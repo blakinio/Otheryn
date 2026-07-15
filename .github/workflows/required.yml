@@ -1,0 +1,126 @@
+---
+name: Required
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  required:
+    name: Required
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout pull request head
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require applicable CI workflows
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_REF: ${{ github.base_ref }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --prune origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+          git diff --name-only "origin/${BASE_REF}...HEAD" > required-changed-files.txt
+
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+          import sys
+          import time
+          import urllib.parse
+          import urllib.request
+
+          changed = [line.strip() for line in open("required-changed-files.txt", encoding="utf-8") if line.strip()]
+
+          ci_prefixes = (
+              "src/",
+              "tests/",
+              "data/",
+              "data-canary/",
+              "data-otservbr-global/",
+              "cmake/",
+              "docker/",
+              "docs/lua-api/",
+              "docs/systems/",
+              "tools/",
+              "vcproj/",
+              ".github/scripts/",
+              ".github/workflows/",
+          )
+          ci_files = {"vcpkg.json", "CMakeLists.txt", "CMakePresets.json"}
+          audit_prefixes = ("tools/canary_audit/", "data/", "data-canary/", "data-otservbr-global/")
+          audit_files = {".github/workflows/repository-audit.yml"}
+
+          ci_needed = any(path.startswith(ci_prefixes) or path in ci_files for path in changed)
+          audit_needed = any(path.startswith(audit_prefixes) or path in audit_files for path in changed)
+
+          required = []
+          if ci_needed:
+              required.append("CI")
+          if audit_needed:
+              required.append("Repository Audit")
+
+          print(f"changed_files={len(changed)}")
+          print(f"ci_needed={ci_needed}")
+          print(f"audit_needed={audit_needed}")
+
+          if not required:
+              print("Required gate passed: no CI workflow is applicable to the changed paths.")
+              raise SystemExit(0)
+
+          repository = os.environ["REPOSITORY"]
+          head_sha = os.environ["HEAD_SHA"]
+          token = os.environ["GH_TOKEN"]
+          pending = set(required)
+          deadline = time.time() + 35 * 60
+
+          while pending and time.time() < deadline:
+              query = urllib.parse.urlencode({"head_sha": head_sha, "event": "pull_request", "per_page": 100})
+              request = urllib.request.Request(
+                  f"https://api.github.com/repos/{repository}/actions/runs?{query}",
+                  headers={
+                      "Accept": "application/vnd.github+json",
+                      "Authorization": f"Bearer {token}",
+                      "X-GitHub-Api-Version": "2022-11-28",
+                  },
+              )
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  runs = json.load(response).get("workflow_runs", [])
+
+              for workflow_name in list(pending):
+                  candidates = [run for run in runs if run.get("name") == workflow_name and run.get("head_sha") == head_sha]
+                  if not candidates:
+                      continue
+                  latest = max(candidates, key=lambda run: int(run.get("id", 0)))
+                  status = latest.get("status")
+                  conclusion = latest.get("conclusion")
+                  print(f"{workflow_name}: status={status} conclusion={conclusion} run_id={latest.get('id')}")
+                  if status != "completed":
+                      continue
+                  if conclusion != "success":
+                      print(f"::error::{workflow_name} did not succeed for {head_sha}: {conclusion}")
+                      raise SystemExit(1)
+                  pending.remove(workflow_name)
+
+              if pending:
+                  time.sleep(10)
+
+          if pending:
+              print(f"::error::Timed out waiting for required workflow(s): {', '.join(sorted(pending))}")
+              raise SystemExit(1)
+
+          print("Required gate passed: all applicable CI workflows succeeded for the exact PR head.")
+          PY
