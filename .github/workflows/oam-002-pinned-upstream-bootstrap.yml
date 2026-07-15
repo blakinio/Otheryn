@@ -1,0 +1,73 @@
+name: OAM-002 Pinned Upstream Bootstrap
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/oam-002-pinned-upstream-bootstrap.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  materialize-pinned-upstream:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'dudantas/oam-002-pinned-upstream-bootstrap'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout bootstrap branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Materialize exact pinned upstream tree and ancestry
+        shell: bash
+        env:
+          TARGET_MAIN_START: 7d1e9cc5b4e799d31ae481b9a65e3f1442ca985e
+          UPSTREAM_SHA: a879c9312e34381e8eedf397b8ed44510698b689
+          BOOTSTRAP_BRANCH: dudantas/oam-002-pinned-upstream-bootstrap
+        run: |
+          set -euo pipefail
+
+          old_head="$(git rev-parse HEAD)"
+          remote_main="$(git ls-remote origin refs/heads/main | cut -f1)"
+          remote_branch="$(git ls-remote origin "refs/heads/${BOOTSTRAP_BRANCH}" | cut -f1)"
+
+          printf 'old_head=%s\n' "$old_head"
+          printf 'remote_main=%s\n' "$remote_main"
+          printf 'remote_branch=%s\n' "$remote_branch"
+
+          test "$remote_main" = "$TARGET_MAIN_START"
+          test "$remote_branch" = "$old_head"
+
+          git remote add upstream https://github.com/opentibiabr/canary.git
+          git fetch --no-tags upstream "$UPSTREAM_SHA"
+
+          fetched_upstream="$(git rev-parse FETCH_HEAD)"
+          test "$fetched_upstream" = "$UPSTREAM_SHA"
+          git cat-file -e "${UPSTREAM_SHA}^{commit}"
+
+          upstream_tree="$(git rev-parse "${UPSTREAM_SHA}^{tree}")"
+          git config user.name "Oteryn OAM Bootstrap"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          bootstrap_commit="$(printf '%s\n\n%s\n' \
+            'chore(bootstrap): anchor pinned upstream canary baseline' \
+            'OAM-002 bootstrap from opentibiabr/canary@a879c9312e34381e8eedf397b8ed44510698b689.' \
+            | git commit-tree "$upstream_tree" -p "$old_head" -p "$UPSTREAM_SHA")"
+
+          bootstrap_tree="$(git rev-parse "${bootstrap_commit}^{tree}")"
+          test "$bootstrap_tree" = "$upstream_tree"
+
+          printf 'upstream_tree=%s\n' "$upstream_tree"
+          printf 'bootstrap_commit=%s\n' "$bootstrap_commit"
+          printf 'bootstrap_tree=%s\n' "$bootstrap_tree"
+
+          git push origin "${bootstrap_commit}:refs/heads/${BOOTSTRAP_BRANCH}"
+
+          pushed_head="$(git ls-remote origin "refs/heads/${BOOTSTRAP_BRANCH}" | cut -f1)"
+          test "$pushed_head" = "$bootstrap_commit"
+          echo "OAM002_PINNED_UPSTREAM_BOOTSTRAP=PASS"
