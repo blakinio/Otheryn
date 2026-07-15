@@ -118,17 +118,7 @@ jobs:
         run: python3 tools/check_lua_api_quality.py
 
       - name: Check new Lua API binding documentation
-        shell: bash
-        env:
-          OAM_002_BOOTSTRAP_UPSTREAM_SHA: a879c9312e34381e8eedf397b8ed44510698b689
-          OAM_002_TARGET_START_SHA: 7d1e9cc5b4e799d31ae481b9a65e3f1442ca985e
-        run: |
-          if [[ "${{ github.event_name }}" == "pull_request" && "${{ github.event.pull_request.base.sha }}" == "${OAM_002_TARGET_START_SHA}" ]]; then
-            echo "OAM-002 bootstrap: comparing Lua binding additions against pinned upstream ${OAM_002_BOOTSTRAP_UPSTREAM_SHA}."
-            python3 tools/check_lua_api_binding_docs.py --base "${OAM_002_BOOTSTRAP_UPSTREAM_SHA}"
-          else
-            python3 tools/check_lua_api_binding_docs.py
-          fi
+        run: python3 tools/check_lua_api_binding_docs.py
 
       - name: Run Analysis (Reviewdog)
         if: github.event_name == 'pull_request'
