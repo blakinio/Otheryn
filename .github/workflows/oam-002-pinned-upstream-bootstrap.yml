@@ -30,44 +30,66 @@ jobs:
           UPSTREAM_SHA: a879c9312e34381e8eedf397b8ed44510698b689
           BOOTSTRAP_BRANCH: dudantas/oam-002-pinned-upstream-bootstrap
         run: |
-          set -euo pipefail
+          set +e
+          (
+            set -euo pipefail
 
-          old_head="$(git rev-parse HEAD)"
-          remote_main="$(git ls-remote origin refs/heads/main | cut -f1)"
-          remote_branch="$(git ls-remote origin "refs/heads/${BOOTSTRAP_BRANCH}" | cut -f1)"
+            old_head="$(git rev-parse HEAD)"
+            remote_main="$(git ls-remote origin refs/heads/main | cut -f1)"
+            remote_branch="$(git ls-remote origin "refs/heads/${BOOTSTRAP_BRANCH}" | cut -f1)"
 
-          printf 'old_head=%s\n' "$old_head"
-          printf 'remote_main=%s\n' "$remote_main"
-          printf 'remote_branch=%s\n' "$remote_branch"
+            printf 'old_head=%s\n' "$old_head"
+            printf 'remote_main=%s\n' "$remote_main"
+            printf 'remote_branch=%s\n' "$remote_branch"
 
-          test "$remote_main" = "$TARGET_MAIN_START"
-          test "$remote_branch" = "$old_head"
+            test "$remote_main" = "$TARGET_MAIN_START"
+            test "$remote_branch" = "$old_head"
 
-          git remote add upstream https://github.com/opentibiabr/canary.git
-          git fetch --no-tags upstream "$UPSTREAM_SHA"
+            git remote add upstream https://github.com/opentibiabr/canary.git
+            git fetch --no-tags upstream "$UPSTREAM_SHA"
 
-          fetched_upstream="$(git rev-parse FETCH_HEAD)"
-          test "$fetched_upstream" = "$UPSTREAM_SHA"
-          git cat-file -e "${UPSTREAM_SHA}^{commit}"
+            fetched_upstream="$(git rev-parse FETCH_HEAD)"
+            test "$fetched_upstream" = "$UPSTREAM_SHA"
+            git cat-file -e "${UPSTREAM_SHA}^{commit}"
 
-          upstream_tree="$(git rev-parse "${UPSTREAM_SHA}^{tree}")"
-          git config user.name "Oteryn OAM Bootstrap"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            upstream_tree="$(git rev-parse "${UPSTREAM_SHA}^{tree}")"
+            git config user.name "Oteryn OAM Bootstrap"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          bootstrap_commit="$(printf '%s\n\n%s\n' \
-            'chore(bootstrap): anchor pinned upstream canary baseline' \
-            'OAM-002 bootstrap from opentibiabr/canary@a879c9312e34381e8eedf397b8ed44510698b689.' \
-            | git commit-tree "$upstream_tree" -p "$old_head" -p "$UPSTREAM_SHA")"
+            bootstrap_commit="$(printf '%s\n\n%s\n' \
+              'chore(bootstrap): anchor pinned upstream canary baseline' \
+              'OAM-002 bootstrap from opentibiabr/canary@a879c9312e34381e8eedf397b8ed44510698b689.' \
+              | git commit-tree "$upstream_tree" -p "$old_head" -p "$UPSTREAM_SHA")"
 
-          bootstrap_tree="$(git rev-parse "${bootstrap_commit}^{tree}")"
-          test "$bootstrap_tree" = "$upstream_tree"
+            bootstrap_tree="$(git rev-parse "${bootstrap_commit}^{tree}")"
+            test "$bootstrap_tree" = "$upstream_tree"
 
-          printf 'upstream_tree=%s\n' "$upstream_tree"
-          printf 'bootstrap_commit=%s\n' "$bootstrap_commit"
-          printf 'bootstrap_tree=%s\n' "$bootstrap_tree"
+            printf 'upstream_tree=%s\n' "$upstream_tree"
+            printf 'bootstrap_commit=%s\n' "$bootstrap_commit"
+            printf 'bootstrap_tree=%s\n' "$bootstrap_tree"
 
-          git push origin "${bootstrap_commit}:refs/heads/${BOOTSTRAP_BRANCH}"
+            git push origin "${bootstrap_commit}:refs/heads/${BOOTSTRAP_BRANCH}"
 
-          pushed_head="$(git ls-remote origin "refs/heads/${BOOTSTRAP_BRANCH}" | cut -f1)"
-          test "$pushed_head" = "$bootstrap_commit"
-          echo "OAM002_PINNED_UPSTREAM_BOOTSTRAP=PASS"
+            pushed_head="$(git ls-remote origin "refs/heads/${BOOTSTRAP_BRANCH}" | cut -f1)"
+            test "$pushed_head" = "$bootstrap_commit"
+            echo "OAM002_PINNED_UPSTREAM_BOOTSTRAP=PASS"
+          ) > >(tee bootstrap-diagnostic.log) 2>&1
+          rc=$?
+          printf '%s\n' "$rc" > bootstrap-exit-code.txt
+          exit 0
+
+      - name: Upload bootstrap diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oam-002-bootstrap-diagnostics
+          path: |
+            bootstrap-diagnostic.log
+            bootstrap-exit-code.txt
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce bootstrap result
+        shell: bash
+        run: |
+          test "$(cat bootstrap-exit-code.txt)" = "0"
