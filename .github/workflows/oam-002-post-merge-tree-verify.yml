@@ -1,0 +1,104 @@
+name: OAM-002 Post-Merge Tree Verify
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/oam-002-post-merge-tree-verify.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-post-merge-tree:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout final target main plus verifier
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: target
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout pinned upstream Canary
+        uses: actions/checkout@v6
+        with:
+          repository: opentibiabr/canary
+          ref: a879c9312e34381e8eedf397b8ed44510698b689
+          path: upstream
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify final main bounded delta
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          upstream_commit="$(git -C upstream rev-parse HEAD)"
+          test "$upstream_commit" = "a879c9312e34381e8eedf397b8ed44510698b689"
+
+          git -C target ls-tree -r --full-tree HEAD > target-tree.txt
+          git -C upstream ls-tree -r --full-tree HEAD > upstream-tree.txt
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          allowed = {
+              ".github/workflows/oam-002-post-merge-tree-verify.yml",
+              ".github/workflows/required.yml",
+              ".github/workflows/reusable-docker-quickstart-smoke.yml",
+          }
+
+          def parse(path: str):
+              entries = {}
+              for raw in Path(path).read_text(encoding="utf-8").splitlines():
+                  meta, file_path = raw.split("\t", 1)
+                  entries[file_path] = meta
+              return entries
+
+          target = parse("target-tree.txt")
+          upstream = parse("upstream-tree.txt")
+          differing = {
+              path
+              for path in set(target) | set(upstream)
+              if target.get(path) != upstream.get(path)
+          }
+
+          print("target_entries=", len(target))
+          print("upstream_entries=", len(upstream))
+          print("differing_paths=")
+          for path in sorted(differing):
+              print(path)
+
+          if differing != allowed:
+              raise SystemExit(
+                  "Unexpected post-merge final-tree delta. Expected exactly: "
+                  + ", ".join(sorted(allowed))
+              )
+
+          filtered_target = {k: v for k, v in target.items() if k not in allowed}
+          filtered_upstream = {k: v for k, v in upstream.items() if k not in allowed}
+          if filtered_target != filtered_upstream:
+              raise SystemExit("Filtered final target tree is not identical to pinned upstream")
+
+          print("OAM002_POST_MERGE_FINAL_TREE=PASS")
+          PY
+
+          target_reusable="$(git -C target rev-parse 'HEAD:.github/workflows/reusable-checks.yml')"
+          upstream_reusable="$(git -C upstream rev-parse 'HEAD:.github/workflows/reusable-checks.yml')"
+          test "$target_reusable" = "$upstream_reusable"
+          test "$target_reusable" = "045c987911cae6ec9cb321c550b5ea0aad34a920"
+
+      - name: Upload post-merge tree manifests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oam-002-post-merge-tree-manifests
+          path: |
+            target-tree.txt
+            upstream-tree.txt
+          if-no-files-found: error
+          retention-days: 7
