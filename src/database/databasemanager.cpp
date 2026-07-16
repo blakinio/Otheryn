@@ -24,6 +24,28 @@ namespace InternalDBManager {
 
 		return -1;
 	}
+
+	bool runMigrationChain(int32_t &currentVersion, std::vector<Migration> migrations, const MigrationRunner &runMigration, const MigrationVersionPersister &persistVersion) {
+		std::sort(migrations.begin(), migrations.end());
+
+		for (const auto &[fileVersion, scriptPath] : migrations) {
+			if (fileVersion <= currentVersion) {
+				continue;
+			}
+
+			if (!runMigration(fileVersion, scriptPath)) {
+				return false;
+			}
+
+			if (!persistVersion(fileVersion)) {
+				return false;
+			}
+
+			currentVersion = fileVersion;
+		}
+
+		return true;
+	}
 }
 
 bool DatabaseManager::optimizeTables() {
@@ -89,11 +111,12 @@ int32_t DatabaseManager::getDatabaseVersion() {
 	return -1;
 }
 
-void DatabaseManager::updateDatabase() {
+bool DatabaseManager::updateDatabase() {
 	Benchmark bm;
 	lua_State* L = luaL_newstate();
 	if (!L) {
-		return;
+		g_logger().error("DatabaseManager::updateDatabase - Unable to create Lua state. Migration chain aborted.");
+		return false;
 	}
 
 	luaL_openlibs(L);
@@ -103,12 +126,11 @@ void DatabaseManager::updateDatabase() {
 	if (currentVersion < 0) {
 		g_logger().error("DatabaseManager::updateDatabase - Unable to read the current database version. Migration chain aborted.");
 		lua_close(L);
-		return;
+		return false;
 	}
 
 	std::string migrationDirectory = g_configManager().getString(DATA_DIRECTORY) + "/migrations/";
-
-	std::vector<std::pair<int32_t, std::string>> migrations;
+	std::vector<InternalDBManager::Migration> migrations;
 
 	for (const auto &entry : std::filesystem::directory_iterator(migrationDirectory)) {
 		if (entry.is_regular_file()) {
@@ -118,46 +140,46 @@ void DatabaseManager::updateDatabase() {
 		}
 	}
 
-	std::sort(migrations.begin(), migrations.end());
-
-	for (const auto &[fileVersion, scriptPath] : migrations) {
-		if (fileVersion <= currentVersion) {
-			continue;
-		}
-
+	const auto runMigration = [L](int32_t fileVersion, const std::string &scriptPath) -> bool {
 		if (!LuaScriptInterface::reserveScriptEnv()) {
 			g_logger().error("DatabaseManager::updateDatabase - Unable to reserve a Lua script environment for migration version {}. Migration chain aborted.", fileVersion);
-			break;
+			return false;
 		}
 
+		lua_settop(L, 0);
 		lua_pushnil(L);
 		lua_setglobal(L, "onUpdateDatabase");
 
 		if (luaL_dofile(L, scriptPath.c_str()) != 0) {
-			g_logger().error("DatabaseManager::updateDatabase - Failed to load migration version {}: {}", fileVersion, lua_tostring(L, -1));
-			lua_pop(L, 1);
+			const char* errorMessage = lua_tostring(L, -1);
+			g_logger().error("DatabaseManager::updateDatabase - Failed to load migration version {}: {}", fileVersion, errorMessage ? errorMessage : "unknown Lua error");
+			lua_settop(L, 0);
 			LuaScriptInterface::resetScriptEnv();
-			break;
+			return false;
 		}
 
+		// Discard any values returned by the migration chunk itself. The migration
+		// contract is defined exclusively by the onUpdateDatabase() return value.
+		lua_settop(L, 0);
 		lua_getglobal(L, "onUpdateDatabase");
 		if (!lua_isfunction(L, -1)) {
 			g_logger().error("DatabaseManager::updateDatabase - Migration version {} does not define onUpdateDatabase(). Migration chain aborted.", fileVersion);
-			lua_pop(L, 1);
+			lua_settop(L, 0);
 			LuaScriptInterface::resetScriptEnv();
-			break;
+			return false;
 		}
 
 		if (lua_pcall(L, 0, 1, 0) != 0) {
-			g_logger().error("DatabaseManager::updateDatabase - Migration version {} failed at runtime: {}", fileVersion, lua_tostring(L, -1));
-			lua_pop(L, 1);
+			const char* errorMessage = lua_tostring(L, -1);
+			g_logger().error("DatabaseManager::updateDatabase - Migration version {} failed at runtime: {}", fileVersion, errorMessage ? errorMessage : "unknown Lua error");
+			lua_settop(L, 0);
 			LuaScriptInterface::resetScriptEnv();
-			break;
+			return false;
 		}
 
 		bool migrationAccepted = false;
 		if (lua_isnil(L, -1)) {
-			// Existing shipped migrations use an implicit nil return on success.
+			// Historical shipped migrations use an implicit nil return on success.
 			migrationAccepted = true;
 		} else if (lua_isboolean(L, -1)) {
 			migrationAccepted = lua_toboolean(L, -1) != 0;
@@ -168,32 +190,39 @@ void DatabaseManager::updateDatabase() {
 				lua_typename(L, lua_type(L, -1))
 			);
 		}
-		lua_pop(L, 1);
+
+		lua_settop(L, 0);
+		LuaScriptInterface::resetScriptEnv();
 
 		if (!migrationAccepted) {
 			g_logger().error("DatabaseManager::updateDatabase - Migration version {} explicitly rejected or returned an invalid result. Migration chain aborted.", fileVersion);
-			LuaScriptInterface::resetScriptEnv();
-			break;
+			return false;
 		}
 
-		if (!registerDatabaseConfig("db_version", fileVersion)) {
+		return true;
+	};
+
+	const auto persistVersion = [](int32_t fileVersion) -> bool {
+		if (!DatabaseManager::registerDatabaseConfig("db_version", fileVersion)) {
 			g_logger().error("DatabaseManager::updateDatabase - Migration version {} completed, but persisting db_version failed. Migration chain aborted.", fileVersion);
-			LuaScriptInterface::resetScriptEnv();
-			break;
+			return false;
 		}
 
-		currentVersion = fileVersion;
-		g_logger().info("Database has been updated to version {}", currentVersion);
-		LuaScriptInterface::resetScriptEnv();
-	}
+		g_logger().info("Database has been updated to version {}", fileVersion);
+		return true;
+	};
+
+	const bool migrationSucceeded = InternalDBManager::runMigrationChain(currentVersion, std::move(migrations), runMigration, persistVersion);
 
 	double duration = bm.duration();
 	if (duration < 1000.0) {
-		g_logger().debug("Database update completed in {:.2f} ms", duration);
+		g_logger().debug("Database update {} in {:.2f} ms", migrationSucceeded ? "completed" : "aborted", duration);
 	} else {
-		g_logger().debug("Database update completed in {:.2f} seconds", duration / 1000.0);
+		g_logger().debug("Database update {} in {:.2f} seconds", migrationSucceeded ? "completed" : "aborted", duration / 1000.0);
 	}
+
 	lua_close(L);
+	return migrationSucceeded;
 }
 
 bool DatabaseManager::getDatabaseConfig(const std::string &config, int32_t &value) {
