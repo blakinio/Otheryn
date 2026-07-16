@@ -96,6 +96,12 @@ void DatabaseManager::updateDatabase() {
 	CoreLibsFunctions::init(L);
 
 	int32_t currentVersion = getDatabaseVersion();
+	if (currentVersion < 0) {
+		g_logger().error("DatabaseManager::updateDatabase - Unable to read the current database version. Migration chain aborted.");
+		lua_close(L);
+		return;
+	}
+
 	std::string migrationDirectory = g_configManager().getString(DATA_DIRECTORY) + "/migrations/";
 
 	std::vector<std::pair<int32_t, std::string>> migrations;
@@ -111,29 +117,70 @@ void DatabaseManager::updateDatabase() {
 	std::sort(migrations.begin(), migrations.end());
 
 	for (const auto &[fileVersion, scriptPath] : migrations) {
-		if (fileVersion > currentVersion) {
-			if (!LuaScriptInterface::reserveScriptEnv()) {
-				break;
-			}
-
-			if (luaL_dofile(L, scriptPath.c_str()) != 0) {
-				g_logger().error("DatabaseManager::updateDatabase - Version: {}] {}", fileVersion, lua_tostring(L, -1));
-				continue;
-			}
-
-			lua_getglobal(L, "onUpdateDatabase");
-			if (lua_pcall(L, 0, 1, 0) != 0) {
-				LuaScriptInterface::resetScriptEnv();
-				g_logger().warn("[DatabaseManager::updateDatabase - Version: {}] {}", fileVersion, lua_tostring(L, -1));
-				continue;
-			}
-
-			currentVersion = fileVersion;
-			g_logger().info("Database has been updated to version {}", currentVersion);
-			registerDatabaseConfig("db_version", currentVersion);
-
-			LuaScriptInterface::resetScriptEnv();
+		if (fileVersion <= currentVersion) {
+			continue;
 		}
+
+		if (!LuaScriptInterface::reserveScriptEnv()) {
+			g_logger().error("DatabaseManager::updateDatabase - Unable to reserve a Lua script environment for migration version {}. Migration chain aborted.", fileVersion);
+			break;
+		}
+
+		lua_pushnil(L);
+		lua_setglobal(L, "onUpdateDatabase");
+
+		if (luaL_dofile(L, scriptPath.c_str()) != 0) {
+			g_logger().error("DatabaseManager::updateDatabase - Failed to load migration version {}: {}", fileVersion, lua_tostring(L, -1));
+			lua_pop(L, 1);
+			LuaScriptInterface::resetScriptEnv();
+			break;
+		}
+
+		lua_getglobal(L, "onUpdateDatabase");
+		if (!lua_isfunction(L, -1)) {
+			g_logger().error("DatabaseManager::updateDatabase - Migration version {} does not define onUpdateDatabase(). Migration chain aborted.", fileVersion);
+			lua_pop(L, 1);
+			LuaScriptInterface::resetScriptEnv();
+			break;
+		}
+
+		if (lua_pcall(L, 0, 1, 0) != 0) {
+			g_logger().error("DatabaseManager::updateDatabase - Migration version {} failed at runtime: {}", fileVersion, lua_tostring(L, -1));
+			lua_pop(L, 1);
+			LuaScriptInterface::resetScriptEnv();
+			break;
+		}
+
+		bool migrationAccepted = false;
+		if (lua_isnil(L, -1)) {
+			// Existing shipped migrations use an implicit nil return on success.
+			migrationAccepted = true;
+		} else if (lua_isboolean(L, -1)) {
+			migrationAccepted = lua_toboolean(L, -1) != 0;
+		} else {
+			g_logger().error(
+				"DatabaseManager::updateDatabase - Migration version {} returned unsupported result type '{}'. Expected nil for legacy success or a boolean result. Migration chain aborted.",
+				fileVersion,
+				lua_typename(L, lua_type(L, -1))
+			);
+		}
+		lua_pop(L, 1);
+
+		if (!migrationAccepted) {
+			g_logger().error("DatabaseManager::updateDatabase - Migration version {} explicitly rejected or returned an invalid result. Migration chain aborted.", fileVersion);
+			LuaScriptInterface::resetScriptEnv();
+			break;
+		}
+
+		if (!registerDatabaseConfig("db_version", fileVersion)) {
+			g_logger().error("DatabaseManager::updateDatabase - Migration version {} completed, but persisting db_version failed. Migration chain aborted.", fileVersion);
+			LuaScriptInterface::resetScriptEnv();
+			break;
+		}
+
+		currentVersion = fileVersion;
+		g_logger().info("Database has been updated to version {}", currentVersion);
+		LuaScriptInterface::resetScriptEnv();
 	}
 
 	double duration = bm.duration();
@@ -159,17 +206,16 @@ bool DatabaseManager::getDatabaseConfig(const std::string &config, int32_t &valu
 	return true;
 }
 
-void DatabaseManager::registerDatabaseConfig(const std::string &config, int32_t value) {
+bool DatabaseManager::registerDatabaseConfig(const std::string &config, int32_t value) {
 	Database &db = Database::getInstance();
 	std::ostringstream query;
 
 	int32_t tmp;
-
 	if (!getDatabaseConfig(config, tmp)) {
 		query << "INSERT INTO `server_config` VALUES (" << db.escapeString(config) << ", '" << value << "')";
 	} else {
 		query << "UPDATE `server_config` SET `value` = '" << value << "' WHERE `config` = " << db.escapeString(config);
 	}
 
-	db.executeQuery(query.str());
+	return db.executeQuery(query.str());
 }
