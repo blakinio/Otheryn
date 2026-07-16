@@ -1,0 +1,48 @@
+name: OAM-004B startup exact patch
+
+on:
+  push:
+    branches:
+      - dudantas/oam-004b-fail-closed-migrations
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Apply exact startup migration gate
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("src/canary_server.cpp")
+          text = path.read_text(encoding="utf-8")
+          old = "\tDatabaseManager::updateDatabase();"
+          new = "\tif (!DatabaseManager::updateDatabase()) {\n\t\tthrow FailedToInitializeCanary(\"Database migration failed. Server startup aborted.\");\n\t}"
+
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f"expected exactly one updateDatabase startup call, found {count}")
+
+          path.write_text(text.replace(old, new), encoding="utf-8")
+
+      - name: Commit exact patch
+        shell: bash
+        run: |
+          if git diff --quiet -- src/canary_server.cpp; then
+            echo "No patch produced"
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/canary_server.cpp
+          git commit -m "fix(database): abort startup when migrations fail"
+          git push origin HEAD:${{ github.ref_name }}
