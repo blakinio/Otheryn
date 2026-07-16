@@ -63,7 +63,6 @@ bool DatabaseManager::optimizeTables() {
 
 		query.str(std::string());
 		query << "OPTIMIZE TABLE `" << tableName << '`';
-
 		std::string tableResult;
 		if (db.executeQuery(query.str())) {
 			tableResult = "[Success]";
@@ -79,7 +78,6 @@ bool DatabaseManager::optimizeTables() {
 
 bool DatabaseManager::tableExists(const std::string &tableName) {
 	Database &db = Database::getInstance();
-
 	std::ostringstream query;
 	query << "SELECT `TABLE_NAME` FROM `information_schema`.`tables` WHERE `TABLE_SCHEMA` = " << db.escapeString(g_configManager().getString(MYSQL_DB)) << " AND `TABLE_NAME` = " << db.escapeString(tableName) << " LIMIT 1";
 	return db.storeQuery(query.str()).get() != nullptr;
@@ -120,7 +118,7 @@ bool DatabaseManager::updateDatabase() {
 	}
 
 	luaL_openlibs(L);
-	CoreLibsFunctions::init(L);
+	CoreLibsFunctions::initMigration(L);
 
 	int32_t currentVersion = getDatabaseVersion();
 	if (currentVersion < 0) {
@@ -141,11 +139,6 @@ bool DatabaseManager::updateDatabase() {
 	}
 
 	const auto runMigration = [L](int32_t fileVersion, const std::string &scriptPath) -> bool {
-		if (!LuaScriptInterface::reserveScriptEnv()) {
-			g_logger().error("DatabaseManager::updateDatabase - Unable to reserve a Lua script environment for migration version {}. Migration chain aborted.", fileVersion);
-			return false;
-		}
-
 		lua_settop(L, 0);
 		lua_pushnil(L);
 		lua_setglobal(L, "onUpdateDatabase");
@@ -154,7 +147,6 @@ bool DatabaseManager::updateDatabase() {
 			const char* errorMessage = lua_tostring(L, -1);
 			g_logger().error("DatabaseManager::updateDatabase - Failed to load migration version {}: {}", fileVersion, errorMessage ? errorMessage : "unknown Lua error");
 			lua_settop(L, 0);
-			LuaScriptInterface::resetScriptEnv();
 			return false;
 		}
 
@@ -165,7 +157,6 @@ bool DatabaseManager::updateDatabase() {
 		if (!lua_isfunction(L, -1)) {
 			g_logger().error("DatabaseManager::updateDatabase - Migration version {} does not define onUpdateDatabase(). Migration chain aborted.", fileVersion);
 			lua_settop(L, 0);
-			LuaScriptInterface::resetScriptEnv();
 			return false;
 		}
 
@@ -173,7 +164,6 @@ bool DatabaseManager::updateDatabase() {
 			const char* errorMessage = lua_tostring(L, -1);
 			g_logger().error("DatabaseManager::updateDatabase - Migration version {} failed at runtime: {}", fileVersion, errorMessage ? errorMessage : "unknown Lua error");
 			lua_settop(L, 0);
-			LuaScriptInterface::resetScriptEnv();
 			return false;
 		}
 
@@ -192,7 +182,6 @@ bool DatabaseManager::updateDatabase() {
 		}
 
 		lua_settop(L, 0);
-		LuaScriptInterface::resetScriptEnv();
 
 		if (!migrationAccepted) {
 			g_logger().error("DatabaseManager::updateDatabase - Migration version {} explicitly rejected or returned an invalid result. Migration chain aborted.", fileVersion);
