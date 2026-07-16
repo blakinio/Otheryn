@@ -163,7 +163,7 @@ bool GameReload::reloadVocations() {
 
 bool GameReload::reloadCore() {
 	const auto &coreFolder = g_configManager().getString(CORE_DIRECTORY);
-	const bool coreLoaded = g_luaEnvironment().loadFile(coreFolder + "/core.lua", "core.lua") == 0;
+	const bool coreLoaded = g_luaEnvironment().reloadCore(coreFolder);
 
 	if (coreLoaded) {
 		const bool scriptsLoaded = g_scripts().loadScripts(coreFolder + "/scripts/lib", true, false);
