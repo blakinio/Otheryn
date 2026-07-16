@@ -2,8 +2,11 @@
 #include "database/database.hpp"
 #include "database/databasemanager.hpp"
 
+#include <fmt/format.h>
+
 #include <filesystem>
 #include <fstream>
+#include <string_view>
 
 namespace it_database_migrations {
 
