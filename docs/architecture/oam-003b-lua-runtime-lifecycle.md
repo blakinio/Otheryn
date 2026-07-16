@@ -31,8 +31,8 @@ Make the existing `LuaEnvironment` the explicit root Lua runtime lifecycle bound
 1. Add an idempotent public `LuaEnvironment::shutdown()` lifecycle operation.
 2. Keep the destructor as a safety net by delegating to `shutdown()`.
 3. Add `LuaEnvironment::reloadCore(coreDirectory)` so callers do not manually compose root runtime reload from direct `loadFile` calls.
-4. Pass the existing `LuaEnvironment` instance from `main()` into `CanaryServer` as an explicit dependency.
-5. Let `CanaryServer` close the root Lua runtime at the end of its lifetime, after normal server shutdown has returned control to `main()`.
+4. Resolve the existing `LuaEnvironment` from the composition root in `main()` alongside the other root dependencies.
+5. Close the root Lua runtime explicitly in `main()` after `CanaryServer` returns from normal server/doc-generation execution; the `LuaEnvironment` destructor remains the process-exit fallback.
 6. Route SIGHUP and `GameReload::reloadCore()` through the same `LuaEnvironment::reloadCore()` boundary.
 
 ## Explicit non-goals
@@ -55,11 +55,17 @@ This package touches no new domain-facing binding implementation. Existing bindi
 
 Subsystem reloads remain owned by their current bounded subsystem paths until separately revalidated.
 
+## Shutdown semantics
+
+`shutdown()` marks the root environment as shutting down before closing its Lua state. Repeated shutdown calls are no-ops, preventing normal composition-root shutdown plus the destructor fallback from reopening or double-closing the root state.
+
+`initState()`, `reInitState()` and `reloadCore()` refuse to resurrect the root runtime after shutdown has begun.
+
 ## Acceptance evidence
 
 - exact-head build and runtime smoke matrix passes;
 - `Required` passes on the same head;
-- `LuaEnvironment::shutdown()` is idempotent for an already-closed/uninitialized state;
+- `LuaEnvironment::shutdown()` is idempotent for an already-closed/uninitialized state by explicit guard;
 - SIGHUP and game core reload use the same root-runtime reload API;
 - no feature/domain binding files change;
 - typed shared-userdata documentation/implementation remains unchanged.
