@@ -1,0 +1,155 @@
+diff --git a/src/server/network/protocol/protocollogin.cpp b/src/server/network/protocol/protocollogin.cpp
+index 3c7d751..0000000 100644
+--- a/src/server/network/protocol/protocollogin.cpp
++++ b/src/server/network/protocol/protocollogin.cpp
+@@ -12,6 +12,7 @@
+ #include "server/network/protocol/protocollogin.hpp"
+ 
+ #include "config/configmanager.hpp"
++#include "security/login_session_manager.hpp"
+ #include "server/network/message/outputmessage.hpp"
+ #include "server/network/protocol/protocol_port_utils.hpp"
+ #include "server/network/protocol/protocol_session_hint.hpp"
+@@ -47,9 +48,6 @@ void ProtocolLogin::getCharacterList(const std::string &accountDescriptor, const
+ 	if (oldProtocol && !g_configManager().getBoolean(OLD_PROTOCOL)) {
+ 		disconnectClient(ProtocolProfileRegistry::getUnsupportedClientProtocolMessage(false));
+ 		return;
+-	} else if (!oldProtocol) {
+-		disconnectClient(ProtocolProfileRegistry::getUnsupportedClientProtocolMessage(g_configManager().getBoolean(OLD_PROTOCOL)));
+-		return;
+ 	}
+ 
+ 	if (account.load() != AccountErrors_t::Ok || !account.authenticate(password)) {
+@@ -60,7 +58,6 @@ void ProtocolLogin::getCharacterList(const std::string &accountDescriptor, const
+ 	}
+ 
+ 	auto output = OutputMessagePool::getOutputMessage();
+-	const std::string sessionKey = accountDescriptor + "\n" + password;
+ 	const std::string &motd = g_configManager().getString(SERVER_MOTD);
+ 	if (!motd.empty()) {
+ 		// Add MOTD
+@@ -79,6 +76,31 @@ void ProtocolLogin::getCharacterList(const std::string &accountDescriptor, const
+ 
+ 	const auto* loginLayout = protocolProfile ? ProtocolProfileRegistry::resolveAccountLoginLayout(protocolProfile->id) : nullptr;
+ 	const auto characterListLayout = loginLayout ? loginLayout->characterListLayout : AccountCharacterListLayout::WorldListWithSessionKey;
++
++	std::string sessionKey = accountDescriptor + "\n" + password;
++	if (loginLayout && loginLayout->sendsSessionKey && !oldProtocol && protocolProfile && g_configManager().getString(AUTH_TYPE) == "session") {
++		std::vector<std::string> allowedCharacterNames;
++		allowedCharacterNames.reserve(players.size());
++		for (const auto &[name, deletion] : players) {
++			allowedCharacterNames.emplace_back(name);
++		}
++
++		LoginSessionIssueParams issueParams;
++		issueParams.accountId = account.getID();
++		issueParams.allowedCharacterNames = std::move(allowedCharacterNames);
++		issueParams.protocolProfile = protocolProfile->id;
++
++		auto secureToken = LoginSessionManager::getInstance().issueToken(issueParams);
++		if (!secureToken) {
++			g_logger().error("[ProtocolLogin::getCharacterList] Failed to issue secure login session token for account [{}]", account.getID());
++			disconnectClient("Could not create a secure login session. Please try again.");
++			return;
++		}
++
++		sessionKey = std::move(*secureToken);
++	}
++
+ 	if (loginLayout && loginLayout->sendsSessionKey) {
+ 		// Add session key
+ 		output->addByte(0x28);
+@@ -282,9 +304,6 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage &msg) {
+ 		if (oldProtocol && !g_configManager().getBoolean(OLD_PROTOCOL)) {
+ 			disconnectClient(ProtocolProfileRegistry::getUnsupportedClientProtocolMessage(false));
+ 			return;
+-		} else if (!oldProtocol) {
+-			disconnectClient(ProtocolProfileRegistry::getUnsupportedClientProtocolMessage(g_configManager().getBoolean(OLD_PROTOCOL)));
+-			return;
+ 		}
+ 
+ 		dispatchProtocolTask(
+diff --git a/src/io/iologindata.cpp b/src/io/iologindata.cpp
+index adc4ab2..0000000 100644
+--- a/src/io/iologindata.cpp
++++ b/src/io/iologindata.cpp
+@@ -14,6 +14,7 @@
+ #include "account/account.hpp"
+ #include "config/configmanager.hpp"
+ #include "database/database.hpp"
++#include "security/login_session_manager.hpp"
+ #include "io/functions/iologindata_load_player.hpp"
+ #include "io/functions/iologindata_save_player.hpp"
+ #include "game/game.hpp"
+@@ -62,46 +63,58 @@ namespace {
+ } // namespace
+ 
+ bool IOLoginData::gameWorldAuthentication(const std::string &accountDescriptor, const std::string &password, std::string &characterName, uint32_t &accountId, bool oldProtocol, const uint32_t ip) {
+-	Account account(accountDescriptor);
+-	account.setProtocolCompat(oldProtocol);
++	LoginSessionConsumeResult tokenAuthentication;
++	if (!oldProtocol && g_configManager().getString(AUTH_TYPE) == "session") {
++		tokenAuthentication = LoginSessionManager::getInstance().consumeToken(accountDescriptor, characterName, ProtocolProfileId::Current);
++	}
++
++	auto account = tokenAuthentication.ok ? std::make_unique<Account>(tokenAuthentication.accountId) : std::make_unique<Account>(accountDescriptor);
++	account->setProtocolCompat(oldProtocol);
+ 
+-	if (AccountErrors_t::Ok != account.load()) {
+-		g_logger().error("Couldn't load account [{}].", account.getDescriptor());
++	if (AccountErrors_t::Ok != account->load()) {
++		g_logger().error("Couldn't load account for game-world authentication.");
+ 		return false;
+ 	}
+ 
+-	if (g_configManager().getString(AUTH_TYPE) == "session") {
+-		if (!account.authenticate()) {
+-			return false;
+-		}
+-	} else {
+-		if (!account.authenticate(password)) {
+-			return false;
++	if (!tokenAuthentication.ok) {
++		if (g_configManager().getString(AUTH_TYPE) == "session") {
++			if (!account->authenticate()) {
++				return false;
++			}
++		} else {
++			if (!account->authenticate(password)) {
++				return false;
++			}
+ 		}
+ 	}
+ 
+-	if (!g_accountRepository().getCharacterByAccountIdAndName(account.getID(), characterName)) {
++	if (!g_accountRepository().getCharacterByAccountIdAndName(account->getID(), characterName)) {
+ 		g_logger().warn("IP [{}] trying to connect into another account character", convertIPToString(ip));
+ 		return false;
+ 	}
+ 
+-	if (AccountErrors_t::Ok != account.load()) {
+-		g_logger().error("Failed to load account [{}]", accountDescriptor);
++	if (AccountErrors_t::Ok != account->load()) {
++		g_logger().error("Failed to reload authenticated account [{}]", account->getID());
+ 		return false;
+ 	}
+ 
+-	auto [players, result] = account.getAccountPlayers();
++	auto [players, result] = account->getAccountPlayers();
+ 	if (AccountErrors_t::Ok != result) {
+-		g_logger().error("Failed to load account [{}] players", accountDescriptor);
++		g_logger().error("Failed to load account [{}] players", account->getID());
+ 		return false;
+ 	}
+ 
+ 	if (players[characterName] != 0) {
+-		g_logger().error("Account [{}] player [{}] not found or deleted.", accountDescriptor, characterName);
++		g_logger().error("Account [{}] player [{}] not found or deleted.", account->getID(), characterName);
+ 		return false;
+ 	}
+ 
+-	accountId = account.getID();
++	accountId = account->getID();
+ 
+ 	return true;
+ }
