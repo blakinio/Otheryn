@@ -16,10 +16,19 @@
 
 void DBFunctions::init(lua_State* L) {
 	Lua::registerTable(L, "db");
-	Lua::registerMethod(L, "db", "query", DBFunctions::luaDatabaseExecute);
+	registerSynchronousFunctions(L);
 	Lua::registerMethod(L, "db", "asyncQuery", DBFunctions::luaDatabaseAsyncExecute);
-	Lua::registerMethod(L, "db", "storeQuery", DBFunctions::luaDatabaseStoreQuery);
 	Lua::registerMethod(L, "db", "asyncStoreQuery", DBFunctions::luaDatabaseAsyncStoreQuery);
+}
+
+void DBFunctions::initMigration(lua_State* L) {
+	Lua::registerTable(L, "db");
+	registerSynchronousFunctions(L);
+}
+
+void DBFunctions::registerSynchronousFunctions(lua_State* L) {
+	Lua::registerMethod(L, "db", "query", DBFunctions::luaDatabaseExecute);
+	Lua::registerMethod(L, "db", "storeQuery", DBFunctions::luaDatabaseStoreQuery);
 	Lua::registerMethod(L, "db", "escapeString", DBFunctions::luaDatabaseEscapeString);
 	Lua::registerMethod(L, "db", "escapeBlob", DBFunctions::luaDatabaseEscapeBlob);
 	Lua::registerMethod(L, "db", "lastInsertId", DBFunctions::luaDatabaseLastInsertId);
