@@ -8,7 +8,6 @@
  */
 
 #pragma once
-
 #include "lua/scripts/luascript.hpp"
 #include "lua/functions/core/libs/db_functions.hpp"
 #include "lua/functions/core/libs/result_functions.hpp"
@@ -26,6 +25,14 @@ public:
 
 	static void init(lua_State* L) {
 		DBFunctions::init(L);
+		ResultFunctions::init(L);
+		LoggerFunctions::init(L);
+		MetricsFunctions::init(L);
+		KVFunctions::init(L);
+	}
+
+	static void initMigration(lua_State* L) {
+		DBFunctions::initMigration(L);
 		ResultFunctions::init(L);
 		LoggerFunctions::init(L);
 		MetricsFunctions::init(L);

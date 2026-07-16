@@ -26,6 +26,19 @@ void DBFunctions::init(lua_State* L) {
 	Lua::registerMethod(L, "db", "tableExists", DBFunctions::luaDatabaseTableExists);
 }
 
+void DBFunctions::initMigration(lua_State* L) {
+	init(L);
+
+	lua_getglobal(L, "db");
+	if (lua_istable(L, -1)) {
+		lua_pushnil(L);
+		lua_setfield(L, -2, "asyncQuery");
+		lua_pushnil(L);
+		lua_setfield(L, -2, "asyncStoreQuery");
+	}
+	lua_pop(L, 1);
+}
+
 int DBFunctions::luaDatabaseExecute(lua_State* L) {
 	// db.query(query)
 	Lua::pushBoolean(L, Database::getInstance().executeQuery(Lua::getString(L, -1)));

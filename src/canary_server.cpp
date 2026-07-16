@@ -491,7 +491,9 @@ void CanaryServer::initializeDatabase() {
 		throw FailedToInitializeCanary(fmt::format("The database you have specified in {} is empty, please import the schema.sql to your database.", g_configManager().getConfigFileLua()));
 	}
 
-	DatabaseManager::updateDatabase();
+	if (!DatabaseManager::updateDatabase()) {
+		throw FailedToInitializeCanary("Database migration failed. Server startup aborted.");
+	}
 
 	if (g_configManager().getBoolean(OPTIMIZE_DATABASE)
 	    && !DatabaseManager::optimizeTables()) {

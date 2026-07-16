@@ -24,6 +24,28 @@ namespace InternalDBManager {
 
 		return -1;
 	}
+
+	bool runMigrationChain(int32_t &currentVersion, std::vector<Migration> migrations, const MigrationRunner &runMigration, const MigrationVersionPersister &persistVersion) {
+		std::sort(migrations.begin(), migrations.end());
+
+		for (const auto &[fileVersion, scriptPath] : migrations) {
+			if (fileVersion <= currentVersion) {
+				continue;
+			}
+
+			if (!runMigration(fileVersion, scriptPath)) {
+				return false;
+			}
+
+			if (!persistVersion(fileVersion)) {
+				return false;
+			}
+
+			currentVersion = fileVersion;
+		}
+
+		return true;
+	}
 }
 
 bool DatabaseManager::optimizeTables() {
@@ -41,7 +63,6 @@ bool DatabaseManager::optimizeTables() {
 
 		query.str(std::string());
 		query << "OPTIMIZE TABLE `" << tableName << '`';
-
 		std::string tableResult;
 		if (db.executeQuery(query.str())) {
 			tableResult = "[Success]";
@@ -57,24 +78,25 @@ bool DatabaseManager::optimizeTables() {
 
 bool DatabaseManager::tableExists(const std::string &tableName) {
 	Database &db = Database::getInstance();
-
 	std::ostringstream query;
-	query << "SELECT `TABLE_NAME` FROM `information_schema`.`tables` WHERE `TABLE_SCHEMA` = " << db.escapeString(g_configManager().getString(MYSQL_DB)) << " AND `TABLE_NAME` = " << db.escapeString(tableName) << " LIMIT 1";
+	query << "SELECT `TABLE_NAME` FROM `information_schema`.`tables` WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = " << db.escapeString(tableName) << " LIMIT 1";
 	return db.storeQuery(query.str()).get() != nullptr;
 }
 
 bool DatabaseManager::isDatabaseSetup() {
 	Database &db = Database::getInstance();
-	std::ostringstream query;
-	query << "SELECT `TABLE_NAME` FROM `information_schema`.`tables` WHERE `TABLE_SCHEMA` = " << db.escapeString(g_configManager().getString(MYSQL_DB));
-	return db.storeQuery(query.str()).get() != nullptr;
+	return db.storeQuery("SELECT `TABLE_NAME` FROM `information_schema`.`tables` WHERE `TABLE_SCHEMA` = DATABASE() LIMIT 1").get() != nullptr;
 }
 
 int32_t DatabaseManager::getDatabaseVersion() {
 	if (!tableExists("server_config")) {
 		Database &db = Database::getInstance();
-		db.executeQuery("CREATE TABLE `server_config` (`config` VARCHAR(50) NOT NULL, `value` VARCHAR(256) NOT NULL DEFAULT '', UNIQUE(`config`)) ENGINE = InnoDB");
-		db.executeQuery("INSERT INTO `server_config` VALUES ('db_version', 0)");
+		if (!db.executeQuery("CREATE TABLE `server_config` (`config` VARCHAR(50) NOT NULL, `value` VARCHAR(256) NOT NULL DEFAULT '', UNIQUE(`config`)) ENGINE = InnoDB")) {
+			return -1;
+		}
+		if (!db.executeQuery("INSERT INTO `server_config` VALUES ('db_version', 0)")) {
+			return -1;
+		}
 		return 0;
 	}
 
@@ -85,20 +107,26 @@ int32_t DatabaseManager::getDatabaseVersion() {
 	return -1;
 }
 
-void DatabaseManager::updateDatabase() {
+bool DatabaseManager::updateDatabase() {
 	Benchmark bm;
 	lua_State* L = luaL_newstate();
 	if (!L) {
-		return;
+		g_logger().error("DatabaseManager::updateDatabase - Unable to create Lua state. Migration chain aborted.");
+		return false;
 	}
 
 	luaL_openlibs(L);
-	CoreLibsFunctions::init(L);
+	CoreLibsFunctions::initMigration(L);
 
 	int32_t currentVersion = getDatabaseVersion();
-	std::string migrationDirectory = g_configManager().getString(DATA_DIRECTORY) + "/migrations/";
+	if (currentVersion < 0) {
+		g_logger().error("DatabaseManager::updateDatabase - Unable to read the current database version. Migration chain aborted.");
+		lua_close(L);
+		return false;
+	}
 
-	std::vector<std::pair<int32_t, std::string>> migrations;
+	std::string migrationDirectory = g_configManager().getString(DATA_DIRECTORY) + "/migrations/";
+	std::vector<InternalDBManager::Migration> migrations;
 
 	for (const auto &entry : std::filesystem::directory_iterator(migrationDirectory)) {
 		if (entry.is_regular_file()) {
@@ -108,41 +136,80 @@ void DatabaseManager::updateDatabase() {
 		}
 	}
 
-	std::sort(migrations.begin(), migrations.end());
+	const auto runMigration = [L](int32_t fileVersion, const std::string &scriptPath) -> bool {
+		lua_settop(L, 0);
+		lua_pushnil(L);
+		lua_setglobal(L, "onUpdateDatabase");
 
-	for (const auto &[fileVersion, scriptPath] : migrations) {
-		if (fileVersion > currentVersion) {
-			if (!LuaScriptInterface::reserveScriptEnv()) {
-				break;
-			}
-
-			if (luaL_dofile(L, scriptPath.c_str()) != 0) {
-				g_logger().error("DatabaseManager::updateDatabase - Version: {}] {}", fileVersion, lua_tostring(L, -1));
-				continue;
-			}
-
-			lua_getglobal(L, "onUpdateDatabase");
-			if (lua_pcall(L, 0, 1, 0) != 0) {
-				LuaScriptInterface::resetScriptEnv();
-				g_logger().warn("[DatabaseManager::updateDatabase - Version: {}] {}", fileVersion, lua_tostring(L, -1));
-				continue;
-			}
-
-			currentVersion = fileVersion;
-			g_logger().info("Database has been updated to version {}", currentVersion);
-			registerDatabaseConfig("db_version", currentVersion);
-
-			LuaScriptInterface::resetScriptEnv();
+		if (luaL_dofile(L, scriptPath.c_str()) != 0) {
+			const char* errorMessage = lua_tostring(L, -1);
+			g_logger().error("DatabaseManager::updateDatabase - Failed to load migration version {}: {}", fileVersion, errorMessage ? errorMessage : "unknown Lua error");
+			lua_settop(L, 0);
+			return false;
 		}
-	}
+
+		// Discard any values returned by the migration chunk itself. The migration
+		// contract is defined exclusively by the onUpdateDatabase() return value.
+		lua_settop(L, 0);
+		lua_getglobal(L, "onUpdateDatabase");
+		if (!lua_isfunction(L, -1)) {
+			g_logger().error("DatabaseManager::updateDatabase - Migration version {} does not define onUpdateDatabase(). Migration chain aborted.", fileVersion);
+			lua_settop(L, 0);
+			return false;
+		}
+
+		if (lua_pcall(L, 0, 1, 0) != 0) {
+			const char* errorMessage = lua_tostring(L, -1);
+			g_logger().error("DatabaseManager::updateDatabase - Migration version {} failed at runtime: {}", fileVersion, errorMessage ? errorMessage : "unknown Lua error");
+			lua_settop(L, 0);
+			return false;
+		}
+
+		bool migrationAccepted = false;
+		if (lua_isnil(L, -1)) {
+			// Historical shipped migrations use an implicit nil return on success.
+			migrationAccepted = true;
+		} else if (lua_isboolean(L, -1)) {
+			migrationAccepted = lua_toboolean(L, -1) != 0;
+		} else {
+			g_logger().error(
+				"DatabaseManager::updateDatabase - Migration version {} returned unsupported result type '{}'. Expected nil for legacy success or a boolean result. Migration chain aborted.",
+				fileVersion,
+				lua_typename(L, lua_type(L, -1))
+			);
+		}
+
+		lua_settop(L, 0);
+
+		if (!migrationAccepted) {
+			g_logger().error("DatabaseManager::updateDatabase - Migration version {} explicitly rejected or returned an invalid result. Migration chain aborted.", fileVersion);
+			return false;
+		}
+
+		return true;
+	};
+
+	const auto persistVersion = [](int32_t fileVersion) -> bool {
+		if (!DatabaseManager::registerDatabaseConfig("db_version", fileVersion)) {
+			g_logger().error("DatabaseManager::updateDatabase - Migration version {} completed, but persisting db_version failed. Migration chain aborted.", fileVersion);
+			return false;
+		}
+
+		g_logger().info("Database has been updated to version {}", fileVersion);
+		return true;
+	};
+
+	const bool migrationSucceeded = InternalDBManager::runMigrationChain(currentVersion, std::move(migrations), runMigration, persistVersion);
 
 	double duration = bm.duration();
 	if (duration < 1000.0) {
-		g_logger().debug("Database update completed in {:.2f} ms", duration);
+		g_logger().debug("Database update {} in {:.2f} ms", migrationSucceeded ? "completed" : "aborted", duration);
 	} else {
-		g_logger().debug("Database update completed in {:.2f} seconds", duration / 1000.0);
+		g_logger().debug("Database update {} in {:.2f} seconds", migrationSucceeded ? "completed" : "aborted", duration / 1000.0);
 	}
+
 	lua_close(L);
+	return migrationSucceeded;
 }
 
 bool DatabaseManager::getDatabaseConfig(const std::string &config, int32_t &value) {
@@ -159,17 +226,16 @@ bool DatabaseManager::getDatabaseConfig(const std::string &config, int32_t &valu
 	return true;
 }
 
-void DatabaseManager::registerDatabaseConfig(const std::string &config, int32_t value) {
+bool DatabaseManager::registerDatabaseConfig(const std::string &config, int32_t value) {
 	Database &db = Database::getInstance();
 	std::ostringstream query;
 
 	int32_t tmp;
-
 	if (!getDatabaseConfig(config, tmp)) {
 		query << "INSERT INTO `server_config` VALUES (" << db.escapeString(config) << ", '" << value << "')";
 	} else {
 		query << "UPDATE `server_config` SET `value` = '" << value << "' WHERE `config` = " << db.escapeString(config);
 	}
 
-	db.executeQuery(query.str());
+	return db.executeQuery(query.str());
 }
