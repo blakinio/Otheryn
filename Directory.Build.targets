@@ -1,0 +1,6 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'canary'">
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\security\login_session_manager.hpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\security\login_session_manager.cpp" />
+  </ItemGroup>
+</Project>

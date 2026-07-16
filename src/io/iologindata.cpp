@@ -12,6 +12,7 @@
 #include "account/account.hpp"
 #include "config/configmanager.hpp"
 #include "database/database.hpp"
+#include "security/login_session_manager.hpp"
 #include "io/functions/iologindata_load_player.hpp"
 #include "io/functions/iologindata_save_player.hpp"
 #include "game/game.hpp"
@@ -61,46 +62,58 @@ namespace {
 } // namespace
 
 bool IOLoginData::gameWorldAuthentication(const std::string &accountDescriptor, const std::string &password, std::string &characterName, uint32_t &accountId, bool oldProtocol, const uint32_t ip) {
-	Account account(accountDescriptor);
-	account.setProtocolCompat(oldProtocol);
+	LoginSessionConsumeResult tokenAuthentication;
+	if (!oldProtocol && g_configManager().getString(AUTH_TYPE) == "session") {
+		tokenAuthentication = LoginSessionManager::getInstance().consumeToken(accountDescriptor, characterName, ProtocolProfileId::Current);
+	}
 
-	if (AccountErrors_t::Ok != account.load()) {
-		g_logger().error("Couldn't load account [{}].", account.getDescriptor());
+	std::unique_ptr<Account> account;
+	if (tokenAuthentication.ok) {
+		account = std::make_unique<Account>(tokenAuthentication.accountId);
+	} else {
+		account = std::make_unique<Account>(accountDescriptor);
+	}
+	account->setProtocolCompat(oldProtocol);
+
+	if (AccountErrors_t::Ok != account->load()) {
+		g_logger().error("Couldn't load account for game-world authentication.");
 		return false;
 	}
 
-	if (g_configManager().getString(AUTH_TYPE) == "session") {
-		if (!account.authenticate()) {
-			return false;
-		}
-	} else {
-		if (!account.authenticate(password)) {
-			return false;
+	if (!tokenAuthentication.ok) {
+		if (g_configManager().getString(AUTH_TYPE) == "session") {
+			if (!account->authenticate()) {
+				return false;
+			}
+		} else {
+			if (!account->authenticate(password)) {
+				return false;
+			}
 		}
 	}
 
-	if (!g_accountRepository().getCharacterByAccountIdAndName(account.getID(), characterName)) {
+	if (!g_accountRepository().getCharacterByAccountIdAndName(account->getID(), characterName)) {
 		g_logger().warn("IP [{}] trying to connect into another account character", convertIPToString(ip));
 		return false;
 	}
 
-	if (AccountErrors_t::Ok != account.load()) {
-		g_logger().error("Failed to load account [{}]", accountDescriptor);
+	if (AccountErrors_t::Ok != account->load()) {
+		g_logger().error("Failed to reload authenticated account [{}]", account->getID());
 		return false;
 	}
 
-	auto [players, result] = account.getAccountPlayers();
+	auto [players, result] = account->getAccountPlayers();
 	if (AccountErrors_t::Ok != result) {
-		g_logger().error("Failed to load account [{}] players", accountDescriptor);
+		g_logger().error("Failed to load account [{}] players", account->getID());
 		return false;
 	}
 
 	if (players[characterName] != 0) {
-		g_logger().error("Account [{}] player [{}] not found or deleted.", accountDescriptor, characterName);
+		g_logger().error("Account [{}] player [{}] not found or deleted.", account->getID(), characterName);
 		return false;
 	}
 
-	accountId = account.getID();
+	accountId = account->getID();
 
 	return true;
 }
