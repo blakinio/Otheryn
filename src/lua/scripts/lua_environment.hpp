@@ -40,6 +40,8 @@ public:
 	bool initState() override;
 	bool reInitState() override;
 	bool closeState() override;
+	bool reloadCore(const std::string &coreDirectory);
+	void shutdown();
 
 	LuaScriptInterface* getTestInterface();
 

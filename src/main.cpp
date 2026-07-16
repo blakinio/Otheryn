@@ -9,6 +9,7 @@
 
 #include "canary_server.hpp"
 #include "lib/di/container.hpp"
+#include "lua/scripts/lua_environment.hpp"
 
 #ifndef USE_PRECOMPILED_HEADERS
 	#include <span>
@@ -32,12 +33,14 @@ int main(int argc, char* argv[]) {
 	auto &logger = DI::get<Logger>();
 	auto &rsa = DI::get<RSAManager>();
 	auto &serviceManager = DI::get<ServiceManager>();
+	auto &luaEnvironment = DI::get<LuaEnvironment>();
 	CanaryServer server(logger, rsa, serviceManager);
 
 	const std::span<char*> arguments(argv, static_cast<std::size_t>(argc));
-	if (hasArgument(arguments, GenerateLuaApiDocsOnlyArgument)) {
-		return server.generateLuaApiDocsOnly();
-	}
+	const int exitCode = hasArgument(arguments, GenerateLuaApiDocsOnlyArgument)
+		? server.generateLuaApiDocsOnly()
+		: server.run();
 
-	return server.run();
+	luaEnvironment.shutdown();
+	return exitCode;
 }
