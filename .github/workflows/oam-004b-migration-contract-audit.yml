@@ -1,9 +1,14 @@
 name: OAM-004B Migration Contract Audit
 
 on:
-  push:
-    branches:
-      - dudantas/oam-004b-fail-closed-migrations
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "data-otservbr-global/migrations/**"
+      - "src/database/databasemanager.cpp"
+      - "src/database/databasemanager.hpp"
+      - "docs/architecture/oam-004b-fail-closed-database-migrations.md"
+      - ".github/workflows/oam-004b-migration-contract-audit.yml"
 
 permissions:
   contents: read
@@ -12,7 +17,7 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout PR head
         uses: actions/checkout@v4
 
       - name: Audit shipped migration return conventions
