@@ -35,25 +35,43 @@ Make the ordered Lua database migration chain fail closed so persisted `db_versi
 
 Legacy has the same manager behavior and is not a ready fix source.
 
+## Shipped migration compatibility
+
+The pinned upstream/target migration lineage contains two success conventions:
+
+- older shipped migrations, including versions 1, 2 and 52, return no value (`nil`) after their statements;
+- newer migrations, beginning with the observed version 53 pattern, may return explicit boolean `true` or `false`.
+
+Requiring every historical migration to return boolean `true` would break upgrades from older database versions and would force a broad rewrite of historical migration files. OAM-004B therefore defines a backward-compatible acceptance contract at the manager boundary.
+
+## Migration result contract
+
+After `onUpdateDatabase` returns successfully:
+
+- `nil` means **legacy success**;
+- boolean `true` means **explicit success**;
+- boolean `false` means **explicit failure** and stops the chain;
+- any non-boolean, non-nil result means **invalid migration result** and stops the chain.
+
+This contract preserves existing historical migrations while allowing newer migrations to fail explicitly. It does not prove that an older migration checked every `db.query` result internally.
+
 ## Bounded implementation
 
 1. Stop the migration chain immediately on migration-file load failure.
-2. Stop immediately when `onUpdateDatabase` is missing or raises a Lua error.
-3. Define the migration success contract as an explicit boolean `true` returned by `onUpdateDatabase`.
-4. Treat missing/non-boolean/false results as migration failure.
-5. Persist `db_version` only after the corresponding migration step returns explicit success.
-6. Preserve ordered numeric migration discovery.
-7. Keep generic DDL rollback/reverse migration explicitly out of scope.
-
-## Compatibility gate
-
-Before changing migration-manager semantics, inspect the currently shipped migration files used by the configured `DATA_DIRECTORY` and confirm that successful migrations already return boolean `true`. If a shipped migration uses a different success convention, adapt only that migration contract in this bounded PR and record it explicitly; do not silently reinterpret arbitrary Lua truthiness.
+2. Require `onUpdateDatabase` to exist and be callable; stop when it is missing/non-callable.
+3. Stop immediately when `onUpdateDatabase` raises a Lua error.
+4. Apply the migration result contract above and stop on explicit/invalid failure.
+5. Persist `db_version` only after the corresponding migration step is accepted.
+6. Stop the chain if persisting `db_version` fails.
+7. Preserve ordered numeric migration discovery.
+8. Keep generic DDL rollback/reverse migration explicitly out of scope.
 
 ## Explicit non-goals
 
 - no production/user database access;
 - no reverse migration framework;
 - no unrelated schema changes;
+- no bulk rewrite of historical migration files;
 - no player/world persistence changes;
 - no feature migration;
 - no broad Lua runtime changes.
@@ -63,5 +81,5 @@ Before changing migration-manager semantics, inspect the currently shipped migra
 - exact-head full target CI and `Required`;
 - clean schema import on temporary MariaDB;
 - focused evidence that the manager stops at first failure and does not advance `db_version` after a failed step;
-- current shipped migration success contract verified before merge;
+- backward compatibility with legacy `nil`-returning shipped migrations preserved;
 - DDL rollback/reversibility remains explicitly unproven.
