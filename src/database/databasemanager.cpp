@@ -79,15 +79,13 @@ bool DatabaseManager::optimizeTables() {
 bool DatabaseManager::tableExists(const std::string &tableName) {
 	Database &db = Database::getInstance();
 	std::ostringstream query;
-	query << "SELECT `TABLE_NAME` FROM `information_schema`.`tables` WHERE `TABLE_SCHEMA` = " << db.escapeString(g_configManager().getString(MYSQL_DB)) << " AND `TABLE_NAME` = " << db.escapeString(tableName) << " LIMIT 1";
+	query << "SELECT `TABLE_NAME` FROM `information_schema`.`tables` WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = " << db.escapeString(tableName) << " LIMIT 1";
 	return db.storeQuery(query.str()).get() != nullptr;
 }
 
 bool DatabaseManager::isDatabaseSetup() {
 	Database &db = Database::getInstance();
-	std::ostringstream query;
-	query << "SELECT `TABLE_NAME` FROM `information_schema`.`tables` WHERE `TABLE_SCHEMA` = " << db.escapeString(g_configManager().getString(MYSQL_DB));
-	return db.storeQuery(query.str()).get() != nullptr;
+	return db.storeQuery("SELECT `TABLE_NAME` FROM `information_schema`.`tables` WHERE `TABLE_SCHEMA` = DATABASE() LIMIT 1").get() != nullptr;
 }
 
 int32_t DatabaseManager::getDatabaseVersion() {
