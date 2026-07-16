@@ -27,11 +27,7 @@ LuaEnvironment::LuaEnvironment() :
 	LuaScriptInterface("Main Interface") { }
 
 LuaEnvironment::~LuaEnvironment() {
-	if (!testInterface) {
-	}
-
-	LuaEnvironment::shuttingDown = true;
-	closeState();
+	shutdown();
 }
 
 lua_State* LuaEnvironment::getLuaState() {
@@ -47,6 +43,10 @@ lua_State* LuaEnvironment::getLuaState() {
 }
 
 bool LuaEnvironment::initState() {
+	if (LuaEnvironment::isShuttingDown()) {
+		return false;
+	}
+
 	luaState = luaL_newstate();
 	Lua::load(luaState);
 	runningEventId = EVENT_ID_USER;
@@ -55,6 +55,10 @@ bool LuaEnvironment::initState() {
 }
 
 bool LuaEnvironment::reInitState() {
+	if (LuaEnvironment::isShuttingDown()) {
+		return false;
+	}
+
 	// TODO(lgrossi): get children, reload children
 	closeState();
 	return initState();
@@ -84,6 +88,23 @@ bool LuaEnvironment::closeState() {
 	lua_close(luaState);
 	luaState = nullptr;
 	return true;
+}
+
+bool LuaEnvironment::reloadCore(const std::string &coreDirectory) {
+	if (LuaEnvironment::isShuttingDown()) {
+		return false;
+	}
+
+	return loadFile(coreDirectory + "/core.lua", "core.lua") == 0;
+}
+
+void LuaEnvironment::shutdown() {
+	if (LuaEnvironment::isShuttingDown()) {
+		return;
+	}
+
+	LuaEnvironment::shuttingDown = true;
+	closeState();
 }
 
 LuaScriptInterface* LuaEnvironment::getTestInterface() {
