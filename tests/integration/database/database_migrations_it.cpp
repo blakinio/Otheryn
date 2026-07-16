@@ -70,8 +70,7 @@ function onUpdateDatabase()
 end
 )lua");
 
-		DatabaseManager::updateDatabase();
-
+		EXPECT_TRUE(DatabaseManager::updateDatabase());
 		EXPECT_EQ(firstVersion, readVersion());
 	}
 
@@ -88,8 +87,7 @@ function onUpdateDatabase()
 end
 )lua");
 
-		DatabaseManager::updateDatabase();
-
+		EXPECT_FALSE(DatabaseManager::updateDatabase());
 		EXPECT_EQ(baseVersion, readVersion());
 		EXPECT_FALSE(DatabaseManager::tableExists(std::string(markerTable)));
 	}
@@ -101,8 +99,7 @@ function onUpdateDatabase()
 end
 )lua");
 
-		DatabaseManager::updateDatabase();
-
+		EXPECT_FALSE(DatabaseManager::updateDatabase());
 		EXPECT_EQ(baseVersion, readVersion());
 	}
 
