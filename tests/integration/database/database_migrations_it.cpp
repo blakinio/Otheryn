@@ -1,13 +1,11 @@
 #include "config/configmanager.hpp"
 #include "database/database.hpp"
 #include "database/databasemanager.hpp"
-#include "lib/logging/in_memory_logger.hpp"
 
 #include <fmt/format.h>
 
 #include <filesystem>
 #include <fstream>
-#include <sstream>
 #include <string_view>
 
 namespace it_database_migrations {
@@ -27,7 +25,6 @@ namespace it_database_migrations {
 			cleanupMigrationFiles();
 			ASSERT_TRUE(DatabaseManager::registerDatabaseConfig("db_version", baseVersion));
 			ASSERT_TRUE(g_database().executeQuery(fmt::format("DROP TABLE IF EXISTS `{}`", markerTable)));
-			migrationLogger().reset();
 		}
 
 		void TearDown() override {
@@ -53,27 +50,7 @@ namespace it_database_migrations {
 			return version;
 		}
 
-		bool updateDatabaseWithDiagnostics() {
-			auto &logger = migrationLogger();
-			logger.reset();
-			const bool success = DatabaseManager::updateDatabase();
-			if (!success) {
-				std::ostringstream diagnostics;
-				diagnostics << "DatabaseManager::updateDatabase() failed. Captured logs:";
-				for (size_t index = 0; index < logger.logCount(); ++index) {
-					const auto [level, message] = logger.getLogEntry(index);
-					diagnostics << "\n[" << level << "] " << message;
-				}
-				ADD_FAILURE() << diagnostics.str();
-			}
-			return success;
-		}
-
 	private:
-		InMemoryLogger &migrationLogger() const {
-			return dynamic_cast<InMemoryLogger &>(g_logger());
-		}
-
 		std::filesystem::path migrationPath(int32_t version) const {
 			return migrationDirectory / fmt::format("{}.lua", version);
 		}
@@ -96,7 +73,7 @@ function onUpdateDatabase()
 end
 )lua");
 
-		EXPECT_TRUE(updateDatabaseWithDiagnostics());
+		EXPECT_TRUE(DatabaseManager::updateDatabase());
 		EXPECT_EQ(firstVersion, readVersion());
 	}
 
@@ -107,7 +84,7 @@ function onUpdateDatabase()
 end
 )lua");
 
-		EXPECT_TRUE(updateDatabaseWithDiagnostics());
+		EXPECT_TRUE(DatabaseManager::updateDatabase());
 		EXPECT_EQ(firstVersion, readVersion());
 	}
 
