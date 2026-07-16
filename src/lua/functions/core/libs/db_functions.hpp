@@ -8,12 +8,13 @@
  */
 
 #pragma once
-
 class DBFunctions {
 public:
 	static void init(lua_State* L);
+	static void initMigration(lua_State* L);
 
 private:
+	static void registerSynchronousFunctions(lua_State* L);
 	static int luaDatabaseAsyncExecute(lua_State* L);
 	static int luaDatabaseAsyncStoreQuery(lua_State* L);
 	static int luaDatabaseEscapeBlob(lua_State* L);
