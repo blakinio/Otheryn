@@ -77,6 +77,17 @@ end
 		EXPECT_EQ(firstVersion, readVersion());
 	}
 
+	TEST_F(DatabaseMigrationChainTest, MigrationStateDoesNotExposeAsyncDatabaseApis) {
+		writeMigration(firstVersion, R"lua(
+function onUpdateDatabase()
+	return db.asyncQuery == nil and db.asyncStoreQuery == nil
+end
+)lua");
+
+		EXPECT_TRUE(DatabaseManager::updateDatabase());
+		EXPECT_EQ(firstVersion, readVersion());
+	}
+
 	TEST_F(DatabaseMigrationChainTest, ExplicitFalseStopsChainWithoutAdvancingVersion) {
 		writeMigration(firstVersion, R"lua(
 function onUpdateDatabase()
