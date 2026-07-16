@@ -1,0 +1,30 @@
+name: OAM006 Apply Bounded Patch
+
+on:
+  push:
+    branches:
+      - feat/oam-006-secure-login-session-wire
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/oam-006-secure-login-session-wire
+          fetch-depth: 0
+      - name: Apply bounded patch
+        run: git apply --check tools/oam006-secure-login-wire.patch && git apply tools/oam006-secure-login-wire.patch
+      - name: Remove transient patch machinery
+        run: rm -f tools/oam006-secure-login-wire.patch .github/workflows/oam006-apply-bounded-patch.yml
+      - name: Commit bounded source adaptation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat(protocol): wire secure login session token"
+          git push origin HEAD:feat/oam-006-secure-login-session-wire
