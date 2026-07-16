@@ -29,7 +29,11 @@ namespace {
 }
 
 int main(int argc, char* argv[]) {
-	auto &server = inject<CanaryServer>();
+	auto &logger = DI::get<Logger>();
+	auto &rsa = DI::get<RSAManager>();
+	auto &serviceManager = DI::get<ServiceManager>();
+	CanaryServer server(logger, rsa, serviceManager);
+
 	const std::span<char*> arguments(argv, static_cast<std::size_t>(argc));
 	if (hasArgument(arguments, GenerateLuaApiDocsOnlyArgument)) {
 		return server.generateLuaApiDocsOnly();
