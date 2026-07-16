@@ -25,13 +25,14 @@ SaveManager &SaveManager::getInstance() {
 	return inject<SaveManager>();
 }
 
-void SaveManager::saveAll() {
+bool SaveManager::saveAll() {
 	Benchmark bm_saveAll;
+	bool allSucceeded = true;
 	logger.info("Saving server...");
 	Benchmark bm_players;
 	const auto &players = game.getPlayers();
 	const bool savePlayersInParallel = threadPool.get_thread_count() > 1 && players.size() > 1;
-	std::vector<std::pair<std::future<void>, std::string>> pending;
+	std::vector<std::pair<std::future<bool>, std::string>> pending;
 	logger.info("Saving {} players...", players.size());
 	if (savePlayersInParallel) {
 		pending.reserve(players.size());
@@ -46,13 +47,16 @@ void SaveManager::saveAll() {
 
 		if (savePlayersInParallel) {
 			auto fut = threadPool.submit_task([this, player] {
-				doSavePlayer(player);
+				return doSavePlayer(player);
 			});
 			pending.emplace_back(std::move(fut), player->getName());
 		} else {
 			try {
-				doSavePlayer(player);
+				if (!doSavePlayer(player)) {
+					allSucceeded = false;
+				}
 			} catch (const std::exception &e) {
+				allSucceeded = false;
 				logger.error("Failed to save player {}: {}", player->getName(), e.what());
 			}
 		}
@@ -60,8 +64,11 @@ void SaveManager::saveAll() {
 
 	for (auto &[future, name] : pending) {
 		try {
-			future.get();
+			if (!future.get()) {
+				allSucceeded = false;
+			}
 		} catch (const std::exception &e) {
+			allSucceeded = false;
 			logger.error("Failed to save player {}: {}", name, e.what());
 		}
 	}
@@ -76,7 +83,9 @@ void SaveManager::saveAll() {
 	Benchmark bm_guilds;
 	const auto &guilds = game.getGuilds();
 	for (const auto &[_, guild] : guilds) {
-		saveGuild(guild);
+		if (!saveGuild(guild)) {
+			allSucceeded = false;
+		}
 	}
 	double duration_guilds = bm_guilds.duration();
 	if (duration_guilds > 1000.0) {
@@ -85,8 +94,12 @@ void SaveManager::saveAll() {
 		logger.info("Guilds saved in {} milliseconds.", duration_guilds);
 	}
 
-	saveMap();
-	saveKV();
+	if (!saveMap()) {
+		allSucceeded = false;
+	}
+	if (!saveKV()) {
+		allSucceeded = false;
+	}
 
 	double duration_saveAll = bm_saveAll.duration();
 	if (duration_saveAll > 1000.0) {
@@ -94,6 +107,8 @@ void SaveManager::saveAll() {
 	} else {
 		logger.info("Server saved in {} milliseconds.", duration_saveAll);
 	}
+
+	return allSucceeded;
 }
 
 void SaveManager::scheduleAll() {
@@ -102,7 +117,9 @@ void SaveManager::scheduleAll() {
 
 	// Disable save async if the config is set to false
 	if (!g_configManager().getBoolean(TOGGLE_SAVE_ASYNC)) {
-		saveAll();
+		if (!saveAll()) {
+			logger.error("Scheduled server save completed with one or more failures.");
+		}
 		return;
 	}
 
@@ -111,7 +128,9 @@ void SaveManager::scheduleAll() {
 			logger.warn("Skipping save for server because another save has been scheduled.");
 			return;
 		}
-		saveAll();
+		if (!saveAll()) {
+			logger.error("Scheduled server save completed with one or more failures.");
+		}
 	});
 }
 
@@ -179,40 +198,46 @@ bool SaveManager::savePlayer(std::shared_ptr<Player> player) {
 	return doSavePlayer(player);
 }
 
-void SaveManager::saveGuild(std::shared_ptr<Guild> guild) {
+bool SaveManager::saveGuild(std::shared_ptr<Guild> guild) {
 	if (!guild) {
 		logger.debug("Failed to save guild because guild is null.");
-		return;
+		return false;
 	}
 
 	Benchmark bm_saveGuild;
 	logger.debug("Saving guild {}...", guild->getName());
-	IOGuild::saveGuild(guild);
+	const bool saveSuccess = IOGuild::saveGuild(guild);
+	if (!saveSuccess) {
+		logger.error("Failed to save guild {}.", guild->getName());
+	}
 
 	auto duration = bm_saveGuild.duration();
 	logger.debug("Saving guild {} took {} milliseconds.", guild->getName(), duration);
+	return saveSuccess;
 }
 
-void SaveManager::saveMap() {
+bool SaveManager::saveMap() {
 	Benchmark bm_saveMap;
 	logger.debug("Saving map...");
-	bool saveSuccess = Map::save();
+	const bool saveSuccess = Map::save();
 	if (!saveSuccess) {
 		logger.error("Failed to save map.");
 	}
 
 	auto duration = bm_saveMap.duration();
 	logger.debug("Map saved in {} milliseconds.", duration);
+	return saveSuccess;
 }
 
-void SaveManager::saveKV() {
+bool SaveManager::saveKV() {
 	Benchmark bm_saveKV;
 	logger.debug("Saving key-value store...");
-	bool saveSuccess = kv.saveAll();
+	const bool saveSuccess = kv.saveAll();
 	if (!saveSuccess) {
 		logger.error("Failed to save key-value store.");
 	}
 
 	auto duration = bm_saveKV.duration();
 	logger.debug("Key-value store saved in {} milliseconds.", duration);
+	return saveSuccess;
 }

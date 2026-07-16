@@ -26,15 +26,15 @@ public:
 
 	static SaveManager &getInstance();
 
-	void saveAll();
+	bool saveAll();
 	void scheduleAll();
 
 	bool savePlayer(std::shared_ptr<Player> player);
-	void saveGuild(std::shared_ptr<Guild> guild);
+	bool saveGuild(std::shared_ptr<Guild> guild);
 
 private:
-	void saveMap();
-	void saveKV();
+	bool saveMap();
+	bool saveKV();
 
 	/**
 	 * Schedules saving the current online player object.
