@@ -21,6 +21,19 @@
 #include "enums/account_type.hpp"
 #include "enums/account_errors.hpp"
 
+namespace {
+	void stageOnlinePlayerWheelKV(const std::shared_ptr<Player> &player) {
+		if (player->isOffline()) {
+			return;
+		}
+
+		player->wheel().saveRevealedGems();
+		player->wheel().saveActiveGems();
+		player->wheel().saveKVModGrades();
+		player->wheel().saveKVScrolls();
+	}
+} // namespace
+
 bool IOLoginData::gameWorldAuthentication(const std::string &accountDescriptor, const std::string &password, std::string &characterName, uint32_t &accountId, bool oldProtocol, const uint32_t ip) {
 	Account account(accountDescriptor);
 	account.setProtocolCompat(oldProtocol);
@@ -194,15 +207,20 @@ void IOLoginData::loadOnlyDataForOnlinePlayer(const std::shared_ptr<Player> &pla
 
 bool IOLoginData::savePlayer(const std::shared_ptr<Player> &player) {
 	try {
-		bool success = DBTransaction::executeWithinTransaction([player]() {
+		const bool success = DBTransaction::executeWithinTransaction([player]() {
 			return savePlayerGuard(player);
 		});
 
 		if (!success) {
 			g_logger().error("[{}] Error occurred saving player", __FUNCTION__);
+			return false;
 		}
 
-		return success;
+		// Wheel KV uses a separate persistence domain from the player SQL transaction.
+		// Stage it only after the player transaction commits so a later SQL rollback
+		// cannot leave KV changes queued for independent persistence.
+		stageOnlinePlayerWheelKV(player);
+		return true;
 	} catch (const DatabaseException &e) {
 		g_logger().error("[{}] Exception occurred: {}", __FUNCTION__, e.what());
 	}
@@ -259,7 +277,7 @@ bool IOLoginData::savePlayerGuard(const std::shared_ptr<Player> &player) {
 		throw DatabaseException("[IOLoginDataSave::savePlayerTaskHuntingClass] - Failed to save player task hunting class: " + player->getName());
 	}
 
-	// Saves data components that are only valid if the player is online.
+	// Saves SQL-backed data components that are only valid if the player is online.
 	// Skips execution entirely if the player is offline to avoid overwriting unloaded data.
 	saveOnlyDataForOnlinePlayer(player);
 
@@ -282,11 +300,6 @@ void IOLoginData::saveOnlyDataForOnlinePlayer(const std::shared_ptr<Player> &pla
 	if (!player->wheel().saveDBPlayerSlotPointsOnLogout()) {
 		throw DatabaseException("[PlayerWheel::saveDBPlayerSlotPointsOnLogout] - Failed to save player wheel info: " + player->getName());
 	}
-
-	player->wheel().saveRevealedGems();
-	player->wheel().saveActiveGems();
-	player->wheel().saveKVModGrades();
-	player->wheel().saveKVScrolls();
 
 	if (!player->weaponProficiency().saveAll()) {
 		throw DatabaseException("[IOLoginData::saveOnlyDataForOnlinePlayer] - Failed to save player weapon proficiency: " + player->getName());
