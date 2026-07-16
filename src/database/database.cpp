@@ -58,8 +58,9 @@ bool Database::connect(const std::string* host, const std::string* user, const s
 		g_logger().warn("MySQL host, user, password, database or port not provided");
 	}
 
-	// automatic reconnect
-	bool reconnect = true;
+	// Oteryn persistence is fail-closed: an implicit reconnect resets server-side
+	// session state and rolls back active transactions without notifying callers.
+	bool reconnect = false;
 	mysql_options(handle, MYSQL_OPT_RECONNECT, &reconnect);
 
 	// Remove ssl verification
@@ -176,12 +177,16 @@ void Database::createDatabaseBackup(bool compress) const {
 }
 
 bool Database::beginTransaction() {
-	if (!executeQuery("BEGIN")) {
-		return false;
-	}
+	// Hold the connection lock before BEGIN so no other thread can execute a
+	// statement on the shared MYSQL handle between BEGIN and transaction ownership.
 	metrics::lock_latency measureLock("database");
 	databaseLock.lock();
 	measureLock.stop();
+
+	if (!executeQuery("BEGIN")) {
+		databaseLock.unlock();
+		return false;
+	}
 
 	return true;
 }
@@ -222,20 +227,15 @@ bool Database::isRecoverableError(unsigned int error) {
 }
 
 bool Database::retryQuery(std::string_view query, int retries) {
-	while (retries > 0 && mysql_query(handle, query.data()) != 0) {
+	// Compatibility wrapper for existing callers. Arbitrary SQL statements are
+	// intentionally not resent after connection loss because their server-side
+	// execution state may be unknown and an implicit reconnect destroys transaction state.
+	(void)retries;
+	if (mysql_query(handle, query.data()) != 0) {
 		g_logger().error("Query: {}", query.substr(0, 256));
 		g_logger().error("MySQL error [{}]: {}", mysql_errno(handle), mysql_error(handle));
-		if (!isRecoverableError(mysql_errno(handle))) {
-			return false;
-		}
-		std::this_thread::sleep_for(std::chrono::seconds(1));
-		retries--;
-	}
-	if (retries == 0) {
-		g_logger().error("Query {} failed after {} retries.", query, 10);
 		return false;
 	}
-
 	return true;
 }
 
@@ -270,15 +270,10 @@ DBResult_ptr Database::storeQuery(std::string_view query) {
 	measureLock.stop();
 
 	metrics::query_latency measure(query.substr(0, 50));
-retry:
 	if (mysql_query(handle, query.data()) != 0) {
 		g_logger().error("Query: {}", query);
-		g_logger().error("Message: {}", mysql_error(handle));
-		if (!isRecoverableError(mysql_errno(handle))) {
-			return nullptr;
-		}
-		std::this_thread::sleep_for(std::chrono::seconds(1));
-		goto retry;
+		g_logger().error("MySQL error [{}]: {}", mysql_errno(handle), mysql_error(handle));
+		return nullptr;
 	}
 
 	// Retrieving results of query

@@ -241,13 +241,12 @@ public:
 				return false;
 			}
 
-			const bool result = callback();
-
-			if (!transaction.commit()) {
+			if (!callback()) {
+				transaction.rollback();
 				return false;
 			}
 
-			return result;
+			return transaction.commit();
 		} catch (const std::exception &exception) {
 			transaction.rollback();
 			g_logger().error("[{}] Error occurred during transaction, error: {}", __FUNCTION__, exception.what());
@@ -287,9 +286,14 @@ private:
 		}
 
 		try {
-			// Start the transaction
+			// Start the transaction. Keep local state aligned with the database lock
+			// and server-side transaction only after BEGIN succeeds.
 			state = STATE_START;
-			return Database::getInstance().beginTransaction();
+			if (!Database::getInstance().beginTransaction()) {
+				state = STATE_NO_START;
+				return false;
+			}
+			return true;
 		} catch (const std::exception &exception) {
 			// An error occurred while starting the transaction
 			state = STATE_NO_START;
