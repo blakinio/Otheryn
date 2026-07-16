@@ -21,6 +21,45 @@
 #include "enums/account_type.hpp"
 #include "enums/account_errors.hpp"
 
+namespace {
+	void saveOnlinePlayerDatabaseData(const std::shared_ptr<Player> &player) {
+		if (player->isOffline()) {
+			return;
+		}
+
+		if (!player->forgeHistory().save()) {
+			throw DatabaseException("[IOLoginData::saveOnlyDataForOnlinePlayer] - Failed to save player forge history: " + player->getName());
+		}
+
+		if (!IOLoginDataSave::savePlayerBosstiary(player)) {
+			throw DatabaseException("[IOLoginDataSave::savePlayerBosstiary] - Failed to save player bosstiary: " + player->getName());
+		}
+
+		if (!player->wheel().saveDBPlayerSlotPointsOnLogout()) {
+			throw DatabaseException("[PlayerWheel::saveDBPlayerSlotPointsOnLogout] - Failed to save player wheel info: " + player->getName());
+		}
+
+		if (!player->weaponProficiency().saveAll()) {
+			throw DatabaseException("[IOLoginData::saveOnlyDataForOnlinePlayer] - Failed to save player weapon proficiency: " + player->getName());
+		}
+
+		if (!IOLoginDataSave::savePlayerStorage(player)) {
+			throw DatabaseException("[IOLoginDataSave::savePlayerStorage] - Failed to save player storage: " + player->getName());
+		}
+	}
+
+	void stageOnlinePlayerWheelKV(const std::shared_ptr<Player> &player) {
+		if (player->isOffline()) {
+			return;
+		}
+
+		player->wheel().saveRevealedGems();
+		player->wheel().saveActiveGems();
+		player->wheel().saveKVModGrades();
+		player->wheel().saveKVScrolls();
+	}
+} // namespace
+
 bool IOLoginData::gameWorldAuthentication(const std::string &accountDescriptor, const std::string &password, std::string &characterName, uint32_t &accountId, bool oldProtocol, const uint32_t ip) {
 	Account account(accountDescriptor);
 	account.setProtocolCompat(oldProtocol);
@@ -194,17 +233,24 @@ void IOLoginData::loadOnlyDataForOnlinePlayer(const std::shared_ptr<Player> &pla
 
 bool IOLoginData::savePlayer(const std::shared_ptr<Player> &player) {
 	try {
-		bool success = DBTransaction::executeWithinTransaction([player]() {
+		const bool success = DBTransaction::executeWithinTransaction([player]() {
 			return savePlayerGuard(player);
 		});
 
 		if (!success) {
 			g_logger().error("[{}] Error occurred saving player", __FUNCTION__);
+			return false;
 		}
 
-		return success;
+		// Wheel KV uses a separate persistence domain from the player SQL transaction.
+		// Stage it only after the player transaction commits so a later SQL rollback
+		// cannot leave KV changes queued for independent persistence.
+		stageOnlinePlayerWheelKV(player);
+		return true;
 	} catch (const DatabaseException &e) {
 		g_logger().error("[{}] Exception occurred: {}", __FUNCTION__, e.what());
+	} catch (const std::exception &e) {
+		g_logger().error("[{}] Exception occurred staging post-commit player data: {}", __FUNCTION__, e.what());
 	}
 
 	return false;
@@ -259,42 +305,19 @@ bool IOLoginData::savePlayerGuard(const std::shared_ptr<Player> &player) {
 		throw DatabaseException("[IOLoginDataSave::savePlayerTaskHuntingClass] - Failed to save player task hunting class: " + player->getName());
 	}
 
-	// Saves data components that are only valid if the player is online.
+	// Saves SQL-backed data components that are only valid if the player is online.
 	// Skips execution entirely if the player is offline to avoid overwriting unloaded data.
-	saveOnlyDataForOnlinePlayer(player);
+	saveOnlinePlayerDatabaseData(player);
 
 	return true;
 }
 
 void IOLoginData::saveOnlyDataForOnlinePlayer(const std::shared_ptr<Player> &player) {
-	if (player->isOffline()) {
-		return;
-	}
-
-	if (!player->forgeHistory().save()) {
-		throw DatabaseException("[IOLoginData::saveOnlyDataForOnlinePlayer] - Failed to save player forge history: " + player->getName());
-	}
-
-	if (!IOLoginDataSave::savePlayerBosstiary(player)) {
-		throw DatabaseException("[IOLoginDataSave::savePlayerBosstiary] - Failed to save player bosstiary: " + player->getName());
-	}
-
-	if (!player->wheel().saveDBPlayerSlotPointsOnLogout()) {
-		throw DatabaseException("[PlayerWheel::saveDBPlayerSlotPointsOnLogout] - Failed to save player wheel info: " + player->getName());
-	}
-
-	player->wheel().saveRevealedGems();
-	player->wheel().saveActiveGems();
-	player->wheel().saveKVModGrades();
-	player->wheel().saveKVScrolls();
-
-	if (!player->weaponProficiency().saveAll()) {
-		throw DatabaseException("[IOLoginData::saveOnlyDataForOnlinePlayer] - Failed to save player weapon proficiency: " + player->getName());
-	}
-
-	if (!IOLoginDataSave::savePlayerStorage(player)) {
-		throw DatabaseException("[IOLoginDataSave::savePlayerStorage] - Failed to save player storage: " + player->getName());
-	}
+	// Preserve the public helper's historical SQL + KV behavior for any direct callers.
+	// The transaction-owned savePlayer() path deliberately invokes the SQL helper and
+	// stages KV only after its transaction commits.
+	saveOnlinePlayerDatabaseData(player);
+	stageOnlinePlayerWheelKV(player);
 }
 
 std::string IOLoginData::getNameByGuid(uint32_t guid) {
