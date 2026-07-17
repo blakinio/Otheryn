@@ -2,5 +2,6 @@
   <ItemGroup Condition="'$(MSBuildProjectName)' == 'canary'">
     <ClInclude Include="$(MSBuildThisFileDirectory)src\security\login_session_manager.hpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)src\security\login_session_manager.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\items\functions\item\item_parse_event_registration.cpp" />
   </ItemGroup>
 </Project>
