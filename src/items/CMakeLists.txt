@@ -15,6 +15,7 @@ target_sources(
             functions/item/attribute.cpp
             functions/item/custom_attribute.cpp
             functions/item/item_parse.cpp
+            functions/item/item_parse_event_registration.cpp
             thing.cpp
             tile.cpp
             trashholder.cpp
