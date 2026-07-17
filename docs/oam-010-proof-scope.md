@@ -1,9 +1,26 @@
 # OAM-010 Character Progression Target Proof Scope
 
-This proof-only target slice validates the existing Otheryn character-progression substrate without changing production runtime behavior.
+This proof-only target slice validates the existing Otheryn `character-progression` substrate without changing production runtime behavior.
 
-- Task-start target: `f59a58426b4d3910ba0cdc0d2332c24f31a1db4f`.
-- Canonical module: `character-progression`.
-- Production source remains unchanged.
-- Focused tests cover experience thresholds, zero-stamina experience gating, offline-training time bounds, regular-skill advancement, and magic-level advancement.
-- Legacy disconnect-death protection is intentionally not imported by this proof. It is a session-coupled death-loss policy divergence that requires separate authorization/evidence and prevents whole-module `REUSE`.
+## Exact baseline
+
+- target: `blakinio/Otheryn@f59a58426b4d3910ba0cdc0d2332c24f31a1db4f`
+- canonical module: `character-progression`
+
+## Proof boundary
+
+Focused tests exercise the existing target implementation for:
+
+- monotonic experience thresholds;
+- zero-stamina experience gating before mutation;
+- offline-training time upper/lower bounds;
+- regular-skill advancement through `addOfflineTrainingTries`;
+- magic-level advancement through `addOfflineTrainingTries`.
+
+No production `Player`, IOLoginData, persistence, protocol, client, database, map or gameplay source is changed by this target slice.
+
+## Deliberate exclusion
+
+Legacy Canary contains a session-coupled disconnect-death-protection extension that can set death loss to zero and preserve blessings after a protected disconnect. The pinned Otheryn target and pinned upstream do not contain that behavior.
+
+This proof does not import that legacy extension. Its presence prevents treating the whole legacy `character-progression` boundary as unconditional `REUSE`; any future adoption of disconnect-death protection requires its own explicit session/protocol/runtime evidence and authorization.
