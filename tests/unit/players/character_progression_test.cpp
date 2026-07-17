@@ -6,9 +6,9 @@
 #undef private
 
 namespace {
-std::shared_ptr<Vocation> makeTestVocation() {
-	return std::make_shared<Vocation>(1);
-}
+	std::shared_ptr<Vocation> makeTestVocation() {
+		return std::make_shared<Vocation>(1);
+	}
 }
 
 TEST(CharacterProgressionTest, ExperienceThresholdsAreMonotonic) {
