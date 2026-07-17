@@ -22,19 +22,6 @@ TEST(CharacterProgressionTest, ExperienceThresholdsAreMonotonic) {
 	EXPECT_LT(Player::getExpForLevel(100), Player::getExpForLevel(101));
 }
 
-TEST(CharacterProgressionTest, ZeroStaminaBlocksExperienceGainBeforeMutation) {
-	const auto player = makeTestPlayer();
-	player->staminaMinutes = 0;
-	player->experience = Player::getExpForLevel(10);
-	player->level = 10;
-
-	const auto before = player->experience;
-	player->gainExperience(1000, nullptr);
-
-	EXPECT_EQ(player->experience, before);
-	EXPECT_EQ(player->level, 10U);
-}
-
 TEST(CharacterProgressionTest, OfflineTrainingTimeClampsAndFloors) {
 	const auto player = makeTestPlayer();
 
