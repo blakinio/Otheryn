@@ -12,10 +12,11 @@ This proof-only target slice validates the existing Otheryn `character-progressi
 Focused tests exercise the existing target implementation for:
 
 - monotonic experience thresholds;
-- zero-stamina experience gating before mutation;
 - offline-training time upper/lower bounds;
 - regular-skill advancement through `addOfflineTrainingTries`;
 - magic-level advancement through `addOfflineTrainingTries`.
+
+The zero-stamina experience gate remains source-reviewed compatibility evidence rather than a unit-test claim in this slice. Exercising `gainExperience` in the minimal unit harness crosses broader runtime callback/global-service boundaries, so OAM-010 does not create a second harness merely to force that path.
 
 No production `Player`, IOLoginData, persistence, protocol, client, database, map or gameplay source is changed by this target slice.
 
