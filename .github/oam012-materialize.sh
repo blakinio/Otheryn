@@ -25,7 +25,7 @@ RAW=https://raw.githubusercontent.com/blakinio/canary
 
 fetch_verified "$RAW/$PR264/src/creatures/players/components/player_achievement.cpp" 998a077b6302233ba81969e904f72ad19d4b4840 src/creatures/players/components/player_achievement.cpp
 fetch_verified "$RAW/$PR264/src/creatures/players/components/player_achievement.hpp" c44334cc9993c5a497ea2023d52cdd6d26501914 src/creatures/players/components/player_achievement.hpp
-fetch_verified "$RAW/$PR264/tests/unit/players/components/player_achievement_test.cpp" c10d90aa37e587aa1738512e4907a4399e97f511 tests/unit/players/components/player_achievement_test.cpp
+fetch_verified "$RAW/$PR264/tests/unit/players/components/player_achievement_test.cpp" c10d90aa649322520739696507ba8a0ff2d05a06 tests/unit/players/components/player_achievement_test.cpp
 
 fetch_verified "$RAW/$PR288/data/scripts/lib/register_achievements.lua" 25e5b794a41adb84f7c0f7d309283d4fdb971511 data/scripts/lib/register_achievements.lua
 fetch_verified "$RAW/$PR288/src/creatures/players/components/weapon_proficiency.cpp" 780d39f0c2cd0002ebd12f11a611212592217976 src/creatures/players/components/weapon_proficiency.cpp
@@ -44,7 +44,7 @@ PY
 test "$(git hash-object data/scripts/lib/register_achievements.lua)" = 25e5b794a41adb84f7c0f7d309283d4fdb971511
 test "$(git hash-object src/creatures/players/components/player_achievement.cpp)" = 998a077b6302233ba81969e904f72ad19d4b4840
 test "$(git hash-object src/creatures/players/components/player_achievement.hpp)" = c44334cc9993c5a497ea2023d52cdd6d26501914
-test "$(git hash-object tests/unit/players/components/player_achievement_test.cpp)" = c10d90aa37e587aa1738512e4907a4399e97f511
+test "$(git hash-object tests/unit/players/components/player_achievement_test.cpp)" = c10d90aa649322520739696507ba8a0ff2d05a06
 test "$(git hash-object src/creatures/players/components/weapon_proficiency.cpp)" = 780d39f0c2cd0002ebd12f11a611212592217976
 test "$(git hash-object src/creatures/players/components/weapon_proficiency.hpp)" = 1ce80f1789aec6649df9943b24081f0df8f10fb2
 test "$(git hash-object tests/unit/players/components/weapon_proficiency_test.cpp)" = 756088ca70188226b2bbe96dd44f038fd6afe417
@@ -62,9 +62,15 @@ git add \
   tests/unit/players/components/player_achievement_test.cpp \
   tests/unit/players/components/weapon_proficiency_test.cpp \
   tests/unit/players/components/CMakeLists.txt
+
+git rm -f -- \
+  .github/oam012-materialize.sh \
+  .github/workflows/oam012-materialize-donor.yml
+
 if git diff --cached --quiet; then
-  echo "No donor changes to commit"
+  echo "No donor or helper-cleanup changes to commit"
   exit 0
 fi
+
 git commit -m "chore(oam): materialize exact OAM-012 donor state"
 git push origin HEAD:fix/oam-012-achievements-reconciliation
