@@ -6,6 +6,12 @@ on:
       - fix/oam-012-achievements-reconciliation
     paths:
       - .github/workflows/oam012-materialize-donor.yml
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize]
+    paths:
+      - .github/workflows/oam012-materialize-donor.yml
 
 permissions:
   contents: write
@@ -16,6 +22,7 @@ concurrency:
 
 jobs:
   materialize:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - name: Checkout exact branch head
