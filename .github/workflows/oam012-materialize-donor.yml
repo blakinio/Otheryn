@@ -6,6 +6,7 @@ on:
       - main
     types: [synchronize]
     paths:
+      - .github/oam012-materialize.sh
       - .github/workflows/oam012-materialize-donor.yml
 
 permissions:
