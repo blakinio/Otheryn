@@ -41,8 +41,6 @@ if 'player_achievement_test.cpp' not in text:
 path.write_text(text)
 PY
 
-rm -f .github/workflows/oam012-materialize-donor.yml .github/oam012-materialize.sh
-
 test "$(git hash-object data/scripts/lib/register_achievements.lua)" = 25e5b794a41adb84f7c0f7d309283d4fdb971511
 test "$(git hash-object src/creatures/players/components/player_achievement.cpp)" = 998a077b6302233ba81969e904f72ad19d4b4840
 test "$(git hash-object src/creatures/players/components/player_achievement.hpp)" = c44334cc9993c5a497ea2023d52cdd6d26501914
@@ -51,11 +49,21 @@ test "$(git hash-object src/creatures/players/components/weapon_proficiency.cpp)
 test "$(git hash-object src/creatures/players/components/weapon_proficiency.hpp)" = 1ce80f1789aec6649df9943b24081f0df8f10fb2
 test "$(git hash-object tests/unit/players/components/weapon_proficiency_test.cpp)" = 756088ca70188226b2bbe96dd44f038fd6afe417
 
+echo "ALL_DONOR_HASHES_VERIFIED"
+
 git config user.name github-actions[bot]
 git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-git add -A
+git add \
+  data/scripts/lib/register_achievements.lua \
+  src/creatures/players/components/player_achievement.cpp \
+  src/creatures/players/components/player_achievement.hpp \
+  src/creatures/players/components/weapon_proficiency.cpp \
+  src/creatures/players/components/weapon_proficiency.hpp \
+  tests/unit/players/components/player_achievement_test.cpp \
+  tests/unit/players/components/weapon_proficiency_test.cpp \
+  tests/unit/players/components/CMakeLists.txt
 if git diff --cached --quiet; then
-  echo "No changes to commit"
+  echo "No donor changes to commit"
   exit 0
 fi
 git commit -m "chore(oam): materialize exact OAM-012 donor state"
