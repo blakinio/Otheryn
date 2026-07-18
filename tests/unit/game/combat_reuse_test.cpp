@@ -1,0 +1,27 @@
+#include "creatures/combat/combat.hpp"
+
+TEST(CombatReuseTest, MapsKnownConditionAndDamageTypesBidirectionally) {
+	EXPECT_EQ(COMBAT_FIREDAMAGE, Combat::ConditionToDamageType(CONDITION_FIRE));
+	EXPECT_EQ(COMBAT_ENERGYDAMAGE, Combat::ConditionToDamageType(CONDITION_ENERGY));
+	EXPECT_EQ(COMBAT_PHYSICALDAMAGE, Combat::ConditionToDamageType(CONDITION_BLEEDING));
+	EXPECT_EQ(COMBAT_DROWNDAMAGE, Combat::ConditionToDamageType(CONDITION_DROWN));
+	EXPECT_EQ(COMBAT_EARTHDAMAGE, Combat::ConditionToDamageType(CONDITION_POISON));
+	EXPECT_EQ(COMBAT_ICEDAMAGE, Combat::ConditionToDamageType(CONDITION_FREEZING));
+	EXPECT_EQ(COMBAT_HOLYDAMAGE, Combat::ConditionToDamageType(CONDITION_DAZZLED));
+	EXPECT_EQ(COMBAT_DEATHDAMAGE, Combat::ConditionToDamageType(CONDITION_CURSED));
+
+	EXPECT_EQ(CONDITION_FIRE, Combat::DamageToConditionType(COMBAT_FIREDAMAGE));
+	EXPECT_EQ(CONDITION_ENERGY, Combat::DamageToConditionType(COMBAT_ENERGYDAMAGE));
+	EXPECT_EQ(CONDITION_BLEEDING, Combat::DamageToConditionType(COMBAT_PHYSICALDAMAGE));
+	EXPECT_EQ(CONDITION_DROWN, Combat::DamageToConditionType(COMBAT_DROWNDAMAGE));
+	EXPECT_EQ(CONDITION_POISON, Combat::DamageToConditionType(COMBAT_EARTHDAMAGE));
+	EXPECT_EQ(CONDITION_FREEZING, Combat::DamageToConditionType(COMBAT_ICEDAMAGE));
+	EXPECT_EQ(CONDITION_DAZZLED, Combat::DamageToConditionType(COMBAT_HOLYDAMAGE));
+	EXPECT_EQ(CONDITION_CURSED, Combat::DamageToConditionType(COMBAT_DEATHDAMAGE));
+}
+
+TEST(CombatReuseTest, MapsUnsupportedTypesToNone) {
+	EXPECT_EQ(COMBAT_NONE, Combat::ConditionToDamageType(CONDITION_NONE));
+	EXPECT_EQ(CONDITION_NONE, Combat::DamageToConditionType(COMBAT_NONE));
+	EXPECT_EQ(CONDITION_NONE, Combat::DamageToConditionType(COMBAT_HEALING));
+}
