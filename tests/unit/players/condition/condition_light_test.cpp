@@ -1,24 +1,3 @@
-#!/usr/bin/env bash
-set -euo pipefail
-
-python3 - <<'PY'
-from pathlib import Path
-
-path = Path('src/creatures/combat/condition.cpp')
-text = path.read_text()
-old_start = "\tinternalLightTicks = 0;\n\tlightChangeInterval = ticks / lightInfo.level;"
-new_start = "\tinternalLightTicks = 0;\n\tlightInfo.level = std::max<uint8_t>(1, lightInfo.level);\n\tlightChangeInterval = ticks / lightInfo.level;"
-old_load = "\t\tlightInfo.level = value;"
-new_load = "\t\tlightInfo.level = std::max<uint32_t>(1, value);"
-if text.count(old_start) != 1:
-    raise SystemExit('OAM-014 fail-closed: startCondition anchor mismatch')
-if text.count(old_load) != 1:
-    raise SystemExit('OAM-014 fail-closed: unserializeProp anchor mismatch')
-text = text.replace(old_start, new_start, 1).replace(old_load, new_load, 1)
-path.write_text(text)
-PY
-
-cat > tests/unit/players/condition/condition_light_test.cpp <<'EOF'
 /**
  * Canary - A free and open-source MMORPG server emulator
  * Copyright (©) 2019–present OpenTibiaBR <opentibiabr@outlook.com>
@@ -145,41 +124,3 @@ TEST(ConditionLightTest, PreservesValidLevelAndInterval) {
 	EXPECT_EQ(1000u, state->interval);
 	EXPECT_EQ(5u, player->getCreatureLight().level);
 }
-EOF
-
-cat > tests/unit/players/condition/CMakeLists.txt <<'EOF'
-target_sources(
-    canary_ut
-    PRIVATE condition_light_test.cpp player_paralyze_walk_exhaust_test.cpp
-)
-EOF
-
-verify_blob() {
-  local path="$1"
-  local expected="$2"
-  local actual
-  actual="$(git hash-object "$path")"
-  if [[ "$actual" != "$expected" ]]; then
-    echo "OAM-014 fail-closed: $path blob $actual != expected $expected" >&2
-    exit 1
-  fi
-}
-
-verify_blob src/creatures/combat/condition.cpp 26a1cf0c9e01f4ab162438e8284f5cc73d129d11
-verify_blob tests/unit/players/condition/condition_light_test.cpp ee2f185042cdb359aac1a752dce971ec76c38f8d
-verify_blob tests/unit/players/condition/CMakeLists.txt b224d4eb1eb15eb92ca4a26f214c0764b82b03c3
-
-rm -f .github/oam014-materialize.sh .github/workflows/oam014-materialize.yml
-
-changed="$(git status --short | awk '{print $2}' | sort)"
-expected="$(printf '%s\n' \
-  .github/oam014-materialize.sh \
-  .github/workflows/oam014-materialize.yml \
-  src/creatures/combat/condition.cpp \
-  tests/unit/players/condition/CMakeLists.txt \
-  tests/unit/players/condition/condition_light_test.cpp | sort)"
-if [[ "$changed" != "$expected" ]]; then
-  echo "OAM-014 fail-closed: unexpected materialization scope" >&2
-  printf 'Changed:\n%s\nExpected:\n%s\n' "$changed" "$expected" >&2
-  exit 1
-fi
