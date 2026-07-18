@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <optional>
+
 class Player;
 class KV;
 
@@ -33,6 +35,8 @@ public:
 	bool remove(uint16_t id);
 	[[nodiscard]] bool isUnlocked(uint16_t id) const;
 	[[nodiscard]] uint16_t getPoints() const;
+	[[nodiscard]] std::optional<uint16_t> calculateUnlockedPoints() const;
+	[[nodiscard]] bool reconcilePoints() const;
 	void addPoints(uint16_t toAddPoints) const;
 	void removePoints(uint16_t toRemovePoints) const;
 	[[nodiscard]] std::vector<std::pair<uint16_t, uint32_t>> getUnlockedAchievements() const;
