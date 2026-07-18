@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <array>
+
 #include "enums/weapon_proficiency.hpp"
 #include "creatures/creatures_definitions.hpp"
 #include "utils/hash.hpp"
@@ -132,6 +134,10 @@ private:
 	// Reconciliation deliberately awards all eligible IDs so existing players and
 	// large mastery jumps cannot skip lower thresholds.
 	[[nodiscard]] static std::vector<uint16_t> getMasteryAchievementIds(size_t masteredWeaponCount);
+
+	// Exact reviewed item set for secret achievement 567.
+	[[nodiscard]] static const std::array<uint16_t, 12> &getForbiddenBuildWeaponIds();
+	[[nodiscard]] bool hasForbiddenBuildMastery() const;
 
 	// Uses PlayerAchievement::add for idempotent live awards and login backfill.
 	void reconcileMasteryAchievements(bool message);

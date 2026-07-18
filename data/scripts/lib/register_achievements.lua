@@ -404,7 +404,7 @@ ACHIEVEMENTS = {
 	[403] = { name = "Icy Glare", grade = 1, points = 1, description = "Here's looking at you, kid. This ancient creature seems to size you up with its brilliant eyes and barely tolerates you riding it. Maybe it thinks you're the defrosted snack, after all?" },
 	[404] = { name = "Cartography 101", grade = 1, points = 2, description = "You succeeded in finding and charting several previously unexplored landmarks and locations for the Adventurer's Guild, you probably never need to ask anyone for the way - do you?" },
 	[405] = { name = "Lost Palace Raider", grade = 1, points = 2, secret = true, description = "Lifting the secrets of a fabulous palace and defeating a beautiful demon princess was a thrilling experience indeed. This site's marvels nearly matched its terrors. Nearly." },
-	[406] = { name = "The More the Merrier", grade = 1, points = 0, secret = true, description = "It's dangerous to go alone... Take ten friends." },
+	[406] = { name = "The More the Merrier", grade = 0, points = 0, secret = true, description = "It's dangerous to go alone... Take ten friends." },
 	-- [407] = Unknown/non-existent
 	[408] = { name = "Rift Warrior", grade = 1, points = 3, description = "You went through hell. Seven times. You defeated the demons. Countless times. You put an end to Ferumbras claims to ascendancy. Once and for all." },
 	-- [409] = Unknown/non-existent
@@ -511,7 +511,7 @@ ACHIEVEMENTS = {
 	[510] = { name = "Drama in Darama", grade = 1, points = 3, description = "If a pride of lions and a pack of hyaenas feud, it is not called a catfight but a ... whatsoever. For sure, it caused a lot of drama in the Darama Desert." },
 	[511] = { name = "Malefitz", grade = 1, points = 1, secret = true, description = "Made acquaintance with three brothers Fitz." },
 	[512] = { name = "Lionheart", grade = 1, points = 3, description = "You bested the maleficent duo Drume and Fugue and restored order to the besieged town of Bounac. You conquered the exotic stronghold of the Order of the Cobra and bested the undead knights of the Order of the Falcon. A true knight in heart and mind." },
-	[513] = { name = "Soul Mender", grade = 4, points = 10, description = "Brought back to the realm of the living this magnificent creature will carry you through death and everything that lays beyond." },
+	[513] = { name = "Soul Mender", grade = 4, points = 10, secret = true, description = "Brought back to the realm of the living this magnificent creature will carry you through death and everything that lays beyond." },
 	[514] = { name = "You Got Horse Power", grade = 3, points = 8, description = "Brought back to the realm of the living this magnificent creature will carry you through death and everything that lays beyond." },
 	[515] = { name = "Unleash the Beast", grade = 3, points = 8, description = "You defeated the manifestation of Goshnar's evil traits by fighting your way through beasts you didn't even want to imagine. It transformed you and now you can also look the part." },
 	[516] = { name = "Well Roared, Lion!", grade = 1, points = 1, description = "You helped Domizian and thus proved yourself worthy to enter the werelion sanctum underneath Lion's Rock. You faced the mighty werelions there and one of the rare white lions even chose to accompany you." },
@@ -524,7 +524,7 @@ ACHIEVEMENTS = {
 	[523] = { name = "Bounacean Chivalry", grade = 1, points = 2, secret = true, description = "Yselda forever stands watch against the carnisylvan menace. Ever awake, waiting in the dark, her heart longs to be united with her king once again. Deep empathy let a hero to bring her Kesar's tulip as a token of his love. That hero was you." },
 	[524] = { name = "Knowledge Raider", grade = 1, points = 3, description = "Your thirst for knowledge is insatiable. In the task of helping your gnomish friends, flawless execution is just the icing on the cake." },
 	[525] = { name = "Citizen of Issavi", grade = 1, points = 2, description = "It was not the first time that you helped the Sapphire Blade or the Midnight Flame with a difficult task. You may now wear the Kilmareshian robes as well as the tagralt blade and the eye-embroidered veil of the seers as a sign of Issavi's gratitude." },
-	[526] = { name = "King's Council", grade = 1, points = 0, description = "Your continued efforts in keeping Bounac and the people of Kesar the Younger safe, earned you a permanent place at the royal court as an advisor to the king." },
+	[526] = { name = "King's Council", grade = 1, points = 2, description = "Your continued efforts in keeping Bounac and the people of Kesar the Younger safe, earned you a permanent place at the royal court as an advisor to the king." },
 	[527] = { name = "Hot on the Trail", grade = 1, points = 3, description = "Since it is fireproof, this flaming creature feels right at home in raging infernos. But remember: just because it doesn't burn, you still do!" },
 	[528] = { name = "Shell We Take a Ride", grade = 1, points = 3, description = "Equipped with the shell of a tortoise and claws of a lobster this insect like companion will help you through every hardship." },
 	[529] = { name = "Phantastic!", grade = 1, points = 3, description = "This mighty pachyderm will march into battle as if just taking its Sunday stroll. The cost of friendship was only a few drome points!" },
@@ -551,19 +551,19 @@ ACHIEVEMENTS = {
 	[552] = { name = "I Wanna Fly Away", grade = 1, points = 3, description = "... on a pegasus, to a land of honey and milk. With this beautiful flying steed you certainly can." },
 	[553] = { name = "The Rootwalker", grade = 1, points = 2, description = "Traversing the entrances to Podzilla is an achievement in itself, thanks to Two Lips you are now one with the plant biosphere as you walk its many intertwined trails." },
 	[554] = { name = "Soul Crusher", grade = 1, points = 2, description = "The Soulpit resonates as the spirit of your final foe shatters under your might." },
-	[555] = { name = "Inner Peace", grade = 1, points = 2, description = "The transcendence to a higher state of mind and existence in order to achieve inner peace has been amplified by various means throughout Merudri history. Among them a manifold of potions with varying potency - it seems some of them actually work..." },
-	[556] = { name = "Fiend Rider", grade = 1, points = 2, description = "Riding such an ancient beast is certainly a good and harmless idea." },
+	[555] = { name = "Inner Peace", grade = 1, points = 3, description = "The transcendence to a higher state of mind and existence in order to achieve inner peace has been amplified by various means throughout Merudri history. Among them a manifold of potions with varying potency - it seems some of them actually work..." },
+	[556] = { name = "Fiend Rider", grade = 1, points = 3, description = "Riding such an ancient beast is certainly a good and harmless idea." },
 	[557] = { name = "Fiend Slayer", grade = 1, points = 2, description = "No living fiends were hurt to achieve this outfit." },
 	[558] = { name = "Tear the Toxic Veil", grade = 3, points = 7, description = "On the shoulders of demons, you tore through veils of venomous corruption. Demonic essences made you an unstoppable force but take care to also foster your human side." },
-	[559] = { name = "Hope of the Merudri", grade = 1, points = 3, description = "You followed the Three-Fold Path as did generations of Merudri before you. Carry the legacy, culture and hope of the Merudri proudly into this realm, the hearts of its people and beyond." },
+	[559] = { name = "Hope of the Merudri", grade = 1, points = 2, description = "You followed the Three-Fold Path as did generations of Merudri before you. Carry the legacy, culture and hope of the Merudri proudly into this realm, the hearts of its people and beyond." },
 	[560] = { name = "Umbral Redeemer", grade = 2, points = 6, description = "You managed to create, improve and transform your katar into a master state and have proven yourself worthy in a nightmarish world." },
 	[561] = { name = "Hell Rider", grade = 1, points = 2, description = "Pray it never finds its way back to its original stable with you still riding." },
-	[562] = { name = "Alpha Rider", grade = 1, points = 2, description = "You never can tell, who's boss here." },
+	[562] = { name = "Alpha Rider", grade = 1, points = 3, description = "You never can tell, who's boss here." },
 	-- [563] = Unknown/non-existent
 	[564] = { name = "The First of Many", grade = 1, points = 3, description = "The first step to greatness has been done." },
 	[565] = { name = "A Well-Honed Arsenal", grade = 2, points = 5, description = "Your expertise in weaponry reaches new heights." },
 	[566] = { name = "Arsenal of War", grade = 3, points = 7, description = "Feared by your enemies, admired by many - your reputation in weapon mastery precedes you." },
-	-- [567] = Unknown/non-existent
+	[567] = { name = "The Forbidden Build", grade = 1, points = 3, secret = true, description = "Surely, this will prove useful in the future... right?" },
 	[568] = { name = "Bat Person", grade = 1, points = 3, description = "No matter your command, this beast is all ears!" },
 	[569] = { name = "Illuminator", grade = 1, points = 3, description = "Joran and Yvette have brought the colours back to the world, and you have freed it from the monsters of this story. The world of books is now yours." },
 	[570] = { name = "Power of Words", grade = 2, points = 5, description = "The pen is mightier than the sword. In a way, yes, you have had this experience. You have seen with your own eyes what the power of words can do, the written word, to be precise." },
@@ -589,30 +589,34 @@ Functions:
 	Player:getAchievementPoints()
 ]]
 
-ACHIEVEMENT_FIRST = 1
-ACHIEVEMENT_LAST = #ACHIEVEMENTS
+local achievementIds = {}
+for id in pairs(ACHIEVEMENTS) do
+	if type(id) == "number" then
+		achievementIds[#achievementIds + 1] = id
+	end
+end
+table.sort(achievementIds)
 
-for id, achievTable in pairs(ACHIEVEMENTS) do
+local registeredAchievementIds = {}
+for _, id in ipairs(achievementIds) do
+	local achievTable = ACHIEVEMENTS[id]
 	if achievTable.name == nil then
 		logger.error(string.format("[Achievements registration] - Invalid achievement with no name, id: '%s'", id))
-		goto continue -- Skips to the next iteration using the 'continue' label
-	end
-
-	if achievTable.description == nil then
+	elseif achievTable.description == nil then
 		logger.error(string.format("[Achievements registration] - Invalid achievement with no description, id: '%s'", id))
-		goto continue -- Skips to the next iteration
+	else
+		local secret = achievTable.secret or false
+		local grade = achievTable.grade or 0
+		local points = achievTable.points or 0
+
+		logger.trace("[Achievements registration] - Registering achievement '{}' with id '{}'", achievTable.name, id)
+		Game.registerAchievement(id, achievTable.name, achievTable.description, secret, grade, points)
+		registeredAchievementIds[#registeredAchievementIds + 1] = id
 	end
-
-	-- Set default values for 'secret', 'grade', and 'points' if not present
-	local secret = achievTable.secret or false
-	local grade = achievTable.grade or 0
-	local points = achievTable.points or 0
-
-	logger.trace("[Achievements registration] - Registering achievement '{}' with id '{}'", achievTable.name, id)
-	Game.registerAchievement(id, achievTable.name, achievTable.description, secret, grade, points)
-
-	::continue:: -- Label used by 'goto' to continue the loop
 end
+
+ACHIEVEMENT_FIRST = registeredAchievementIds[1] or 0
+ACHIEVEMENT_LAST = registeredAchievementIds[#registeredAchievementIds] or 0
 
 function Game.isAchievementSecret(achievement)
 	local foundAchievement
@@ -621,48 +625,44 @@ function Game.isAchievementSecret(achievement)
 	else
 		foundAchievement = Game.getAchievementInfoByName(achievement)
 	end
+
 	if not foundAchievement then
-		return Spdlog.error(string.format("[isAchievementSecret] - Invalid achievement '%s'", ach)) and false
+		logger.error("[Game.isAchievementSecret] - Invalid achievement '{}'", achievement)
+		return false
 	end
 
-	return achievement.secret
+	return foundAchievement.secret
 end
 
 function Player.getAchievements(self)
 	local unlockedAchievements = {}
-	local index = 1
-	for achievIdentifier = 1, #ACHIEVEMENTS do
-		if self:hasAchievement(achievIdentifier) then
-			unlockedAchievements[index] = achievIdentifier
-			index = index + 1
+	for _, achievementId in ipairs(registeredAchievementIds) do
+		if self:hasAchievement(achievementId) then
+			unlockedAchievements[#unlockedAchievements + 1] = achievementId
 		end
 	end
 	return unlockedAchievements
 end
 
 function Player.addAllAchievements(self, denyMsg)
-	for id in pairs(ACHIEVEMENTS) do
-		if type(id) == "number" then
-			self:addAchievement(id, denyMsg)
-		end
+	for _, achievementId in ipairs(registeredAchievementIds) do
+		self:addAchievement(achievementId, denyMsg)
 	end
 	return true
 end
 
 function Player.removeAllAchievements(self)
-	for id in pairs(ACHIEVEMENTS) do
-		if type(id) == "number" then
-			self:removeAchievement(id)
-		end
+	for _, achievementId in ipairs(registeredAchievementIds) do
+		self:removeAchievement(achievementId)
 	end
 	return true
 end
 
 function Player.getSecretAchievements(self)
 	local unlockedSecretAchievements = {}
-	for achievIdentifier, achievementDetails in pairs(ACHIEVEMENTS) do
-		if self:hasAchievement(achievIdentifier) and achievementDetails.secret then
-			unlockedSecretAchievements[#unlockedSecretAchievements + 1] = achievIdentifier
+	for _, achievementId in ipairs(registeredAchievementIds) do
+		if self:hasAchievement(achievementId) and ACHIEVEMENTS[achievementId].secret then
+			unlockedSecretAchievements[#unlockedSecretAchievements + 1] = achievementId
 		end
 	end
 	return unlockedSecretAchievements
@@ -670,9 +670,9 @@ end
 
 function Player.getPublicAchievements(self)
 	local unlockedPublicAchievements = {}
-	for achievIdentifier, achievementDetails in pairs(ACHIEVEMENTS) do
-		if self:hasAchievement(achievIdentifier) and not achievementDetails.secret then
-			unlockedPublicAchievements[#unlockedPublicAchievements + 1] = achievIdentifier
+	for _, achievementId in ipairs(registeredAchievementIds) do
+		if self:hasAchievement(achievementId) and not ACHIEVEMENTS[achievementId].secret then
+			unlockedPublicAchievements[#unlockedPublicAchievements + 1] = achievementId
 		end
 	end
 	return unlockedPublicAchievements
