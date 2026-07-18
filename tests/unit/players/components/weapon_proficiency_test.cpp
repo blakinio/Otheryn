@@ -33,6 +33,14 @@ protected:
 		return WeaponProficiency::getMasteryAchievementIds(masteredWeaponCount);
 	}
 
+	static const std::array<uint16_t, 12> &getForbiddenBuildWeaponIds() {
+		return WeaponProficiency::getForbiddenBuildWeaponIds();
+	}
+
+	static bool hasForbiddenBuildMastery(const WeaponProficiency &component) {
+		return component.hasForbiddenBuildMastery();
+	}
+
 private:
 	inline static di::extension::injector<> injector {};
 };
@@ -92,4 +100,39 @@ TEST_F(WeaponProficiencyTest, MasteryAchievementThresholdsAreExact) {
 	EXPECT_EQ((std::vector<uint16_t> { 564, 565 }), getMasteryAchievementIds(49));
 	EXPECT_EQ((std::vector<uint16_t> { 564, 565, 566 }), getMasteryAchievementIds(50));
 	EXPECT_EQ((std::vector<uint16_t> { 564, 565, 566 }), getMasteryAchievementIds(500));
+}
+
+TEST_F(WeaponProficiencyTest, ForbiddenBuildReviewedWeaponSetIsExact) {
+	EXPECT_EQ((std::array<uint16_t, 12> { 9385, 21179, 9373, 21178, 3284, 9396, 9378, 26073, 26009, 9375, 1781, 2992 }), getForbiddenBuildWeaponIds());
+}
+
+TEST_F(WeaponProficiencyTest, ForbiddenBuildRequiresEveryReviewedWeaponMastered) {
+	auto player = std::make_shared<Player>();
+	auto &component = player->weaponProficiency();
+	const auto &weaponIds = getForbiddenBuildWeaponIds();
+
+	for (size_t index = 0; index + 1 < weaponIds.size(); ++index) {
+		setMasteredState(component, weaponIds[index], true);
+	}
+	EXPECT_FALSE(hasForbiddenBuildMastery(component));
+
+	setMasteredState(component, weaponIds.back(), true);
+	EXPECT_TRUE(hasForbiddenBuildMastery(component));
+
+	setMasteredState(component, weaponIds.front(), false);
+	EXPECT_FALSE(hasForbiddenBuildMastery(component));
+}
+
+TEST_F(WeaponProficiencyTest, ForbiddenBuildIgnoresNonTargetAndDuplicateEntries) {
+	auto player = std::make_shared<Player>();
+	auto &component = player->weaponProficiency();
+	const auto &weaponIds = getForbiddenBuildWeaponIds();
+
+	for (size_t index = 0; index + 1 < weaponIds.size(); ++index) {
+		setMasteredState(component, weaponIds[index], true);
+	}
+	setMasteredState(component, weaponIds.front(), true);
+	setMasteredState(component, 65000, true);
+
+	EXPECT_FALSE(hasForbiddenBuildMastery(component));
 }

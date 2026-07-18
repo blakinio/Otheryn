@@ -13,6 +13,8 @@
 #include "game/game.hpp"
 #include "kv/kv.hpp"
 
+#include <limits>
+
 PlayerAchievement::PlayerAchievement(Player &player) :
 	m_player(player) { }
 
@@ -82,6 +84,39 @@ uint16_t PlayerAchievement::getPoints() const {
 	return kvScoped ? static_cast<uint16_t>(kvScoped->getNumber()) : 0;
 }
 
+std::optional<uint16_t> PlayerAchievement::calculateUnlockedPoints() const {
+	uint32_t totalPoints = 0;
+	for (const auto &unlockedAchievement : m_achievementsUnlocked) {
+		const auto achievement = g_game().getAchievementById(unlockedAchievement.first);
+		if (achievement.id == 0) {
+			g_logger().error("[{}] - Achievement ID {} not found; point reconciliation aborted.", __FUNCTION__, unlockedAchievement.first);
+			return std::nullopt;
+		}
+
+		totalPoints += achievement.points;
+		if (totalPoints > std::numeric_limits<uint16_t>::max()) {
+			g_logger().error("[{}] - Achievement point total {} exceeds uint16_t; reconciliation aborted.", __FUNCTION__, totalPoints);
+			return std::nullopt;
+		}
+	}
+
+	return static_cast<uint16_t>(totalPoints);
+}
+
+bool PlayerAchievement::reconcilePoints() const {
+	const auto authoritativePoints = calculateUnlockedPoints();
+	if (!authoritativePoints.has_value()) {
+		return false;
+	}
+
+	const auto storedPoints = getPoints();
+	if (storedPoints != authoritativePoints.value()) {
+		m_player.kv()->scoped("achievements")->set("points", authoritativePoints.value());
+	}
+
+	return true;
+}
+
 void PlayerAchievement::addPoints(uint16_t toAddPoints) const {
 	const auto oldPoints = getPoints();
 	m_player.kv()->scoped("achievements")->set("points", oldPoints + toAddPoints);
@@ -97,18 +132,28 @@ std::vector<std::pair<uint16_t, uint32_t>> PlayerAchievement::getUnlockedAchieve
 }
 
 void PlayerAchievement::loadUnlockedAchievements() {
+	m_achievementsUnlocked.clear();
+	bool hasUnresolvedAchievement = false;
 	const auto &unlockedAchievements = getUnlockedKV()->keys();
 	g_logger().debug("[{}] - Loading unlocked achievements: {}", __FUNCTION__, unlockedAchievements.size());
 	for (const auto &achievementName : unlockedAchievements) {
 		const Achievement &achievement = g_game().getAchievementByName(achievementName);
 		if (achievement.id == 0) {
-			g_logger().error("[{}] - Achievement {} not found.", __FUNCTION__, achievementName);
+			g_logger().error("[{}] - Achievement {} not found; preserving stored point aggregate.", __FUNCTION__, achievementName);
+			hasUnresolvedAchievement = true;
 			continue;
 		}
 
 		g_logger().debug("[{}] - Achievement {} found for player {}.", __FUNCTION__, achievementName, m_player.getName());
-
 		m_achievementsUnlocked.emplace_back(achievement.id, getUnlockedKV()->get(achievementName)->getNumber());
+	}
+
+	if (hasUnresolvedAchievement) {
+		return;
+	}
+
+	if (!reconcilePoints()) {
+		g_logger().error("[{}] - Failed to reconcile achievement points for player {}.", __FUNCTION__, m_player.getName());
 	}
 }
 

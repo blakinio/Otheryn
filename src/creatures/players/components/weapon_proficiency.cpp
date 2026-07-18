@@ -8,6 +8,7 @@
  */
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 
@@ -42,6 +43,20 @@ namespace {
 	constexpr int32_t MIN_TRACKED_SKILL = static_cast<int32_t>(SKILL_FIRST);
 	constexpr int32_t MAX_TRACKED_SKILL = static_cast<int32_t>(SKILL_MAGLEVEL);
 	constexpr size_t MASTERY_EXPERIENCE_OFFSET = 2;
+	constexpr std::array<uint16_t, 12> FORBIDDEN_BUILD_WEAPON_IDS = {
+		9385,
+		21179,
+		9373,
+		21178,
+		3284,
+		9396,
+		9378,
+		26073,
+		26009,
+		9375,
+		1781,
+		2992,
+	};
 
 	[[nodiscard]] bool isTrackedWeaponProficiencySkill(skills_t skill) {
 		const auto enumValue = static_cast<int32_t>(skill);
@@ -354,9 +369,23 @@ std::vector<uint16_t> WeaponProficiency::getMasteryAchievementIds(size_t mastere
 	return achievementIds;
 }
 
+const std::array<uint16_t, 12> &WeaponProficiency::getForbiddenBuildWeaponIds() {
+	return FORBIDDEN_BUILD_WEAPON_IDS;
+}
+
+bool WeaponProficiency::hasForbiddenBuildMastery() const {
+	return std::ranges::all_of(getForbiddenBuildWeaponIds(), [this](const uint16_t weaponId) {
+		const auto it = proficiency.find(weaponId);
+		return it != proficiency.end() && it->second.mastered;
+	});
+}
+
 void WeaponProficiency::reconcileMasteryAchievements(bool message) {
 	for (const auto achievementId : getMasteryAchievementIds(getMasteredWeaponCount())) {
 		m_player.achiev().add(achievementId, message);
+	}
+	if (hasForbiddenBuildMastery()) {
+		m_player.achiev().add(567, message);
 	}
 }
 
