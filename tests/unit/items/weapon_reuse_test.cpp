@@ -7,7 +7,6 @@
 
 #include <gtest/gtest.h>
 
-#include "items/items.hpp"
 #include "items/weapons/weapons.hpp"
 
 TEST(WeaponReuseTest, PreservesMaximumDamageHelpers) {
@@ -17,15 +16,11 @@ TEST(WeaponReuseTest, PreservesMaximumDamageHelpers) {
 	EXPECT_EQ(Weapons::getMaxWeaponDamage(100, 100, 0, 1.0F, true), 0);
 }
 
-TEST(WeaponReuseTest, PublishesWandAverageHitMetadata) {
-	ItemType itemType;
-	EXPECT_EQ(itemType.maxHitChance, -1);
-
+TEST(WeaponReuseTest, PreservesDeterministicWandMaximumDamage) {
 	WeaponWand wand;
 	wand.setMinChange(20);
 	wand.setMaxChange(80);
-	wand.configureWeapon(itemType);
 
-	EXPECT_EQ(itemType.maxHitChance, 50);
-	EXPECT_EQ(itemType.combatType, wand.getElementType());
+	EXPECT_EQ(wand.getWeaponDamage(nullptr, nullptr, nullptr, true), -80);
+	EXPECT_EQ(wand.getElementDamageValue(), 0);
 }
