@@ -13,8 +13,9 @@ target_sources(
             monster_targeting_test.cpp
             navigation_snapshot_test.cpp
             npc_shop_range_test.cpp
-            random_mount_test.cpp
             player_stats_test.cpp
+            random_mount_test.cpp
             spawn_monster_test.cpp
+            spell_reuse_test.cpp
             zone_weak_cache_test.cpp
 )
