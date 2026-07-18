@@ -7,6 +7,60 @@
  * Website: https://docs.opentibiabr.com/
  */
 
-#include "lib/logging/in_memory_logger.hpp"
+#include <gtest/gtest.h>
 
 #include "items/containers/container.hpp"
+
+TEST(ContainerReuseTest, PreservesDirectCapacityAndItemLifecycle) {
+	const auto container = Container::create(0, 2, true, false);
+	ASSERT_NE(container, nullptr);
+	EXPECT_TRUE(container->empty());
+	EXPECT_EQ(container->capacity(), 2);
+	EXPECT_EQ(container->getFreeSlots(), 2);
+
+	const auto first = std::make_shared<Item>(0);
+	const auto second = std::make_shared<Item>(0);
+
+	container->addItem(first);
+	EXPECT_EQ(container->size(), 1);
+	EXPECT_EQ(container->getItemByIndex(0), first);
+	EXPECT_EQ(container->getThingIndex(first), 0);
+	EXPECT_EQ(container->getFreeSlots(), 1);
+	EXPECT_TRUE(container->isHoldingItem(first));
+
+	container->addItem(second);
+	EXPECT_EQ(container->size(), 2);
+	EXPECT_EQ(container->getFreeSlots(), 0);
+	EXPECT_EQ(container->getItemByIndex(1), second);
+
+	container->removeItem(first);
+	EXPECT_EQ(container->size(), 1);
+	EXPECT_EQ(container->getThingIndex(first), -1);
+	EXPECT_EQ(container->getFreeSlots(), 1);
+}
+
+TEST(ContainerReuseTest, PreservesBoundedNestedTraversal) {
+	const auto root = Container::create(0, 4, true, false);
+	const auto nested = Container::create(0, 4, true, false);
+	const auto leaf = std::make_shared<Item>(0);
+
+	nested->addItem(leaf);
+	root->addItem(nested);
+
+	ContainerIterator iterator(root, 2);
+	ASSERT_TRUE(iterator.hasNext());
+	EXPECT_EQ(*iterator, nested);
+	iterator.advance();
+	ASSERT_TRUE(iterator.hasNext());
+	EXPECT_EQ(*iterator, leaf);
+	iterator.advance();
+	EXPECT_FALSE(iterator.hasNext());
+	EXPECT_FALSE(iterator.hasReachedMaxDepth());
+
+	ContainerIterator shallowIterator(root, 1);
+	ASSERT_TRUE(shallowIterator.hasNext());
+	EXPECT_EQ(*shallowIterator, nested);
+	shallowIterator.advance();
+	EXPECT_TRUE(shallowIterator.hasReachedMaxDepth());
+	EXPECT_FALSE(shallowIterator.hasNext());
+}
