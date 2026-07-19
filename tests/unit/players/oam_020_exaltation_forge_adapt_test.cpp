@@ -20,6 +20,7 @@ TEST(Oam020ExaltationForgeAdaptTest, PinsValidatedDefaultsAndServerAuthorityPoli
 	EXPECT_EQ(4, ForgeConfigDefaults::fiendishCreaturesLimit);
 
 	EXPECT_TRUE(ForgeFusionPolicy::isValid(100, 100, 4, 4, false, false));
+	EXPECT_FALSE(ForgeFusionPolicy::isValid(0, 100, 4, 4, false, false));
 	EXPECT_FALSE(ForgeFusionPolicy::isValid(100, 101, 4, 4, false, false));
 	EXPECT_TRUE(ForgeFusionPolicy::isValid(100, 101, 4, 4, true, true));
 	EXPECT_FALSE(ForgeFusionPolicy::isValid(100, 101, 3, 3, true, true));
@@ -29,6 +30,7 @@ TEST(Oam020ExaltationForgeAdaptTest, PinsValidatedDefaultsAndServerAuthorityPoli
 	EXPECT_TRUE(ForgeTransferPolicy::isValidTransfer(2, 2, 2, false));
 	EXPECT_EQ(2, ForgeTransferPolicy::resourceTier(2));
 	EXPECT_EQ(1, ForgeTransferPolicy::resultTier(2, false));
+	EXPECT_EQ(2, ForgeTransferPolicy::resultTier(2, true));
 }
 
 TEST(Oam020ExaltationForgeAdaptTest, PreservesEffectGatesAndRollsBackFailedTransactions) {
