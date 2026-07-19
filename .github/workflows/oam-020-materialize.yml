@@ -1,0 +1,27 @@
+name: OAM-020 bounded materializer
+
+on:
+  push:
+    branches:
+      - dudantas/oam-020-exaltation-forge-adapt
+    paths:
+      - .github/scripts/oam_020_materialize.sh
+      - .github/workflows/oam-020-materialize.yml
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    if: github.repository == 'blakinio/Otheryn'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact target branch
+        uses: actions/checkout@v4
+        with:
+          ref: dudantas/oam-020-exaltation-forge-adapt
+          fetch-depth: 0
+
+      - name: Materialize bounded OAM-020 donor set
+        shell: bash
+        run: bash .github/scripts/oam_020_materialize.sh
