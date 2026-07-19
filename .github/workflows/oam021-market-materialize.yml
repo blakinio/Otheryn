@@ -1,0 +1,70 @@
+name: OAM-021 market materializer
+
+on:
+  push:
+    branches:
+      - dudantas/oam-021-market-adapt
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dudantas/oam-021-market-adapt
+          fetch-depth: 0
+
+      - name: Apply exact market adaptation and remove materializer
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/io/iomarket.cpp')
+          text = path.read_text()
+
+          old_include = '#include "io/iomarket.hpp"\n'
+          new_include = '#include "io/iomarket.hpp"\n\n#include "io/market_validation.hpp"\n'
+          if text.count(old_include) != 1:
+              raise SystemExit('unexpected iomarket include anchor count')
+          text = text.replace(old_include, new_include, 1)
+
+          old_tier = '''uint8_t IOMarket::getTierFromDatabaseTable(const std::string &string) {\n\tauto tier = static_cast<uint8_t>(std::atoi(string.c_str()));\n\tif (tier > g_configManager().getNumber(FORGE_MAX_ITEM_TIER)) {\n\t\tg_logger().error("{} - Failed to get number value {} for tier table result", __FUNCTION__, tier);\n\t\treturn 0;\n\t}\n\n\treturn tier;\n}\n'''
+          new_tier = '''uint8_t IOMarket::getTierFromDatabaseTable(const std::string &string) {\n\tconst auto maxTier = g_configManager().getNumber(FORGE_MAX_ITEM_TIER);\n\tconst auto tier = MarketValidation::parseTier(string, maxTier);\n\tif (!tier) {\n\t\tg_logger().error("{} - Failed to get valid number value '{}' for tier table result", __FUNCTION__, string);\n\t\treturn 0;\n\t}\n\n\treturn *tier;\n}\n'''
+          if text.count(old_tier) != 1:
+              raise SystemExit('unexpected tier parser anchor count')
+          text = text.replace(old_tier, new_tier, 1)
+
+          old_counter = '(result->getNumber<uint32_t>("id") ^ 0xABCDEF) & 0xFFFF'
+          if text.count(old_counter) != 4:
+              raise SystemExit(f'unexpected market counter anchor count: {text.count(old_counter)}')
+          text = text.replace(old_counter, 'MarketValidation::offerCounter(result->getNumber<uint32_t>("id"))')
+
+          old_created = '\tconst int32_t created = timestamp - g_configManager().getNumber(MARKET_OFFER_DURATION);\n'
+          new_created = '''\tconst auto created = MarketValidation::offerCreatedAt(timestamp, g_configManager().getNumber(MARKET_OFFER_DURATION));\n\tif (!created) {\n\t\toffer.id = 0;\n\t\treturn offer;\n\t}\n'''
+          if text.count(old_created) != 1:
+              raise SystemExit('unexpected created-at anchor count')
+          text = text.replace(old_created, new_created, 1)
+
+          old_query = 'FROM `market_offers` WHERE `created` = " << created << " AND ((`id` ^ 0xABCDEF) & 65535) = " << counter << " LIMIT 1";'
+          new_query = 'FROM `market_offers` WHERE `created` = " << *created << " AND ((`id` ^ 0xABCDEF) & 65535) = " << counter << " LIMIT 1";'
+          if text.count(old_query) != 1:
+              raise SystemExit('unexpected created-at query anchor count')
+          text = text.replace(old_query, new_query, 1)
+
+          path.write_text(text)
+          PY
+
+          rm .github/workflows/oam021-market-materialize.yml
+
+          git diff --check
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/io/iomarket.cpp .github/workflows/oam021-market-materialize.yml
+          git commit -m "feat(market): wire strict offer validation"
+          git push origin HEAD:dudantas/oam-021-market-adapt
