@@ -19,7 +19,10 @@ permissions:
 
 jobs:
   materialize:
-    if: github.repository == 'blakinio/Otheryn' && github.head_ref == 'dudantas/oam-020-exaltation-forge-adapt'
+    if: >-
+      github.repository == 'blakinio/Otheryn' &&
+      (github.ref == 'refs/heads/dudantas/oam-020-exaltation-forge-adapt' ||
+      github.head_ref == 'dudantas/oam-020-exaltation-forge-adapt')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout exact target branch
