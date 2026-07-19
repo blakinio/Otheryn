@@ -37,6 +37,7 @@ jobs:
             echo "OAM-020 materializer already removed from current branch; nothing to do." | tee /tmp/oam-020-materializer.log
             exit 0
           fi
+          sed -i 's#git add vcproj/canary.vcxproj#git add -f vcproj/canary.vcxproj#' .github/scripts/oam_020_materialize.sh
           set +e
           bash .github/scripts/oam_020_materialize.sh 2>&1 | tee /tmp/oam-020-materializer.log
           status=${PIPESTATUS[0]}
