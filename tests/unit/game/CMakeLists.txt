@@ -5,6 +5,7 @@ target_sources(
             dispatcher_policy_test.cpp
             dispatcher_wdrr_test.cpp
             events_scheduler_test.cpp
+            forge_config_test.cpp
             highscores_test.cpp
             monster_combat_intention_test.cpp
             monster_compute_service_test.cpp

@@ -8,6 +8,7 @@
  */
 
 #include "config/configmanager.hpp"
+#include "config/forge_config_defaults.hpp"
 
 #include "lib/di/container.hpp"
 #include "game/game.hpp"
@@ -262,10 +263,10 @@ bool ConfigManager::load() {
 	loadIntConfig(L, FORGE_CONVERGENCE_TRANSFER_DUST_COST, "forgeConvergenceTransferCost", 160);
 	loadIntConfig(L, FORGE_CORE_COST, "forgeCoreCost", 50);
 	loadIntConfig(L, FORGE_COST_ONE_SLIVER, "forgeCostOneSliver", 20);
-	loadIntConfig(L, FORGE_FIENDISH_CREATURES_LIMIT, "forgeFiendishLimit", 3);
+	loadIntConfig(L, FORGE_FIENDISH_CREATURES_LIMIT, "forgeFiendishLimit", ForgeConfigDefaults::fiendishCreaturesLimit);
 	loadIntConfig(L, FORGE_FUSION_DUST_COST, "forgeFusionDustCost", 100);
 	loadIntConfig(L, FORGE_INFLUENCED_CREATURES_LIMIT, "forgeInfluencedLimit", 300);
-	loadIntConfig(L, FORGE_MAX_DUST, "forgeMaxDust", 225);
+	loadIntConfig(L, FORGE_MAX_DUST, "forgeMaxDust", ForgeConfigDefaults::maxDust);
 	loadIntConfig(L, FORGE_MAX_ITEM_TIER, "forgeMaxItemTier", 10);
 	loadIntConfig(L, FORGE_MAX_SLIVERS, "forgeMaxSlivers", 7);
 	loadIntConfig(L, FORGE_MIN_SLIVERS, "forgeMinSlivers", 3);

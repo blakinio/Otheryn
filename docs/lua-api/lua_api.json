@@ -6889,6 +6889,12 @@
         "source": "src/lua/functions/creatures/player/player_functions.cpp"
       },
       {
+        "name": "isPremium",
+        "params": [],
+        "return": "boolean",
+        "source": "src/lua/functions/creatures/player/player_functions.cpp"
+      },
+      {
         "name": "isPromoted",
         "params": [],
         "return": "boolean|nil",
