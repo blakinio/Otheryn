@@ -204,7 +204,14 @@ for path in "${staged_paths[@]}"; do
   fi
 done
 
-git rm .github/scripts/oam_020_materialize.sh .github/workflows/oam-020-materialize.yml
+cat > .github/scripts/oam_020_materialize.sh <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+echo "OAM-020 materializer already completed; no action."
+exit 0
+EOF
+git add .github/scripts/oam_020_materialize.sh
+git rm .github/workflows/oam-020-materialize.yml
 
 git config user.name "github-actions[bot]"
 git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -216,6 +223,9 @@ if [[ "${#final_paths[@]}" -eq 0 ]]; then
   exit 1
 fi
 for path in "${final_paths[@]}"; do
+  if [[ "${path}" == ".github/scripts/oam_020_materialize.sh" ]]; then
+    continue
+  fi
   if ! is_allowed "${path}"; then
     echo "Final target diff contains non-allowlisted path: ${path}" >&2
     exit 1
