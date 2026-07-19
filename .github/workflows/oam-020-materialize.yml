@@ -17,6 +17,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: oam-020-exaltation-forge-materializer
+  cancel-in-progress: true
+
 jobs:
   materialize:
     if: >-
@@ -34,6 +38,10 @@ jobs:
       - name: Materialize bounded OAM-020 donor set
         shell: bash
         run: |
+          if [[ ! -f .github/scripts/oam_020_materialize.sh ]]; then
+            echo "OAM-020 materializer already removed from current branch; nothing to do."
+            exit 0
+          fi
           set +e
           bash .github/scripts/oam_020_materialize.sh 2>&1 | tee /tmp/oam-020-materializer.log
           status=${PIPESTATUS[0]}
