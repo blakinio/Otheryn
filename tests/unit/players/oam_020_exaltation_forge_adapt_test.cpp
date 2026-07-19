@@ -55,7 +55,7 @@ TEST(Oam020ExaltationForgeAdaptTest, PreservesEffectGatesAndRollsBackFailedTrans
 		[] {
 			return false;
 		},
-		[] { }
+		[] {}
 	);
 
 	EXPECT_FALSE(transaction.commit());
