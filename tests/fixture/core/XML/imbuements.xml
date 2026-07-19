@@ -6,4 +6,18 @@
 		<attribute key="description" value="Boosts distance." />
 		<attribute key="effect" type="skill" value="distance" bonus="3" />
 	</imbuement>
+	<base id="2" name="Intricate" price="0" protectionPrice="0" percent="100" removecost="0" duration="72000" />
+	<base id="3" name="Powerful" price="0" protectionPrice="0" percent="100" removecost="0" duration="72000" />
+	<category id="19" name="Paralysis Deflection" agressive="0" />
+
+	<imbuement name="Vibrancy" base="2" category="19" iconid="79" premium="1" storage="0">
+		<attribute key="description" value="Test Intricate Vibrancy." />
+		<attribute key="effect" type="paralysis" chance="25" pvpDeflect="1" />
+		<attribute key="scroll" value="51746" />
+	</imbuement>
+	<imbuement name="Vibrancy" base="3" category="19" iconid="79" premium="1" storage="46365">
+		<attribute key="description" value="Test Powerful Vibrancy." />
+		<attribute key="effect" type="paralysis" chance="50" pvpDeflect="1" />
+		<attribute key="scroll" value="51466" />
+	</imbuement>
 </imbuements>
