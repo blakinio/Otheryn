@@ -37,7 +37,7 @@ jobs:
         run: |
           set -euo pipefail
           git status --short
-          changed="$(git status --short | awk '{print $2}' | sort)"
+          changed="$(git diff --name-only origin/main -- | sort)"
           allowed="$(cat <<'EOF' | sort
           data/XML/imbuements.xml
           src/creatures/players/imbuements/imbuement_access_policy.hpp
