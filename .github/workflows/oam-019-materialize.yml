@@ -24,11 +24,14 @@ jobs:
           fetch-depth: 0
 
       - name: Apply fail-closed bounded adaptation
-        run: python tools/oam_019_materialize.py
+        run: |
+          python tools/oam_019_materialize.py
+          python tools/oam_019_runtime_test_materialize.py
 
       - name: Remove temporary materializer
         run: |
           rm tools/oam_019_materialize.py
+          rm tools/oam_019_runtime_test_materialize.py
           rm .github/workflows/oam-019-materialize.yml
           rm -f .oam-019-trigger
 
@@ -44,9 +47,11 @@ jobs:
           src/creatures/players/imbuements/imbuement_storage_policy.hpp
           src/creatures/players/imbuements/imbuements.cpp
           src/creatures/players/player.cpp
+          tests/fixture/core/XML/imbuements.xml
           tests/unit/players/imbuements/CMakeLists.txt
           tests/unit/players/imbuements/imbuement_storage_policy_test.cpp
           tests/unit/players/imbuements/oam_019_imbuements_adapt_test.cpp
+          tests/unit/players/imbuements/oam_019_scroll_runtime_test.cpp
           EOF
           )"
           test "$changed" = "$allowed"
