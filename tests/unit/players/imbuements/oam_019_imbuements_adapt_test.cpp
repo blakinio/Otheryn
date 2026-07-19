@@ -93,6 +93,15 @@ namespace {
 			return pugi::xml_node {};
 		};
 
+		auto findAttribute = [](const pugi::xml_node &node, const char* key) {
+			for (const auto child : node.children("attribute")) {
+				if (std::string(child.attribute("key").as_string()) == key) {
+					return child;
+				}
+			}
+			return pugi::xml_node {};
+		};
+
 		const auto intricateVibrancy = findImbuement("Vibrancy", 2);
 		const auto powerfulVibrancy = findImbuement("Vibrancy", 3);
 		const auto powerfulFeatherweight = findImbuement("Featherweight", 3);
@@ -101,17 +110,30 @@ namespace {
 		ASSERT_TRUE(powerfulFeatherweight);
 		EXPECT_EQ(46365, powerfulVibrancy.attribute("storage").as_int());
 		EXPECT_EQ(45929, powerfulFeatherweight.attribute("storage").as_int());
+		EXPECT_EQ(51746, findAttribute(intricateVibrancy, "scroll").attribute("value").as_int());
+		EXPECT_EQ(51466, findAttribute(powerfulVibrancy, "scroll").attribute("value").as_int());
 
-		auto scrollValue = [](const pugi::xml_node &node) {
-			for (const auto child : node.children("attribute")) {
-				if (std::string(child.attribute("key").as_string()) == "scroll") {
-					return child.attribute("value").as_int();
-				}
-			}
-			return 0;
+		const std::array expectedStrike {
+			std::tuple { 1, 500, 500 },
+			std::tuple { 2, 1500, 500 },
+			std::tuple { 3, 4000, 500 },
 		};
-		EXPECT_EQ(51746, scrollValue(intricateVibrancy));
-		EXPECT_EQ(51466, scrollValue(powerfulVibrancy));
+		for (const auto &[base, bonus, chance] : expectedStrike) {
+			const auto strike = findImbuement("Strike", base);
+			ASSERT_TRUE(strike);
+			const auto effect = findAttribute(strike, "effect");
+			ASSERT_TRUE(effect);
+			EXPECT_STREQ("critical", effect.attribute("value").as_string());
+			EXPECT_EQ(bonus, effect.attribute("bonus").as_int());
+			EXPECT_EQ(chance, effect.attribute("chance").as_int());
+		}
+
+		const auto basicPunch = findImbuement("Punch", 1);
+		ASSERT_TRUE(basicPunch);
+		const auto punchItem = findAttribute(basicPunch, "item");
+		ASSERT_TRUE(punchItem);
+		EXPECT_EQ(10281, punchItem.attribute("value").as_int());
+		EXPECT_EQ(25, punchItem.attribute("count").as_int());
 	}
 
 } // namespace
