@@ -157,6 +157,47 @@ done
 python3 - <<'PY'
 from pathlib import Path
 
+replacements = {
+    Path("src/config/forge_config_defaults.hpp"): (
+        "#include <cstdint>",
+        "#ifndef USE_PRECOMPILED_HEADERS\n\t#include <cstdint>\n#endif",
+    ),
+    Path("src/game/functions/forge_effect_policy.hpp"): (
+        "#include <cstdint>",
+        "#ifndef USE_PRECOMPILED_HEADERS\n\t#include <cstdint>\n#endif",
+    ),
+    Path("src/game/functions/forge_fusion_policy.hpp"): (
+        "#include <cstdint>",
+        "#ifndef USE_PRECOMPILED_HEADERS\n\t#include <cstdint>\n#endif",
+    ),
+    Path("src/game/functions/forge_transfer_policy.hpp"): (
+        "#include <cstdint>",
+        "#ifndef USE_PRECOMPILED_HEADERS\n\t#include <cstdint>\n#endif",
+    ),
+    Path("src/game/functions/forge_transaction.hpp"): (
+        "#include <functional>\n#include <utility>\n#include <vector>",
+        "#ifndef USE_PRECOMPILED_HEADERS\n\t#include <functional>\n\t#include <utility>\n\t#include <vector>\n#endif",
+    ),
+}
+
+for path, (old, new) in replacements.items():
+    text = path.read_text(encoding="utf-8")
+    if new in text:
+        continue
+    if text.count(old) != 1:
+        raise SystemExit(f"Expected exactly one PCH include block in {path}, got {text.count(old)}")
+    path.write_text(text.replace(old, new, 1), encoding="utf-8")
+PY
+git add \
+  src/config/forge_config_defaults.hpp \
+  src/game/functions/forge_effect_policy.hpp \
+  src/game/functions/forge_fusion_policy.hpp \
+  src/game/functions/forge_transaction.hpp \
+  src/game/functions/forge_transfer_policy.hpp
+
+python3 - <<'PY'
+from pathlib import Path
+
 path = Path("vcproj/canary.vcxproj")
 with path.open("r", encoding="utf-8", newline="") as stream:
     text = stream.read()
