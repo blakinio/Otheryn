@@ -123,7 +123,6 @@ for commit in "${ORDERED_DONORS[@]}"; do
         data/libs/systems/exaltation_forge.lua \
         src/config/configmanager.cpp \
         src/config/forge_config_defaults.hpp \
-        tests/unit/game/CMakeLists.txt \
         tests/unit/game/forge_config_test.cpp
       ;;
     ded1830b143388d65c895ad30918faf128df66ed)
@@ -155,21 +154,25 @@ done
 python3 - <<'PY'
 from pathlib import Path
 
-path = Path("tests/unit/players/CMakeLists.txt")
-with path.open("r", encoding="utf-8", newline="") as stream:
-    text = stream.read()
-newline = "\r\n" if "\r\n" in text else "\n"
-anchor = "            forge_test.cpp"
-if text.count(anchor) != 1:
-    raise SystemExit(f"Expected exactly one Forge test CMake anchor, got {text.count(anchor)}")
-if "            forge_effect_policy_test.cpp" not in text:
-    text = text.replace(anchor, "            forge_effect_policy_test.cpp" + newline + anchor, 1)
-if "            forge_transaction_test.cpp" not in text:
-    text = text.replace(anchor, anchor + newline + "            forge_transaction_test.cpp", 1)
-with path.open("w", encoding="utf-8", newline="") as stream:
-    stream.write(text)
+registrations = [
+    (Path("tests/unit/players/CMakeLists.txt"), "            forge_test.cpp", "            forge_effect_policy_test.cpp", "            forge_transaction_test.cpp"),
+    (Path("tests/unit/game/CMakeLists.txt"), "            highscores_test.cpp", "            forge_config_test.cpp", None),
+]
+
+for path, anchor, before, after in registrations:
+    with path.open("r", encoding="utf-8", newline="") as stream:
+        text = stream.read()
+    newline = "\r\n" if "\r\n" in text else "\n"
+    if text.count(anchor) != 1:
+        raise SystemExit(f"Expected exactly one CMake anchor in {path}, got {text.count(anchor)}: {anchor}")
+    if before and before not in text:
+        text = text.replace(anchor, before + newline + anchor, 1)
+    if after and after not in text:
+        text = text.replace(anchor, anchor + newline + after, 1)
+    with path.open("w", encoding="utf-8", newline="") as stream:
+        stream.write(text)
 PY
-git add tests/unit/players/CMakeLists.txt
+git add tests/unit/players/CMakeLists.txt tests/unit/game/CMakeLists.txt
 
 python3 - <<'PY'
 from pathlib import Path
