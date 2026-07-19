@@ -26,6 +26,7 @@ jobs:
         run: |
           rm tools/oam_019_materialize.py
           rm .github/workflows/oam-019-materialize.yml
+          rm -f .oam-019-trigger
 
       - name: Verify intended final paths only
         shell: bash
