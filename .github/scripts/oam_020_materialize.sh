@@ -154,6 +154,43 @@ for commit in "${ORDERED_DONORS[@]}"; do
   esac
 done
 
+python3 - <<'PY'
+from pathlib import Path
+
+path = Path("vcproj/canary.vcxproj")
+with path.open("r", encoding="utf-8", newline="") as stream:
+    text = stream.read()
+newline = "\r\n" if "\r\n" in text else "\n"
+
+insertions = [
+    (
+        '    <ClInclude Include="..\\src\\config\\configmanager.hpp" />',
+        ['    <ClInclude Include="..\\src\\config\\forge_config_defaults.hpp" />'],
+    ),
+    (
+        '    <ClInclude Include="..\\src\\game\\functions\\game_reload.hpp" />',
+        [
+            '    <ClInclude Include="..\\src\\game\\functions\\forge_effect_policy.hpp" />',
+            '    <ClInclude Include="..\\src\\game\\functions\\forge_fusion_policy.hpp" />',
+            '    <ClInclude Include="..\\src\\game\\functions\\forge_transaction.hpp" />',
+            '    <ClInclude Include="..\\src\\game\\functions\\forge_transfer_policy.hpp" />',
+        ],
+    ),
+]
+
+for anchor, entries in insertions:
+    missing = [entry for entry in entries if entry not in text]
+    if not missing:
+        continue
+    if text.count(anchor) != 1:
+        raise SystemExit(f"Expected exactly one vcproj anchor, got {text.count(anchor)}: {anchor}")
+    text = text.replace(anchor, anchor + newline + newline.join(missing), 1)
+
+with path.open("w", encoding="utf-8", newline="") as stream:
+    stream.write(text)
+PY
+git add vcproj/canary.vcxproj
+
 git diff --cached --check
 
 allowed_paths=(
@@ -179,6 +216,7 @@ allowed_paths=(
   tests/unit/players/forge_effect_policy_test.cpp
   tests/unit/players/forge_test.cpp
   tests/unit/players/forge_transaction_test.cpp
+  vcproj/canary.vcxproj
 )
 
 is_allowed() {
