@@ -7,13 +7,19 @@ on:
     paths:
       - .github/scripts/oam_020_materialize.sh
       - .github/workflows/oam-020-materialize.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/scripts/oam_020_materialize.sh
+      - .github/workflows/oam-020-materialize.yml
 
 permissions:
   contents: write
 
 jobs:
   materialize:
-    if: github.repository == 'blakinio/Otheryn'
+    if: github.repository == 'blakinio/Otheryn' && github.head_ref == 'dudantas/oam-020-exaltation-forge-adapt'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout exact target branch
