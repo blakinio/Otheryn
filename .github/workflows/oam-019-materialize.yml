@@ -39,8 +39,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git add -A
           git status --short
-          changed="$(git diff --name-only origin/main -- | sort)"
+          changed="$(git diff --cached --name-only origin/main -- | sort)"
           allowed="$(cat <<'EOF' | sort
           data/XML/imbuements.xml
           src/creatures/players/imbuements/imbuement_access_policy.hpp
@@ -62,6 +63,5 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
           git commit -m "fix(imbuements): adapt OAM-019 validated behavior"
           git push origin HEAD:dudantas/oam-019-imbuements-adapt
