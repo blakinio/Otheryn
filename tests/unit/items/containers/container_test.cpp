@@ -11,7 +11,26 @@
 
 #include "items/containers/container.hpp"
 
+namespace {
+class ScopedItemTypeRegistry {
+public:
+	ScopedItemTypeRegistry() : originalSize(Item::items.getItems().size()) {
+		if (originalSize == 0) {
+			Item::items.getItems().resize(1);
+		}
+	}
+
+	~ScopedItemTypeRegistry() {
+		Item::items.getItems().resize(originalSize);
+	}
+
+private:
+	size_t originalSize;
+};
+} // namespace
+
 TEST(ContainerReuseTest, PreservesDirectCapacityAndItemLifecycle) {
+	const ScopedItemTypeRegistry itemTypeRegistry;
 	const auto container = Container::create(0, 2, true, false);
 	ASSERT_NE(container, nullptr);
 	EXPECT_TRUE(container->empty());
@@ -40,6 +59,7 @@ TEST(ContainerReuseTest, PreservesDirectCapacityAndItemLifecycle) {
 }
 
 TEST(ContainerReuseTest, PreservesBoundedNestedTraversal) {
+	const ScopedItemTypeRegistry itemTypeRegistry;
 	const auto root = Container::create(0, 4, true, false);
 	const auto nested = Container::create(0, 4, true, false);
 	const auto leaf = std::make_shared<Item>(0);
