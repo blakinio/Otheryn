@@ -10,7 +10,7 @@ if not ForgeMonster then
 			fiendish = 80,
 			influenced = 20,
 		},
-		maxFiendish = 3,
+		maxFiendish = 4,
 		eventName = "ForgeMonster",
 	}
 end
@@ -40,95 +40,79 @@ function ForgeMonster:getTimeLeftToChangeMonster(creature)
 	return 0
 end
 
+function ForgeMonster:getPlayerKiller(killer)
+	if not killer then
+		return nil
+	end
+
+	if killer:isPlayer() then
+		return killer
+	end
+
+	local master = killer:getMaster()
+	if master and master:isPlayer() then
+		return master
+	end
+	return nil
+end
+
+function ForgeMonster:creditDust(player, amount)
+	if not player then
+		return 0
+	end
+
+	if not player:isPremium() then
+		player:sendTextMessage(MESSAGE_EVENT_ADVANCE, "You did not receive " .. amount .. " dust for the Exaltation Forge because a Premium Account is required.")
+		return 0
+	end
+
+	local totalDusts = player:getForgeDusts()
+	local limitDusts = player:getForgeDustLevel()
+	if totalDusts >= limitDusts then
+		player:sendTextMessage(MESSAGE_EVENT_ADVANCE, "You did not receive " .. amount .. " dust for the Exaltation Forge because you have already reached the maximum of " .. limitDusts .. " dust.")
+		return 0
+	end
+
+	local creditedAmount = math.min(amount, limitDusts - totalDusts)
+	player:addForgeDusts(creditedAmount)
+	local actualTotalDusts = player:getForgeDusts()
+	player:sendTextMessage(MESSAGE_EVENT_ADVANCE, "You received " .. creditedAmount .. " dust for the Exaltation Forge. You now have " .. actualTotalDusts .. " out of a maximum of " .. limitDusts .. " dusts.")
+	return creditedAmount
+end
+
 function ForgeMonster:onDeath(creature, corpse, killer, mostDamageKiller, unjustified, mostDamageUnjustified)
 	if not creature then
 		return true
 	end
 
-	local forgeAmountMultiplier = (configManager.getFloat(configKeys.FORGE_AMOUNT_MULTIPLIER) or 3)
-
 	local stack = creature:getForgeStack()
-	if stack > 0 then
-		local party = nil
-		if killer then
-			if killer:isPlayer() then
-				party = killer:getParty()
-			elseif killer:getMaster() and killer:getMaster():isPlayer() then
-				party = killer:getMaster():getParty()
-			end
+	if stack <= 0 then
+		return true
+	end
+
+	local playerKiller = self:getPlayerKiller(killer)
+	if not playerKiller then
+		return true
+	end
+
+	local forgeAmountMultiplier = configManager.getFloat(configKeys.FORGE_AMOUNT_MULTIPLIER) or 3
+	local amount = math.random(stack, forgeAmountMultiplier * stack)
+	local party = playerKiller:getParty()
+	if not party or not party:isSharedExperienceEnabled() then
+		self:creditDust(playerKiller, amount)
+		return true
+	end
+
+	local recipients = { party:getLeader() }
+	for _, member in ipairs(party:getMembers()) do
+		if member and not table.contains(recipients, member) then
+			table.insert(recipients, member)
 		end
+	end
 
-		if party and party:isSharedExperienceEnabled() then
-			local killers = { party:getLeader() }
-			local partyMembers = party:getMembers()
-
-			for i = 1, #partyMembers do
-				local member = partyMembers[i]
-				if member and member:isPlayer() then
-					if not table.contains(killers, member) then
-						table.insert(killers, member)
-					end
-				end
-			end
-
-			for i = 1, #killers do
-				local playerKiller = killers[i]
-				if playerKiller then
-					-- Each stack can multiplied from 1x to 3x
-					-- Example monster with 5 stack and system randomize multiplier 3x, players will receive 15x dusts
-
-					local amount = math.random(stack, forgeAmountMultiplier * stack)
-
-					local totalDusts = playerKiller:getForgeDusts()
-					local limitDusts = playerKiller:getForgeDustLevel()
-
-					if totalDusts < limitDusts then
-						if totalDusts + amount > limitDusts then
-							playerKiller:addForgeDusts(limitDusts - totalDusts)
-						else
-							playerKiller:addForgeDusts(amount)
-						end
-
-						local actualTotalDusts = playerKiller:getForgeDusts()
-						playerKiller:sendTextMessage(MESSAGE_EVENT_ADVANCE, "You received " .. amount .. " dust" .. " for the Exaltation Forge. You now have " .. actualTotalDusts .. " out of a maximum of " .. limitDusts .. " dusts.")
-					else
-						playerKiller:sendTextMessage(MESSAGE_EVENT_ADVANCE, "You did not receive " .. amount .. " dust" .. " for the Exaltation Forge because you have already reached the maximum of " .. limitDusts .. " dust.")
-					end
-				end
-			end
-		else
-			local playerKiller = nil
-
-			if killer then
-				if killer:isPlayer() then
-					playerKiller = killer
-				elseif killer:getMaster() and killer:getMaster():isPlayer() then
-					playerKiller = killer:getMaster()
-				end
-			end
-
-			if playerKiller then
-				-- Each stack can multiplied from 1x to 3x
-				-- Example monster with 5 stack and system randomize multiplier 3x, players will receive 15x dusts
-
-				local amount = math.random(stack, forgeAmountMultiplier * stack)
-
-				local totalDusts = playerKiller:getForgeDusts()
-				local limitDusts = playerKiller:getForgeDustLevel()
-
-				if totalDusts < limitDusts then
-					if totalDusts + amount > limitDusts then
-						playerKiller:addForgeDusts(limitDusts - totalDusts)
-					else
-						playerKiller:addForgeDusts(amount)
-					end
-
-					local actualTotalDusts = playerKiller:getForgeDusts()
-					playerKiller:sendTextMessage(MESSAGE_EVENT_ADVANCE, "You received " .. amount .. " dust" .. " for the Exaltation Forge. You now have " .. actualTotalDusts .. " out of a maximum of " .. limitDusts .. " dusts.")
-				else
-					playerKiller:sendTextMessage(MESSAGE_EVENT_ADVANCE, "You did not receive " .. amount .. " dust" .. " for the Exaltation Forge because you have already reached the maximum of " .. limitDusts .. " dust.")
-				end
-			end
+	for _, recipient in ipairs(recipients) do
+		if recipient and recipient:hasCondition(CONDITION_INFIGHT) then
+			self:creditDust(recipient, amount)
 		end
 	end
 	return true

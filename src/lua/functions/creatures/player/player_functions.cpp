@@ -317,6 +317,7 @@ void PlayerFunctions::init(lua_State* L) {
 	Lua::registerMethod(L, "Player", "setFamiliarLooktype", PlayerFunctions::luaPlayerSetFamiliarLooktype);
 	Lua::registerMethod(L, "Player", "getFamiliarLooktype", PlayerFunctions::luaPlayerGetFamiliarLooktype);
 
+	Lua::registerMethod(L, "Player", "isPremium", PlayerFunctions::luaPlayerIsPremium);
 	Lua::registerMethod(L, "Player", "getPremiumDays", PlayerFunctions::luaPlayerGetPremiumDays);
 	Lua::registerMethod(L, "Player", "addPremiumDays", PlayerFunctions::luaPlayerAddPremiumDays);
 	Lua::registerMethod(L, "Player", "removePremiumDays", PlayerFunctions::luaPlayerRemovePremiumDays);
@@ -3107,6 +3108,17 @@ int PlayerFunctions::luaPlayerGetFamiliarLooktype(lua_State* L) {
 	const auto &player = Lua::getUserdataShared<Player>(L, 1, "Player");
 	if (player) {
 		lua_pushnumber(L, player->defaultOutfit.lookFamiliarsType);
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int PlayerFunctions::luaPlayerIsPremium(lua_State* L) {
+	// player:isPremium()
+	const auto &player = Lua::getUserdataShared<Player>(L, 1, "Player");
+	if (player) {
+		Lua::pushBoolean(L, player->isPremium());
 	} else {
 		lua_pushnil(L);
 	}

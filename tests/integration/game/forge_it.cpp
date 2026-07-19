@@ -93,10 +93,10 @@ namespace {
 			classification->addTier(1, 3, 200, 140, 120);
 			classification->addTier(2, 4, 320, 160, 140);
 
-			setupItemType(firstForgeItemId);
-			setupItemType(secondForgeItemId);
-			setupItemType(donorItemId);
-			setupItemType(receiveItemId);
+			setupItemType(firstForgeItemId, "forge fusion item one", 0);
+			setupItemType(secondForgeItemId, "forge fusion item two", 0);
+			setupItemType(donorItemId, "forge donor item", SLOTP_HAND);
+			setupItemType(receiveItemId, "forge receiver item", SLOTP_ARMOR);
 			ready = true;
 		}
 
@@ -153,14 +153,15 @@ namespace {
 			return 1;
 		}
 
-		void setupItemType(uint16_t itemId) const {
+		void setupItemType(uint16_t itemId, std::string name, uint32_t slotPosition) const {
 			auto &itemType = Item::items.getItemType(itemId);
 			itemType = ItemType {};
 			itemType.id = itemId;
-			itemType.name = "Forge test item";
+			itemType.article = "a";
+			itemType.name = std::move(name);
 			itemType.pickupable = true;
 			itemType.movable = true;
-			itemType.slotPosition = 0;
+			itemType.slotPosition = slotPosition;
 			itemType.type = ITEM_TYPE_TOOLS;
 			itemType.upgradeClassification = classificationId;
 		}
@@ -269,30 +270,36 @@ protected:
 	std::shared_ptr<Player> player;
 };
 
-TEST_F(ForgeIntegrationTest, ForgeFuseItemsViaGameFlowAddsExaltationChestAndConsumesInputs) {
+TEST_F(ForgeIntegrationTest, ForgeFuseItemsRejectsDifferentItemIdsBeforeMutating) {
 	ensureBackpack();
 	const auto &fixture = testState();
 
-	seedGameRng(1337);
 	const uint64_t dustCost = g_configManager().getNumber(FORGE_FUSION_DUST_COST);
 	const uint64_t goldCost = fixture.fusionCostForTier(2);
 	setPlayerResources(dustCost + 5, goldCost + 7);
 	addPlayerItemBackpack(fixture.firstForgeItemId, 1);
 	addPlayerItemBackpack(fixture.secondForgeItemId, 1);
+	const auto &forgeCore = Item::CreateItem(ITEM_FORGE_CORE, 1);
+	ASSERT_NE(nullptr, forgeCore);
+	ASSERT_EQ(RETURNVALUE_NOERROR, g_game().internalPlayerAddItem(player, forgeCore, false, CONST_SLOT_BACKPACK));
 
 	const auto startDust = player->getForgeDusts();
 	const auto startBalance = player->getBankBalance();
 	const auto startChest = countItem(*player, ITEM_EXALTATION_CHEST, 0);
 	const auto startFirstTier = countItem(*player, fixture.firstForgeItemId, 1);
 	const auto startSecondTier = countItem(*player, fixture.secondForgeItemId, 1);
+	const auto startCore = countItem(*player, ITEM_FORGE_CORE, 0);
+	const auto startHistory = player->forgeHistory().get().size();
 
-	player->forgeFuseItems(ForgeAction_t::FUSION, fixture.firstForgeItemId, 1, fixture.secondForgeItemId, true, false, false, 0, 0);
+	player->forgeFuseItems(ForgeAction_t::FUSION, fixture.firstForgeItemId, 1, fixture.secondForgeItemId, true, false, false, 0, 1);
 
-	EXPECT_EQ(player->getForgeDusts(), startDust - dustCost);
-	EXPECT_EQ(player->getBankBalance(), startBalance - goldCost);
-	EXPECT_GT(countItem(*player, ITEM_EXALTATION_CHEST, 0), startChest);
-	EXPECT_EQ(countItem(*player, fixture.firstForgeItemId, 1), startFirstTier - 1u);
-	EXPECT_EQ(countItem(*player, fixture.secondForgeItemId, 1), startSecondTier - 1u);
+	EXPECT_EQ(startDust, player->getForgeDusts());
+	EXPECT_EQ(startBalance, player->getBankBalance());
+	EXPECT_EQ(startChest, countItem(*player, ITEM_EXALTATION_CHEST, 0));
+	EXPECT_EQ(startFirstTier, countItem(*player, fixture.firstForgeItemId, 1));
+	EXPECT_EQ(startSecondTier, countItem(*player, fixture.secondForgeItemId, 1));
+	EXPECT_EQ(startCore, countItem(*player, ITEM_FORGE_CORE, 0));
+	EXPECT_EQ(startHistory, player->forgeHistory().get().size());
 }
 
 TEST_F(ForgeIntegrationTest, ForgeTransferItemTierViaGameFlowTransfersHigherTierIntoExaltationChest) {
@@ -303,8 +310,8 @@ TEST_F(ForgeIntegrationTest, ForgeTransferItemTierViaGameFlowTransfersHigherTier
 	const uint8_t transferFromTier = 2;
 	const auto* classification = fixture.getClassification();
 	ASSERT_NE(nullptr, classification);
-	const auto transferCoreCost = classification->tiers.contains(transferToTier) ? classification->tiers.at(transferToTier).corePrice : 0;
-	const auto transferGoldCost = fixture.fusionCostForTier(transferToTier);
+	const auto transferCoreCost = classification->tiers.contains(transferFromTier) ? classification->tiers.at(transferFromTier).corePrice : 0;
+	const auto transferGoldCost = fixture.fusionCostForTier(transferFromTier);
 	const uint64_t dustCost = g_configManager().getNumber(FORGE_TRANSFER_DUST_COST);
 
 	setPlayerResources(dustCost, transferGoldCost + 7);
@@ -327,6 +334,18 @@ TEST_F(ForgeIntegrationTest, ForgeTransferItemTierViaGameFlowTransfersHigherTier
 	EXPECT_FALSE(hasItem(*player, fixture.receiveItemId, 0));
 	EXPECT_TRUE(hasItem(*player, fixture.receiveItemId, 1));
 	EXPECT_GT(countItem(*player, ITEM_EXALTATION_CHEST, 0), startChest);
+	EXPECT_NE(Item::items[fixture.donorItemId].slotPosition, Item::items[fixture.receiveItemId].slotPosition);
+
+	const auto &historyEntries = player->forgeHistory().get();
+	ASSERT_FALSE(historyEntries.empty());
+	const auto &history = historyEntries.back();
+	EXPECT_EQ(transferGoldCost, history.cost);
+	EXPECT_EQ(transferCoreCost, history.coresCost);
+	EXPECT_EQ(dustCost, history.dustCost);
+	EXPECT_NE(std::string::npos, history.description.find("First item: a forge donor item, tier 2"));
+	EXPECT_NE(std::string::npos, history.description.find("Second item: a forge receiver item, tier 0"));
+	EXPECT_NE(std::string::npos, history.description.find("First item: consumed"));
+	EXPECT_NE(std::string::npos, history.description.find("Second item: a forge receiver item, tier 1"));
 }
 
 TEST_F(ForgeIntegrationTest, ForgeFuseItemsFromGameFlowFailsWhenBackpackIsFull) {
@@ -425,8 +444,8 @@ TEST_F(ForgeIntegrationTest, ForgeTransferItemTierWithIdenticalItemIdUsesDistinc
 	const uint8_t transferFromTier = 2;
 	const auto* classification = fixture.getClassification();
 	ASSERT_NE(nullptr, classification);
-	const auto transferCoreCost = classification->tiers.contains(transferToTier) ? classification->tiers.at(transferToTier).corePrice : 0;
-	const auto transferGoldCost = fixture.fusionCostForTier(transferToTier);
+	const auto transferCoreCost = classification->tiers.contains(transferFromTier) ? classification->tiers.at(transferFromTier).corePrice : 0;
+	const auto transferGoldCost = fixture.fusionCostForTier(transferFromTier);
 	const uint64_t dustCost = g_configManager().getNumber(FORGE_TRANSFER_DUST_COST);
 
 	setPlayerResources(dustCost, transferGoldCost + 7);
@@ -478,4 +497,191 @@ TEST_F(ForgeIntegrationTest, ForgeTransferItemTierWithSingleCopyAbortsBeforeMuta
 	EXPECT_TRUE(hasItem(*player, fixture.donorItemId, transferFromTier));
 	EXPECT_EQ(player->getForgeDusts(), startDust);
 	EXPECT_EQ(player->getBankBalance(), startBalance);
+}
+
+TEST_F(ForgeIntegrationTest, ForgeConvergenceFusionRejectsNonClassFourBeforeMutating) {
+	ensureBackpack();
+	const auto &fixture = testState();
+	ASSERT_NE(4, fixture.classificationId);
+	setPlayerResources(1000, 1000000);
+	addPlayerItemBackpack(fixture.firstForgeItemId, 1);
+	addPlayerItemBackpack(fixture.secondForgeItemId, 1);
+
+	const auto startDust = player->getForgeDusts();
+	const auto startBalance = player->getBankBalance();
+	const auto startChest = countItem(*player, ITEM_EXALTATION_CHEST, 0);
+	const auto startFirst = countItem(*player, fixture.firstForgeItemId, 1);
+	const auto startSecond = countItem(*player, fixture.secondForgeItemId, 1);
+	const auto startHistory = player->forgeHistory().get().size();
+
+	player->forgeFuseItems(ForgeAction_t::FUSION, fixture.firstForgeItemId, 1, fixture.secondForgeItemId, true, false, true, 0, 0);
+
+	EXPECT_EQ(startDust, player->getForgeDusts());
+	EXPECT_EQ(startBalance, player->getBankBalance());
+	EXPECT_EQ(startChest, countItem(*player, ITEM_EXALTATION_CHEST, 0));
+	EXPECT_EQ(startFirst, countItem(*player, fixture.firstForgeItemId, 1));
+	EXPECT_EQ(startSecond, countItem(*player, fixture.secondForgeItemId, 1));
+	EXPECT_EQ(startHistory, player->forgeHistory().get().size());
+}
+
+TEST_F(ForgeIntegrationTest, ForgeConvergenceTransferRejectsNonClassFourBeforeMutating) {
+	ensureBackpack();
+	const auto &fixture = testState();
+	ASSERT_NE(4, fixture.classificationId);
+	setPlayerResources(1000, 1000000);
+	addPlayerItemBackpack(fixture.donorItemId, 1);
+	addPlayerItemBackpack(fixture.receiveItemId, 0);
+	const auto &forgeCore = Item::CreateItem(ITEM_FORGE_CORE, 1);
+	ASSERT_NE(nullptr, forgeCore);
+	ASSERT_EQ(RETURNVALUE_NOERROR, g_game().internalPlayerAddItem(player, forgeCore, false, CONST_SLOT_BACKPACK));
+
+	const auto startDust = player->getForgeDusts();
+	const auto startBalance = player->getBankBalance();
+	const auto startChest = countItem(*player, ITEM_EXALTATION_CHEST, 0);
+	const auto startDonor = countItem(*player, fixture.donorItemId, 1);
+	const auto startReceive = countItem(*player, fixture.receiveItemId, 0);
+	const auto startCore = countItem(*player, ITEM_FORGE_CORE, 0);
+	const auto startHistory = player->forgeHistory().get().size();
+
+	player->forgeTransferItemTier(ForgeAction_t::TRANSFER, fixture.donorItemId, 1, fixture.receiveItemId, true);
+
+	EXPECT_EQ(startDust, player->getForgeDusts());
+	EXPECT_EQ(startBalance, player->getBankBalance());
+	EXPECT_EQ(startChest, countItem(*player, ITEM_EXALTATION_CHEST, 0));
+	EXPECT_EQ(startDonor, countItem(*player, fixture.donorItemId, 1));
+	EXPECT_EQ(startReceive, countItem(*player, fixture.receiveItemId, 0));
+	EXPECT_EQ(startCore, countItem(*player, ITEM_FORGE_CORE, 0));
+	EXPECT_EQ(startHistory, player->forgeHistory().get().size());
+}
+
+TEST_F(ForgeIntegrationTest, ForgeSliverToCoreConversionCommitsBothResourceSides) {
+	ensureBackpack();
+	const auto cost = static_cast<uint16_t>(g_configManager().getNumber(FORGE_CORE_COST));
+	const auto &slivers = Item::CreateItem(ITEM_FORGE_SLIVER, cost);
+	ASSERT_NE(nullptr, slivers);
+	ASSERT_EQ(RETURNVALUE_NOERROR, g_game().internalPlayerAddItem(player, slivers, false, CONST_SLOT_BACKPACK));
+
+	const auto [sliversBefore, coresBefore] = player->getForgeSliversAndCores();
+	const auto historyBefore = player->forgeHistory().get().size();
+
+	player->forgeResourceConversion(ForgeAction_t::SLIVERSTOCORES);
+
+	const auto [sliversAfter, coresAfter] = player->getForgeSliversAndCores();
+	EXPECT_EQ(sliversBefore - cost, sliversAfter);
+	EXPECT_EQ(coresBefore + 1, coresAfter);
+	EXPECT_EQ(historyBefore + 1, player->forgeHistory().get().size());
+}
+
+TEST_F(ForgeIntegrationTest, ForgeSliverToCoreConversionRejectsFullBackpackWithoutMutation) {
+	ensureBackpack();
+	const auto &fixture = testState();
+	const auto cost = static_cast<uint16_t>(g_configManager().getNumber(FORGE_CORE_COST));
+	const auto &slivers = Item::CreateItem(ITEM_FORGE_SLIVER, cost);
+	ASSERT_NE(nullptr, slivers);
+	ASSERT_EQ(RETURNVALUE_NOERROR, g_game().internalPlayerAddItem(player, slivers, false, CONST_SLOT_BACKPACK));
+	fillBackpackWithCopies(fixture.receiveItemId);
+	ASSERT_EQ(0u, player->getFreeBackpackSlots());
+
+	const auto [sliversBefore, coresBefore] = player->getForgeSliversAndCores();
+	const auto historyBefore = player->forgeHistory().get().size();
+
+	player->forgeResourceConversion(ForgeAction_t::SLIVERSTOCORES);
+
+	const auto [sliversAfter, coresAfter] = player->getForgeSliversAndCores();
+	EXPECT_EQ(sliversBefore, sliversAfter);
+	EXPECT_EQ(coresBefore, coresAfter);
+	EXPECT_EQ(historyBefore, player->forgeHistory().get().size());
+}
+
+TEST_F(ForgeIntegrationTest, ForgeFailedFusionHistoryUsesRecordedDustCost) {
+	const auto &fixture = testState();
+	ForgeHistory history;
+	history.actionType = ForgeAction_t::FUSION;
+	history.success = false;
+	history.firstItemId = fixture.firstForgeItemId;
+	history.secondItemId = fixture.firstForgeItemId;
+	history.firstItemName = Item::items[fixture.firstForgeItemId].name;
+	history.secondItemName = Item::items[fixture.firstForgeItemId].name;
+	history.tier = 1;
+	history.dustCost = 137;
+	history.coresCost = 2;
+	history.cost = 320;
+
+	const auto before = player->forgeHistory().get().size();
+	player->registerForgeHistoryDescription(history);
+
+	const auto &entries = player->forgeHistory().get();
+	ASSERT_EQ(before + 1, entries.size());
+	const auto &recorded = entries.back();
+	EXPECT_EQ(ForgeAction_t::FUSION, recorded.actionType);
+	EXPECT_EQ(137, recorded.dustCost);
+	EXPECT_NE(std::string::npos, recorded.description.find("137 dust"));
+}
+
+TEST_F(ForgeIntegrationTest, ForgeDustToSliversHistoryUsesConfiguredAmountAndAction) {
+	ensureBackpack();
+	const auto amount = static_cast<uint16_t>(g_configManager().getNumber(FORGE_SLIVER_AMOUNT));
+	const auto cost = static_cast<uint16_t>(g_configManager().getNumber(FORGE_COST_ONE_SLIVER) * amount);
+	setPlayerResources(cost + 7, 0);
+	const auto [sliversBefore, coresBefore] = player->getForgeSliversAndCores();
+	const auto historyBefore = player->forgeHistory().get().size();
+
+	player->forgeResourceConversion(ForgeAction_t::DUSTTOSLIVERS);
+
+	const auto [sliversAfter, coresAfter] = player->getForgeSliversAndCores();
+	EXPECT_EQ(sliversBefore + amount, sliversAfter);
+	EXPECT_EQ(coresBefore, coresAfter);
+	EXPECT_EQ(7, player->getForgeDusts());
+	const auto &entries = player->forgeHistory().get();
+	ASSERT_EQ(historyBefore + 1, entries.size());
+	const auto &history = entries.back();
+	EXPECT_EQ(ForgeAction_t::DUSTTOSLIVERS, history.actionType);
+	EXPECT_EQ(cost, history.cost);
+	EXPECT_EQ(amount, history.gained);
+	EXPECT_NE(std::string::npos, history.description.find("Converted " + std::to_string(cost) + " dust to " + std::to_string(amount) + " slivers."));
+}
+
+TEST_F(ForgeIntegrationTest, ForgeSliversToCoreHistoryPreservesActionAndConfiguredCost) {
+	ensureBackpack();
+	const auto cost = static_cast<uint16_t>(g_configManager().getNumber(FORGE_CORE_COST));
+	const auto &slivers = Item::CreateItem(ITEM_FORGE_SLIVER, cost);
+	ASSERT_NE(nullptr, slivers);
+	ASSERT_EQ(RETURNVALUE_NOERROR, g_game().internalPlayerAddItem(player, slivers, false, CONST_SLOT_BACKPACK));
+	const auto historyBefore = player->forgeHistory().get().size();
+
+	player->forgeResourceConversion(ForgeAction_t::SLIVERSTOCORES);
+
+	const auto &entries = player->forgeHistory().get();
+	ASSERT_EQ(historyBefore + 1, entries.size());
+	const auto &history = entries.back();
+	EXPECT_EQ(ForgeAction_t::SLIVERSTOCORES, history.actionType);
+	EXPECT_EQ(cost, history.cost);
+	EXPECT_EQ(1, history.gained);
+	EXPECT_NE(std::string::npos, history.description.find("Converted " + std::to_string(cost) + " slivers to 1 exalted core."));
+}
+
+TEST_F(ForgeIntegrationTest, ForgeIncreaseLimitHistoryPreservesAction) {
+	constexpr uint64_t testLimit = 100;
+	const auto currentLimit = player->getForgeDustLevel();
+	if (currentLimit < testLimit) {
+		player->addForgeDustLevel(testLimit - currentLimit);
+	} else if (currentLimit > testLimit) {
+		player->removeForgeDustLevel(currentLimit - testLimit);
+	}
+	ASSERT_EQ(testLimit, player->getForgeDustLevel());
+	const uint64_t cost = testLimit - 75;
+	setPlayerResources(cost, 0);
+	const auto historyBefore = player->forgeHistory().get().size();
+
+	player->forgeResourceConversion(ForgeAction_t::INCREASELIMIT);
+
+	EXPECT_EQ(testLimit + 1, player->getForgeDustLevel());
+	EXPECT_EQ(0, player->getForgeDusts());
+	const auto &entries = player->forgeHistory().get();
+	ASSERT_EQ(historyBefore + 1, entries.size());
+	const auto &history = entries.back();
+	EXPECT_EQ(ForgeAction_t::INCREASELIMIT, history.actionType);
+	EXPECT_EQ(cost, history.cost);
+	EXPECT_EQ(testLimit, history.gained);
+	EXPECT_NE(std::string::npos, history.description.find("Spent 25 dust to increase the dust limit to 101."));
 }

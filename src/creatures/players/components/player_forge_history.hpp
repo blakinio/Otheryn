@@ -22,6 +22,9 @@ struct ForgeHistory {
 
 	uint32_t id = 0;
 
+	uint16_t firstItemId = 0;
+	uint16_t secondItemId = 0;
+
 	uint64_t cost = 0;
 	uint64_t dustCost = 0;
 	uint64_t coresCost = 0;

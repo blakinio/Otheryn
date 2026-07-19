@@ -16,6 +16,7 @@
     <ClInclude Include="..\src\account\account_repository.hpp" />
     <ClInclude Include="..\src\account\account_repository_db.hpp" />
     <ClInclude Include="..\src\config\configmanager.hpp" />
+    <ClInclude Include="..\src\config\forge_config_defaults.hpp" />
     <ClInclude Include="..\src\config\config_definitions.hpp" />
     <ClInclude Include="..\src\core.hpp" />
     <ClInclude Include="..\src\creatures\appearance\mounts\mounts.hpp" />
@@ -69,6 +70,10 @@
     <ClInclude Include="..\src\declarations.hpp" />
     <ClInclude Include="..\src\enums\item_attribute.hpp" />
     <ClInclude Include="..\src\game\functions\game_reload.hpp" />
+    <ClInclude Include="..\src\game\functions\forge_effect_policy.hpp" />
+    <ClInclude Include="..\src\game\functions\forge_fusion_policy.hpp" />
+    <ClInclude Include="..\src\game\functions\forge_transaction.hpp" />
+    <ClInclude Include="..\src\game\functions\forge_transfer_policy.hpp" />
     <ClInclude Include="..\src\game\game.hpp" />
     <ClInclude Include="..\src\game\bank\bank.hpp" />
     <ClInclude Include="..\src\game\zones\zone.hpp" />
