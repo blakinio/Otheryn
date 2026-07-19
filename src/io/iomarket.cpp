@@ -9,6 +9,8 @@
 
 #include "io/iomarket.hpp"
 
+#include "io/market_validation.hpp"
+
 #include "config/configmanager.hpp"
 #include "database/databasetasks.hpp"
 #include "game/game.hpp"
@@ -19,13 +21,14 @@
 #include "creatures/players/player.hpp"
 
 uint8_t IOMarket::getTierFromDatabaseTable(const std::string &string) {
-	auto tier = static_cast<uint8_t>(std::atoi(string.c_str()));
-	if (tier > g_configManager().getNumber(FORGE_MAX_ITEM_TIER)) {
-		g_logger().error("{} - Failed to get number value {} for tier table result", __FUNCTION__, tier);
+	const auto maxTier = g_configManager().getNumber(FORGE_MAX_ITEM_TIER);
+	const auto tier = MarketValidation::parseTier(string, maxTier);
+	if (!tier) {
+		g_logger().error("{} - Failed to get valid number value '{}' for tier table result", __FUNCTION__, string);
 		return 0;
 	}
 
-	return tier;
+	return *tier;
 }
 
 MarketOfferList IOMarket::getActiveOffers(MarketAction_t action) {
@@ -51,7 +54,7 @@ MarketOfferList IOMarket::getActiveOffers(MarketAction_t action) {
 		offer.amount = result->getNumber<uint16_t>("amount");
 		offer.price = result->getNumber<uint64_t>("price");
 		offer.timestamp = result->getNumber<uint32_t>("created") + marketOfferDuration;
-		offer.counter = (result->getNumber<uint32_t>("id") ^ 0xABCDEF) & 0xFFFF;
+		offer.counter = MarketValidation::offerCounter(result->getNumber<uint32_t>("id"));
 		if (result->getNumber<uint16_t>("anonymous") == 0) {
 			offer.playerName = result->getString("player_name");
 		} else {
@@ -83,7 +86,7 @@ MarketOfferList IOMarket::getActiveOffers(MarketAction_t action, uint16_t itemId
 		offer.amount = result->getNumber<uint16_t>("amount");
 		offer.price = result->getNumber<uint64_t>("price");
 		offer.timestamp = result->getNumber<uint32_t>("created") + marketOfferDuration;
-		offer.counter = (result->getNumber<uint32_t>("id") ^ 0xABCDEF) & 0xFFFF;
+		offer.counter = MarketValidation::offerCounter(result->getNumber<uint32_t>("id"));
 		if (result->getNumber<uint16_t>("anonymous") == 0) {
 			offer.playerName = result->getString("player_name");
 		} else {
@@ -113,7 +116,7 @@ MarketOfferList IOMarket::getOwnOffers(MarketAction_t action, uint32_t playerId)
 		offer.amount = result->getNumber<uint16_t>("amount");
 		offer.price = result->getNumber<uint64_t>("price");
 		offer.timestamp = result->getNumber<uint32_t>("created") + marketOfferDuration;
-		offer.counter = (result->getNumber<uint32_t>("id") ^ 0xABCDEF) & 0xFFFF;
+		offer.counter = MarketValidation::offerCounter(result->getNumber<uint32_t>("id"));
 		offer.itemId = result->getNumber<uint16_t>("itemtype");
 		offer.tier = getTierFromDatabaseTable(result->getString("tier"));
 		offerList.push_back(offer);
@@ -260,10 +263,14 @@ uint32_t IOMarket::getPlayerOfferCount(uint32_t playerId) {
 MarketOfferEx IOMarket::getOfferByCounter(uint32_t timestamp, uint16_t counter) {
 	MarketOfferEx offer;
 
-	const int32_t created = timestamp - g_configManager().getNumber(MARKET_OFFER_DURATION);
+	const auto created = MarketValidation::offerCreatedAt(timestamp, g_configManager().getNumber(MARKET_OFFER_DURATION));
+	if (!created) {
+		offer.id = 0;
+		return offer;
+	}
 
 	std::ostringstream query;
-	query << "SELECT `id`, `sale`, `itemtype`, `amount`, `created`, `price`, `player_id`, `anonymous`, `tier`, (SELECT `name` FROM `players` WHERE `id` = `player_id`) AS `player_name` FROM `market_offers` WHERE `created` = " << created << " AND ((`id` ^ 0xABCDEF) & 65535) = " << counter << " LIMIT 1";
+	query << "SELECT `id`, `sale`, `itemtype`, `amount`, `created`, `price`, `player_id`, `anonymous`, `tier`, (SELECT `name` FROM `players` WHERE `id` = `player_id`) AS `player_name` FROM `market_offers` WHERE `created` = " << *created << " AND ((`id` ^ 0xABCDEF) & 65535) = " << counter << " LIMIT 1";
 
 	DBResult_ptr result = Database::getInstance().storeQuery(query.str());
 	if (!result) {
@@ -274,7 +281,7 @@ MarketOfferEx IOMarket::getOfferByCounter(uint32_t timestamp, uint16_t counter) 
 	offer.id = result->getNumber<uint32_t>("id");
 	offer.type = static_cast<MarketAction_t>(result->getNumber<uint16_t>("sale"));
 	offer.amount = result->getNumber<uint16_t>("amount");
-	offer.counter = (result->getNumber<uint32_t>("id") ^ 0xABCDEF) & 0xFFFF;
+	offer.counter = MarketValidation::offerCounter(result->getNumber<uint32_t>("id"));
 	offer.timestamp = result->getNumber<uint32_t>("created");
 	offer.price = result->getNumber<uint64_t>("price");
 	offer.itemId = result->getNumber<uint16_t>("itemtype");
