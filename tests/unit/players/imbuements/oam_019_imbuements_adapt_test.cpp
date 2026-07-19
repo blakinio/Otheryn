@@ -64,13 +64,28 @@ namespace {
 		}
 
 		const std::unordered_map<std::string, int> expectedStorage {
-			{ "Reap", 45489 }, { "Vampirism", 45489 }, { "Lich Shroud", 45489 },
-			{ "Electrify", 45490 }, { "Cloud Fabric", 45490 }, { "Swiftness", 45490 },
-			{ "Venom", 45491 }, { "Snake Skin", 45491 }, { "Chop", 45491 }, { "Slash", 45491 }, { "Bash", 45491 }, { "Punch", 45491 },
-			{ "Scorch", 45492 }, { "Void", 45492 }, { "Dragon Hide", 45492 },
-			{ "Frost", 45493 }, { "Quara Scale", 45493 }, { "Blockade", 45493 },
-			{ "Demon Presence", 45494 }, { "Precision", 45494 },
-			{ "Strike", 45495 }, { "Epiphany", 45495 },
+			{ "Reap", 45489 },
+			{ "Vampirism", 45489 },
+			{ "Lich Shroud", 45489 },
+			{ "Electrify", 45490 },
+			{ "Cloud Fabric", 45490 },
+			{ "Swiftness", 45490 },
+			{ "Venom", 45491 },
+			{ "Snake Skin", 45491 },
+			{ "Chop", 45491 },
+			{ "Slash", 45491 },
+			{ "Bash", 45491 },
+			{ "Punch", 45491 },
+			{ "Scorch", 45492 },
+			{ "Void", 45492 },
+			{ "Dragon Hide", 45492 },
+			{ "Frost", 45493 },
+			{ "Quara Scale", 45493 },
+			{ "Blockade", 45493 },
+			{ "Demon Presence", 45494 },
+			{ "Precision", 45494 },
+			{ "Strike", 45495 },
+			{ "Epiphany", 45495 },
 		};
 
 		std::unordered_map<std::string, int> observedPowerfulStorage;
