@@ -12,21 +12,22 @@
 #include "items/containers/container.hpp"
 
 namespace {
-class ScopedItemTypeRegistry {
-public:
-	ScopedItemTypeRegistry() : originalSize(Item::items.getItems().size()) {
-		if (originalSize == 0) {
-			Item::items.getItems().resize(1);
+	class ScopedItemTypeRegistry {
+	public:
+		ScopedItemTypeRegistry() :
+			originalSize(Item::items.getItems().size()) {
+			if (originalSize == 0) {
+				Item::items.getItems().resize(1);
+			}
 		}
-	}
 
-	~ScopedItemTypeRegistry() {
-		Item::items.getItems().resize(originalSize);
-	}
+		~ScopedItemTypeRegistry() {
+			Item::items.getItems().resize(originalSize);
+		}
 
-private:
-	size_t originalSize;
-};
+	private:
+		size_t originalSize;
+	};
 } // namespace
 
 TEST(ContainerReuseTest, PreservesDirectCapacityAndItemLifecycle) {
