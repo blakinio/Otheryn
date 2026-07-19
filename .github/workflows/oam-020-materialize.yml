@@ -33,4 +33,18 @@ jobs:
 
       - name: Materialize bounded OAM-020 donor set
         shell: bash
-        run: bash .github/scripts/oam_020_materialize.sh
+        run: |
+          set +e
+          bash .github/scripts/oam_020_materialize.sh 2>&1 | tee /tmp/oam-020-materializer.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ ${status} -ne 0 ]]; then
+            git reset --hard HEAD
+            cp /tmp/oam-020-materializer.log .github/oam-020-materializer-failure.log
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add .github/oam-020-materializer-failure.log
+            git commit -m "chore(oam): record OAM-020 materializer failure" || true
+            git push origin HEAD:dudantas/oam-020-exaltation-forge-adapt
+            exit ${status}
+          fi
