@@ -1,34 +1,4 @@
-from pathlib import Path
-
-ROOT = Path(__file__).resolve().parents[1]
-
-
-def replace_once(path: str, old: str, new: str) -> None:
-    file_path = ROOT / path
-    text = file_path.read_text(encoding="utf-8")
-    count = text.count(old)
-    if count != 1:
-        raise RuntimeError(f"{path}: expected one match, found {count}")
-    file_path.write_text(text.replace(old, new, 1), encoding="utf-8")
-
-
-fixture_addition = '''\t<base id="2" name="Intricate" price="0" protectionPrice="0" percent="100" removecost="0" duration="72000" />
-\t<base id="3" name="Powerful" price="0" protectionPrice="0" percent="100" removecost="0" duration="72000" />
-\t<category id="19" name="Paralysis Deflection" agressive="0" />
-
-\t<imbuement name="Vibrancy" base="2" category="19" iconid="79" premium="1" storage="0">
-\t\t<attribute key="description" value="Test Intricate Vibrancy." />
-\t\t<attribute key="effect" type="paralysis" chance="25" pvpDeflect="1" />
-\t\t<attribute key="scroll" value="51746" />
-\t</imbuement>
-\t<imbuement name="Vibrancy" base="3" category="19" iconid="79" premium="1" storage="46365">
-\t\t<attribute key="description" value="Test Powerful Vibrancy." />
-\t\t<attribute key="effect" type="paralysis" chance="50" pvpDeflect="1" />
-\t\t<attribute key="scroll" value="51466" />
-\t</imbuement>
-'''
-
-runtime_test = r'''#include "pch.hpp"
+#include "pch.hpp"
 
 #include <gtest/gtest.h>
 
@@ -216,21 +186,3 @@ namespace {
 	}
 
 } // namespace
-'''
-
-fixture_path = ROOT / "tests/fixture/core/XML/imbuements.xml"
-fixture = fixture_path.read_text(encoding="utf-8")
-if 'name="Vibrancy"' in fixture:
-    raise RuntimeError("fixture already contains Vibrancy; refusing ambiguous update")
-replace_once("tests/fixture/core/XML/imbuements.xml", "</imbuements>\n", fixture_addition + "</imbuements>\n")
-
-runtime_path = ROOT / "tests/unit/players/imbuements/oam_019_scroll_runtime_test.cpp"
-if runtime_path.exists():
-    raise RuntimeError("runtime test already exists")
-runtime_path.write_text(runtime_test, encoding="utf-8")
-
-replace_once(
-    "tests/unit/players/imbuements/CMakeLists.txt",
-    "    PRIVATE imbuements_test.cpp oam_019_imbuements_adapt_test.cpp imbuement_storage_policy_test.cpp\n",
-    "    PRIVATE imbuements_test.cpp oam_019_imbuements_adapt_test.cpp oam_019_scroll_runtime_test.cpp imbuement_storage_policy_test.cpp\n",
-)
