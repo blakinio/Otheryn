@@ -115,7 +115,6 @@ for commit in "${ORDERED_DONORS[@]}"; do
         src/creatures/players/player.cpp \
         src/game/functions/forge_transaction.hpp \
         tests/integration/game/forge_it.cpp \
-        tests/unit/players/CMakeLists.txt \
         tests/unit/players/forge_transaction_test.cpp
       ;;
     444aa8ae13edc01c6e77b03139a43d386b437308)
@@ -139,7 +138,6 @@ for commit in "${ORDERED_DONORS[@]}"; do
       apply_donor_paths "${commit}" \
         src/creatures/players/player.cpp \
         src/game/functions/forge_effect_policy.hpp \
-        tests/unit/players/CMakeLists.txt \
         tests/unit/players/forge_effect_policy_test.cpp
       ;;
     82348f9faca788a8cbb5c13feb75b4e06d8da9dc)
@@ -153,6 +151,25 @@ for commit in "${ORDERED_DONORS[@]}"; do
       ;;
   esac
 done
+
+python3 - <<'PY'
+from pathlib import Path
+
+path = Path("tests/unit/players/CMakeLists.txt")
+with path.open("r", encoding="utf-8", newline="") as stream:
+    text = stream.read()
+newline = "\r\n" if "\r\n" in text else "\n"
+anchor = "            forge_test.cpp"
+if text.count(anchor) != 1:
+    raise SystemExit(f"Expected exactly one Forge test CMake anchor, got {text.count(anchor)}")
+if "            forge_effect_policy_test.cpp" not in text:
+    text = text.replace(anchor, "            forge_effect_policy_test.cpp" + newline + anchor, 1)
+if "            forge_transaction_test.cpp" not in text:
+    text = text.replace(anchor, anchor + newline + "            forge_transaction_test.cpp", 1)
+with path.open("w", encoding="utf-8", newline="") as stream:
+    stream.write(text)
+PY
+git add tests/unit/players/CMakeLists.txt
 
 python3 - <<'PY'
 from pathlib import Path
