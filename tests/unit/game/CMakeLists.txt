@@ -1,3 +1,8 @@
+target_compile_definitions(
+    canary_ut
+    PRIVATE OAM027_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
+)
+
 target_sources(
     canary_ut
     PRIVATE combat_reuse_test.cpp
@@ -18,6 +23,7 @@ target_sources(
             oam_022_prey_reuse_test.cpp
             oam_023_parties_reuse_test.cpp
             oam_026_guilds_adapt_test.cpp
+            oam_027_houses_adapt_test.cpp
             player_stats_test.cpp
             random_mount_test.cpp
             spawn_monster_test.cpp
