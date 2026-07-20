@@ -4,6 +4,8 @@
 #include <fmt/format.h>
 
 #include <ctime>
+#include <string>
+#include <string_view>
 
 namespace it_sanctions {
 
