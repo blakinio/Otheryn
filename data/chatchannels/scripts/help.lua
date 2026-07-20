@@ -22,7 +22,7 @@ function onSpeak(player, type, message)
 			local targetName = string.sub(message, 7)
 			local target = Player(targetName)
 			if target then
-				if playerGroupType > target:getAccountType() then
+				if playerGroupType > target:getGroup():getId() then
 					if not target:getCondition(CONDITION_CHANNELMUTEDTICKS, CONDITIONID_DEFAULT, CHANNEL_HELP) then
 						target:addCondition(muted)
 						target:kv():set("channel-help-exhaustion", os.time() + 180) -- 3 minutes
@@ -41,7 +41,7 @@ function onSpeak(player, type, message)
 			local targetName = string.sub(message, 9)
 			local target = Player(targetName)
 			if target then
-				if playerGroupType > target:getAccountType() then
+				if playerGroupType > target:getGroup():getId() then
 					local hasExhaustionTarget = target:kv():get("channel-help-exhaustion") or 0
 					if hasExhaustionTarget > os.time() then
 						target:removeCondition(CONDITION_CHANNELMUTEDTICKS, CONDITIONID_DEFAULT, CHANNEL_HELP)
