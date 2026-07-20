@@ -10,6 +10,7 @@
 #include "creatures/players/management/ban.hpp"
 
 #include "database/database.hpp"
+#include "database/databasetasks.hpp"
 #include "utils/tools.hpp"
 
 bool Ban::acceptConnection(uint32_t clientIP) {
@@ -103,9 +104,7 @@ bool IOBan::isIpBanned(uint32_t clientIP, BanInfo &banInfo) {
 	if (expiresAt != 0 && time(nullptr) > expiresAt) {
 		query.str(std::string());
 		query << "DELETE FROM `ip_bans` WHERE `ip` = " << clientIP;
-		if (!db.executeQuery(query.str())) {
-			g_logger().error("[IOBan::isIpBanned] Failed to delete expired IP ban for IP [{}]", clientIP);
-		}
+		g_databaseTasks().execute(query.str());
 		return false;
 	}
 
