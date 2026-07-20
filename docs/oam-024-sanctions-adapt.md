@@ -49,7 +49,7 @@ OAM-004 already delivered the target's bounded `DBTransaction` primitive, so the
 - expired ban: insert the history row and delete the active row in the same transaction;
 - either write failure: rollback the pair and leave the active expired row available for a later retry.
 
-Expired IP-ban cleanup is made synchronous so the lookup no longer queues an unobserved background delete. No schema, protocol, client, map, asset or deployment change is included.
+IP-ban cleanup behavior remains unchanged. No schema, protocol, client, map, asset or deployment change is included.
 
 ## Focused proof
 
