@@ -17,6 +17,7 @@ target_sources(
             oam_021_market_adapt_test.cpp
             oam_022_prey_reuse_test.cpp
             oam_023_parties_reuse_test.cpp
+            oam_026_guilds_adapt_test.cpp
             player_stats_test.cpp
             random_mount_test.cpp
             spawn_monster_test.cpp
