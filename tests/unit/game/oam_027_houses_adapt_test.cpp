@@ -7,13 +7,13 @@
 #include "map/house/house.hpp"
 
 namespace {
-std::string readHouseSource() {
-	std::ifstream input(std::string(OAM027_SOURCE_DIR) + "/src/map/house/house.cpp");
-	EXPECT_TRUE(input.is_open());
-	std::ostringstream buffer;
-	buffer << input.rdbuf();
-	return buffer.str();
-}
+	std::string readHouseSource() {
+		std::ifstream input(std::string(OAM027_SOURCE_DIR) + "/src/map/house/house.cpp");
+		EXPECT_TRUE(input.is_open());
+		std::ostringstream buffer;
+		buffer << input.rdbuf();
+		return buffer.str();
+	}
 } // namespace
 
 TEST(Oam027HousesAdaptTest, PreservesBasicHouseIdentityAndState) {

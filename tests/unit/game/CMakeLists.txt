@@ -1,4 +1,7 @@
-target_compile_definitions(canary_ut PRIVATE OAM027_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+target_compile_definitions(
+    canary_ut
+    PRIVATE OAM027_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
+)
 
 target_sources(
     canary_ut
