@@ -30,8 +30,8 @@ Apply only the reviewed legacy PR #60 transfer-safety correction to the clean ta
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-20T21:46:00Z
-head: 447f21837dcfb57701c6b1835611048e30201ff0
+updated_at: 2026-07-20T22:04:00Z
+head: 0d3d1e3049d9259a87540a034c3f0c0c016a2c24
 branch: dudantas/oam-027-houses-adapt
 pr: 55
 status: ready
@@ -52,16 +52,21 @@ proven:
   - The target branch contains exactly the four reviewed PR 60 transfer-safety hunks; temporary materializer paths were removed before PR creation.
   - PR 55 changed paths are exactly the active task, OAM-027 evidence doc, house.cpp, focused test and game test CMake registration.
   - Draft CI 197 and Required 179 passed on head 447f21837dcfb57701c6b1835611048e30201ff0.
+  - Ready-state head e3c18e52940df481521ae9c8c413c3f5420a383f passed autofix, Fast Checks, Lua, Linux release, macOS and both Windows builds; Linux debug compiled and runtime smoke passed.
+  - Linux debug CTest on e3c18e52940df481521ae9c8c413c3f5420a383f passed 411/412; the focused transfer-safety source-contract test passed.
+  - The sole failure was the new synthetic PreservesBasicHouseIdentityAndState test segfaulting while constructing House without full runtime state; that harness-only test was removed without changing production code or donor-contract assertions.
 derived:
-  - OAM-027 target disposition is houses ADAPT with exact reviewed PR 60 hunks only.
+  - OAM-027 target disposition remains houses ADAPT with exact reviewed PR 60 hunks only.
+  - The first ready-state CTest failure was a proof-harness defect, not evidence against the production adaptation.
 unknown:
-  - Final ready-state exact-head CI outcome.
+  - Final exact-head CI outcome after removing the invalid synthetic House harness.
 conflicts: []
 first_failure:
-  marker: none
-  evidence: none
+  marker: Oam027HousesAdaptTest.PreservesBasicHouseIdentityAndState SEGFAULT
+  evidence: CI 200 linux-debug CTest 411/412; artifact 8477116498 digest sha256:c2ecbd48b468df6cc6b7df1c6d599e46e7e70ceb9ff5ee8d7f4d166f4db854c9
 rejected_hypotheses:
   - Copy current legacy house.cpp wholesale.
+  - Treat the synthetic House-construction SEGFAULT as a target production defect; the independent transfer-safety contract test passed and the failing harness did not exercise the adapted functions.
 changed_paths:
   - docs/agents/tasks/active/OTH-20260720-oam027-houses-adapt.md
   - docs/oam-027-houses-adapt.md
@@ -72,12 +77,15 @@ validation:
   - command: exact donor/context preflight
     result: PASS
     evidence: PR 60 diff applies without legacy multichannel changes
-  - command: draft target CI 197
+  - command: draft target CI 197 and Required 179
     result: PASS
     evidence: exact head 447f21837dcfb57701c6b1835611048e30201ff0
-  - command: draft Required 179
+  - command: ready-state CI 200 linux-debug CTest
+    result: FAIL
+    evidence: 411/412 passed; sole failure Oam027HousesAdaptTest.PreservesBasicHouseIdentityAndState SEGFAULT; source-contract proof passed
+  - command: remove invalid synthetic House proof harness
     result: PASS
-    evidence: exact head 447f21837dcfb57701c6b1835611048e30201ff0
+    evidence: commit 0d3d1e3049d9259a87540a034c3f0c0c016a2c24 changes only the focused test
 blockers: []
-next_action: Mark PR 55 ready, require CI and Required success on the resulting exact final head, audit five-file scope plus comments/reviews/threads and target-main drift, then expected-head squash merge if all gates remain clean.
+next_action: Require autofix, CI and Required success on the resulting exact final PR 55 head after the harness repair, verify the focused OAM-027 source-contract test passes in Linux debug, audit five-file scope plus comments/reviews/threads and target-main drift, then expected-head squash merge if all gates remain clean.
 ```
