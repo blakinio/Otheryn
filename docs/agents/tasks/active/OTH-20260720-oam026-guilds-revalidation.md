@@ -1,6 +1,6 @@
 ---
 task_id: OTH-20260720-oam026-guilds-revalidation
-status: validating
+status: ready
 branch: dudantas/oam-026-guilds-revalidation
 base_branch: main
 created: 2026-07-20
@@ -48,11 +48,11 @@ Canonical server boundary:
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-20T22:32:00+02:00
-head: 2d95976d890229d63b3c68e673355594dfec23ad
+updated_at: 2026-07-20T22:36:00+02:00
+head: 4dfcbb263bb484399679919eb16f9968ef45aa29
 branch: dudantas/oam-026-guilds-revalidation
 pr: 53
-status: validating
+status: ready
 context_routes:
   - cpp-runtime
   - cross-repo
@@ -64,7 +64,7 @@ owned_paths:
   - tests/unit/game/oam_026_guilds_adapt_test.cpp
   - tests/unit/game/CMakeLists.txt
 proven:
-  - The branch was created from exact Otheryn main baseline 1cf38d354b493b4cd9ec8e841ec8f2a6ff322029 and no target PR was open at task start.
+  - The branch was created from exact Otheryn main baseline 1cf38d354b493b4cd9ec8e841ec8f2a6ff322029 and target main still equals that baseline at the pre-ready gate.
   - Canonical guilds depends only on completed character-lifecycle and database-connection contracts.
   - guild.cpp and guild.hpp are blob-identical across the pinned legacy, target and upstream baselines.
   - The guild-specific IOLoginDataLoad::loadPlayerGuild hunk is semantically identical at pinned target and legacy baselines; the shared loader full-file difference is unrelated to guild ownership and is not copied.
@@ -74,17 +74,20 @@ proven:
   - Legacy security evidence OTS-ECO-GUILD-001 proves a cross-process stale guild-bank balance double-spend class; OAM-026 does not import that multichannel ownership model and records it as a future multiwriter boundary rather than claiming it solved.
   - The canonical guild boundary has no maintained-client path and explicitly excludes wire packet compatibility.
   - OAM-026 disposition is ADAPT: preserve upstream-compatible guild identity/rank/membership/cache behavior while retaining the target-owned OAM-004C persistence failure-propagation adaptation.
+  - PR 53 pre-ready head 4dfcbb263bb484399679919eb16f9968ef45aa29 changed exactly four owned proof paths and no production guild path.
+  - PR 53 pre-ready head 4dfcbb263bb484399679919eb16f9968ef45aa29 passed CI run 193 and Required run 174; autofix.ci run 159 was skipped, not failed.
+  - PR 53 had no comments, submitted reviews or review threads at the pre-ready gate and was mergeable.
 derived:
   - Whole-module REUSE would be inaccurate because copying legacy/upstream IOGuild would regress an established target persistence contract.
   - No new production mutation is required for OAM-026 because the required guild persistence adaptation already exists in the clean target through the completed dependency package.
   - The smallest current proof is documentation plus a focused unit contract test; production guild and IOGuild files remain unchanged.
 unknown:
-  - Exact-head PR #53 CI/check results for the final proof branch.
-  - Whether review/comment/thread state remains empty at the final merge gate.
+  - Exact-head CI/check results after this ready-state checkpoint commit and ready-for-review transition.
+  - Final review/comment/thread state at merge time.
 conflicts: []
 first_failure:
   marker: none
-  evidence: semantic/history/boundary audit found no blocker to ADAPT proof
+  evidence: semantic/history/boundary audit and pre-ready exact-head CI found no blocker
 rejected_hypotheses:
   - guilds REUSE from blob identity: canonical IOGuild has an intentional target architecture divergence from legacy/upstream.
   - copy legacy or upstream IOGuild wholesale: it would regress completed OAM-004C save failure propagation.
@@ -107,9 +110,12 @@ validation:
   - command: legacy history and multichannel overlap audit
     result: PASS
     evidence: no stronger canonical guild donor found; OTS-ECO-GUILD-001 retained as future multiwriter limitation
-  - command: focused Oam026GuildsAdaptTest
-    result: NOT_RUN
-    evidence: local checkout execution unavailable in this sandbox; exact-head GitHub CI is the authoritative execution gate
+  - command: PR 53 pre-ready exact-head target CI
+    result: PASS
+    evidence: head 4dfcbb26; CI 193 success; Required 174 success; autofix.ci 159 skipped
+  - command: PR 53 changed-file and review gate
+    result: PASS
+    evidence: exactly four owned proof paths; no production changes; no comments, reviews or review threads; target main unchanged
 blockers: []
-next_action: Verify PR 53 exact changed files, target-main drift, exact-head CI/checks and review/comment/thread state; if all required gates pass, finalize the proof-only OAM-026 target PR without changing production guild code.
+next_action: Mark PR 53 ready for review, then use the resulting exact PR head for a fresh changed-file, target-main drift, CI/Required, mergeability, comment, review and unresolved-thread gate before squash merge.
 ```
