@@ -1,6 +1,8 @@
 #include "creatures/players/management/ban.hpp"
 #include "database/database.hpp"
 
+#include <fmt/format.h>
+
 #include <ctime>
 
 namespace it_sanctions {
