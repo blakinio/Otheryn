@@ -8,7 +8,7 @@
 #endif
 
 namespace {
-constexpr auto HARNESS = R"lua(
+	constexpr auto HARNESS = R"lua(
 GROUP_TYPE_NORMAL = 1
 GROUP_TYPE_TUTOR = 2
 GROUP_TYPE_GAMEMASTER = 4
@@ -100,24 +100,24 @@ function sendChannelMessage(...)
 end
 )lua";
 
-std::unique_ptr<lua_State, decltype(&lua_close)> createState() {
-	std::unique_ptr<lua_State, decltype(&lua_close)> state(luaL_newstate(), &lua_close);
-	luaL_openlibs(state.get());
-	return state;
-}
+	std::unique_ptr<lua_State, decltype(&lua_close)> createState() {
+		std::unique_ptr<lua_State, decltype(&lua_close)> state(luaL_newstate(), &lua_close);
+		luaL_openlibs(state.get());
+		return state;
+	}
 
-void loadHarnessAndHelpScript(lua_State* state) {
-	ASSERT_EQ(luaL_dostring(state, HARNESS), LUA_OK) << lua_tostring(state, -1);
-	const std::string scriptPath = std::string(TESTS_SOURCE_DIR) + "/data/chatchannels/scripts/help.lua";
-	ASSERT_EQ(luaL_dofile(state, scriptPath.c_str()), LUA_OK) << lua_tostring(state, -1);
-}
+	void loadHarnessAndHelpScript(lua_State* state) {
+		ASSERT_EQ(luaL_dostring(state, HARNESS), LUA_OK) << lua_tostring(state, -1);
+		const std::string scriptPath = std::string(TESTS_SOURCE_DIR) + "/data/chatchannels/scripts/help.lua";
+		ASSERT_EQ(luaL_dofile(state, scriptPath.c_str()), LUA_OK) << lua_tostring(state, -1);
+	}
 
-bool getBooleanGlobal(lua_State* state, const char* name) {
-	lua_getglobal(state, name);
-	const bool value = lua_toboolean(state, -1) != 0;
-	lua_pop(state, 1);
-	return value;
-}
+	bool getBooleanGlobal(lua_State* state, const char* name) {
+		lua_getglobal(state, name);
+		const bool value = lua_toboolean(state, -1) != 0;
+		lua_pop(state, 1);
+		return value;
+	}
 } // namespace
 
 TEST(Oam025ChatCommunicationAdaptTest, MuteRejectsHigherGroupEvenWhenAccountTypeIsLower) {
