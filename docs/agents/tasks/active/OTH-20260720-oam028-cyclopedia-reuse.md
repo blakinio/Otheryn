@@ -1,11 +1,11 @@
 ---
 task_id: OTH-20260720-oam028-cyclopedia-reuse
-status: implementing
+status: ready
 branch: dudantas/oam-028-cyclopedia-reuse
 base_branch: main
 created: 2026-07-20
 updated: 2026-07-20
-related_pr: ""
+related_pr: "57"
 owned_paths:
   - docs/agents/tasks/active/OTH-20260720-oam028-cyclopedia-reuse.md
   - docs/oam-028-cyclopedia-reuse.md
@@ -33,11 +33,11 @@ Prove the clean target already carries the required Cyclopedia umbrella protocol
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-20T22:45:00Z
-head: 2a008f1c8cfa679c9b70281e4c8c16120a7567fa
+updated_at: 2026-07-20T22:48:00Z
+head: f10354322c5b80ec868518d96ad16a494b6bde6a
 branch: dudantas/oam-028-cyclopedia-reuse
-pr: none
-status: implementing
+pr: 57
+status: ready
 context_routes:
   - docs/agents/tasks/active/OTH-20260720-oam028-cyclopedia-reuse.md
   - docs/oam-028-cyclopedia-reuse.md
@@ -54,10 +54,12 @@ proven:
   - Reviewed legacy PR 188 production changes belong to child boundaries and explicitly do not change protocol or maintained OTClient.
   - Reviewed legacy PR 192 production changes are Bestiary/Bosstiary data only and explicitly do not change protocol or maintained OTClient.
   - No target production path needs mutation for the selected umbrella boundary.
+  - PR 57 changes exactly four proof-only paths and no production/runtime/data/client path.
+  - Draft CI 204 and Required 187 passed on head f10354322c5b80ec868518d96ad16a494b6bde6a; autofix 168 was skipped, not failed.
 derived:
   - OAM-028 target disposition is cyclopedia REUSE with proof-only target changes.
 unknown:
-  - Exact CI outcome until the target PR runs.
+  - Final ready-state exact-head CI outcome.
 conflicts: []
 first_failure:
   marker: none
@@ -67,10 +69,19 @@ rejected_hypotheses:
   - Reopen child runtime/data ownership while proving the umbrella.
 changed_paths:
   - docs/agents/tasks/active/OTH-20260720-oam028-cyclopedia-reuse.md
+  - docs/oam-028-cyclopedia-reuse.md
+  - tests/unit/game/oam_028_cyclopedia_reuse_test.cpp
+  - tests/unit/game/CMakeLists.txt
 validation:
   - command: exact umbrella/child boundary preflight
     result: PASS
     evidence: target/upstream protocol header identity plus TSD-004 child decomposition and reviewed legacy PR 188/192 scope
+  - command: draft target CI 204
+    result: PASS
+    evidence: exact head f10354322c5b80ec868518d96ad16a494b6bde6a
+  - command: draft Required 187
+    result: PASS
+    evidence: exact head f10354322c5b80ec868518d96ad16a494b6bde6a
 blockers: []
-next_action: Add proof-only OAM-028 evidence and a focused source-contract test that verifies the existing umbrella protocol declarations plus the independent TSD-004 child implementation roots, register the test, then open the target PR for exact-head CI.
+next_action: Mark PR 57 ready, require CI and Required success on the resulting exact final head, verify the OAM-028 focused proof executes in Linux debug when the full matrix is selected, audit four-file proof-only scope plus comments/reviews/threads and target-main drift, then expected-head squash merge if all gates remain clean.
 ```
