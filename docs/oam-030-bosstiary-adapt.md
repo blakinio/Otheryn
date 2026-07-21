@@ -9,7 +9,7 @@ Maintained OTClient: `a6868920443dc285656bd016acdb2c1ea566e511`.
 
 Canonical `bosstiary` owns `src/io/io_bosstiary.*` and depends on completed `cyclopedia` and `player-persistence`. Task-start Otheryn and fresh upstream shared exact `io_bosstiary.cpp` blob `8e89ce79316e5c193e918661c50278f50d476c83`.
 
-Merged legacy PR #188 contains one isolated Bosstiary production correction. The target/upstream implementation returned immediately when the `boosted_boss` query had no row, making its later `if (!result)` recovery branch unreachable. OAM-030 removes that early return and initializes the missing singleton row before selecting and persisting a new boosted boss.
+Merged legacy PR #188 contains one isolated Bosstiary production correction. The target/upstream implementation returned immediately when the `boosted_boss` query had no row, which made its later `if (!result)` recovery branch unreachable. OAM-030 removes that early return and initializes the missing singleton row before selecting and persisting a new boosted boss.
 
 Later legacy multichannel leader-election changes are deliberately not imported by this bounded donor. Bestiary, Charms, monster-data, protocol and maintained-client changes are also excluded.
 

@@ -5,7 +5,7 @@ branch: dudantas/oam-030-bosstiary-adapt
 base_branch: main
 created: 2026-07-21
 updated: 2026-07-21
-related_pr: "61"
+related_pr: ""
 owned_paths:
   - docs/agents/tasks/active/OTH-20260721-oam030-bosstiary-adapt.md
   - docs/oam-030-bosstiary-adapt.md
@@ -30,10 +30,10 @@ Apply only the reviewed legacy PR #188 missing `boosted_boss` row initialization
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-21T10:00:00+02:00
+updated_at: 2026-07-21T09:55:00+02:00
 head: 68d48deea999990b1eab30858f3a85fc9fef7067
 branch: dudantas/oam-030-bosstiary-adapt
-pr: 61
+pr: none
 status: implementing
 context_routes:
   - docs/oam-030-bosstiary-adapt.md
@@ -55,8 +55,8 @@ unknown:
   - Exact final target CI evidence until PR gating completes.
 conflicts: []
 first_failure:
-  marker: temporary materializer anchor mismatch
-  evidence: first helper workflow failed before changing production code; materialization was narrowed to an inline source-only transform
+  marker: none
+  evidence: none
 rejected_hypotheses:
   - Copy current legacy io_bosstiary.cpp wholesale.
   - Import Bestiary Charms monster-data protocol or maintained-client changes.
@@ -71,5 +71,5 @@ validation:
     result: PASS
     evidence: PR 188 has one isolated io_bosstiary.cpp hunk applicable to exact target/upstream code
 blockers: []
-next_action: Complete the inline source-only materialization, remove all temporary helper paths, then require exact-head autofix CI Required Linux-debug Run Tests scope review and no-main-drift before expected-head squash merge.
+next_action: Materialize the bounded adaptation and focused proof, remove temporary materialization helpers, open the target PR, then require exact-head autofix CI Required Linux-debug Run Tests scope review and no-main-drift before expected-head squash merge.
 ```

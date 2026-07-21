@@ -23,10 +23,6 @@ void IOBosstiary::loadBoostedBoss() {
 	Database &database = Database::getInstance();
 	auto query = fmt::format("SELECT `date`, `boostname`, `raceid` FROM `boosted_boss`");
 	DBResult_ptr result = database.storeQuery(query);
-	if (!result) {
-		g_logger().error("[{}] Failed to detect boosted boss database. (CODE 01)", __FUNCTION__);
-		return;
-	}
 
 	const auto &bossMap = getBosstiaryMap();
 	if (bossMap.size() <= 1) {
@@ -39,7 +35,11 @@ void IOBosstiary::loadBoostedBoss() {
 	auto today = time->tm_mday;
 
 	if (!result) {
-		g_logger().warn("[{}] No boosted boss found in g_database(). A new one will be selected.", __FUNCTION__);
+		g_logger().warn("[{}] No boosted boss row found. A new one will be selected.", __FUNCTION__);
+		if (!database.executeQuery("INSERT INTO `boosted_boss` (`boostname`, `date`, `raceid`) VALUES ('default', '0', '0')")) {
+			g_logger().error("[{}] Failed to initialize the boosted boss database row. (CODE 01)", __FUNCTION__);
+			return;
+		}
 	} else {
 		auto date = result->getNumber<uint16_t>("date");
 		if (date == today) {
