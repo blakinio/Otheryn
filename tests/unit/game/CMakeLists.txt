@@ -2,6 +2,7 @@ target_compile_definitions(
     canary_ut
     PRIVATE OAM027_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
             OAM028_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
+            OAM029_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
 )
 
 target_sources(
@@ -26,6 +27,7 @@ target_sources(
             oam_026_guilds_adapt_test.cpp
             oam_027_houses_adapt_test.cpp
             oam_028_cyclopedia_reuse_test.cpp
+            oam_029_cyclopedia_character_adapt_test.cpp
             player_stats_test.cpp
             random_mount_test.cpp
             spawn_monster_test.cpp
