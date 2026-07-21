@@ -24,6 +24,10 @@ The current legacy retains both corrections. The same donor PR also contains Bes
 
 The smallest valid disposition is therefore `ADAPT`, changing only `data/scripts/lib/register_bestiary_charm.lua` and the all-Charm reset-price expression in `src/io/iobestiary.cpp`, plus focused proof and task evidence.
 
+## Proof-boundary maintenance
+
+The first exact-head Linux-debug suite on PR #67 passed 421/422 tests. Its sole failure was the older OAM-031 test `CharmResetPricingRemainsOutsideBestiaryPackage`, which explicitly required the pre-OAM-033 reset-price formula and rejected the corrected formula. That assertion was valid while Charm pricing was deliberately excluded from OAM-031, but became obsolete once OAM-033 took explicit Charm ownership and changed the formula. The obsolete Charm-specific assertion was removed from the OAM-031 proof file; OAM-031 Bestiary null-safety and difficulty proofs remain unchanged. No production change was made in response to this test failure.
+
 ## Nonclaims
 
 OAM-033 does not claim exhaustive Charm definition/value parity, all unlock costs, assignment-slot rules, combat proc formulas, element/resistance behavior, Bestiary progress correctness, protocol/client compatibility, maintained-client rendering, persistence atomicity, economy transaction atomicity, physical-client Charm E2E closure, or full Real Tibia parity.
