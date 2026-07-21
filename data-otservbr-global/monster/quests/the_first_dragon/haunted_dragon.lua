@@ -16,6 +16,7 @@ monster.outfit = {
 monster.raceId = 1376
 monster.Bestiary = {
 	class = "Dragon",
+	race = BESTY_RACE_DRAGON,
 
 	toKill = 2500,
 	FirstUnlock = 100,
