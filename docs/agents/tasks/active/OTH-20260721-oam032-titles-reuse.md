@@ -1,6 +1,6 @@
 ---
 task_id: OTH-20260721-oam032-titles-reuse
-status: implementing
+status: validating
 branch: dudantas/oam-032-titles-reuse
 base_branch: main
 created: 2026-07-21
@@ -30,11 +30,11 @@ Prove the bounded canonical `titles` server lifecycle is already present in the 
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-21T21:50:00+02:00
-head: ad2bd2f187df057c47d05c121351159ce30cc457
+updated_at: 2026-07-21T22:00:00+02:00
+head: a766d6996d7eca3f103d02e4bbf3bfd056f0705f
 branch: dudantas/oam-032-titles-reuse
 pr: none
-status: implementing
+status: validating
 context_routes:
   - docs/oam-032-titles-reuse.md
 owned_paths:
@@ -55,6 +55,7 @@ proven:
   - Legacy PR 192 contains only monster data validator and documentation paths.
   - Legacy PR 243 contains validator workflow control only.
   - Current open Canary PRs do not overlap player_title or OAM-032 paths and Otheryn has no open PRs.
+  - Target branch changes exactly four intended proof and task paths and no production path.
 derived:
   - OAM-032 disposition is titles REUSE with proof-only target changes.
 unknown:
@@ -75,6 +76,9 @@ validation:
   - command: live target legacy upstream blob and ownership preflight
     result: PASS
     evidence: exact player_title cpp and hpp blobs match across all three server trees and no accepted donor delta owns Titles
+  - command: immutable-base changed-path audit
+    result: PASS
+    evidence: exactly four intended proof and task paths with no production change
 blockers: []
-next_action: Add focused proof registration, open the target PR, require exact-head autofix CI Required and Linux-debug Run Tests success, audit exactly four intended proof paths plus comments reviews threads and target-main drift, then expected-head squash merge if all gates remain clean.
+next_action: Open the target PR, require exact-head autofix CI Required and Linux-debug Run Tests success, audit exactly four intended proof paths plus comments reviews threads and target-main drift, then expected-head squash merge if all gates remain clean.
 ```
