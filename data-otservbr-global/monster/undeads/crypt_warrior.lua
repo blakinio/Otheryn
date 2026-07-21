@@ -13,8 +13,10 @@ monster.outfit = {
 	lookMount = 0,
 }
 
+monster.raceId = 1995
 monster.Bestiary = {
 	class = "Undead",
+	race = BESTY_RACE_UNDEAD,
 
 	toKill = 2500,
 	FirstUnlock = 100,
