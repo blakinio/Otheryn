@@ -1,0 +1,33 @@
+name: OAM 029 Cyclopedia Character Materialize
+
+on:
+  push:
+    branches:
+      - dudantas/oam-029-cyclopedia-character-adapt
+    paths:
+      - .github/workflows/oam-029-cyclopedia-character-materialize.yml
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dudantas/oam-029-cyclopedia-character-adapt
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Apply exact reviewed donor hunk
+        run: python tools/agents/oam_029_cyclopedia_character_materialize.py
+      - name: Commit materialized adaptation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/creatures/players/components/player_cyclopedia.cpp
+          git diff --cached --check
+          git commit -m "fix(cyclopedia): align recent PvP page count window"
+          git push origin HEAD:dudantas/oam-029-cyclopedia-character-adapt
