@@ -1,0 +1,29 @@
+name: OAM 033 Target Materialize
+
+on:
+  push:
+    branches:
+      - dudantas/oam-033-charms-adapt
+    paths:
+      - .github/workflows/oam-033-target-materialize.yml
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dudantas/oam-033-charms-adapt
+      - name: Materialize selected OAM-033 corrections
+        run: python tools/agents/oam_033_target_materialize.py
+      - name: Commit selected production corrections
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/scripts/lib/register_bestiary_charm.lua src/io/iobestiary.cpp
+          git diff --cached --quiet && exit 1
+          git commit -m "fix(charms): adapt OAM-033 runtime rules"
+          git push origin HEAD:dudantas/oam-033-charms-adapt
