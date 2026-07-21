@@ -1,0 +1,30 @@
+name: OAM 030 Materialize
+
+on:
+  push:
+    branches:
+      - dudantas/oam-030-bosstiary-adapt
+    paths:
+      - .github/workflows/oam-030-materialize.yml
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: dudantas/oam-030-bosstiary-adapt
+      - name: Materialize bounded OAM-030 adaptation
+        run: python tools/agents/oam_030_materialize.py
+      - name: Remove temporary materializer
+        run: git rm tools/agents/oam_030_materialize.py .github/workflows/oam-030-materialize.yml
+      - name: Commit materialized package
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/io/io_bosstiary.cpp tests/unit/game/CMakeLists.txt tests/unit/game/oam_030_bosstiary_adapt_test.cpp docs/oam-030-bosstiary-adapt.md docs/agents/tasks/active/OTH-20260721-oam030-bosstiary-adapt.md
+          git commit -m "fix(bosstiary): recover missing boosted boss row"
+          git push origin HEAD:dudantas/oam-030-bosstiary-adapt
