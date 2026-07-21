@@ -381,8 +381,12 @@ void IOBestiary::addMinorCharmEchoes(const std::shared_ptr<Player> &player, uint
 }
 
 void IOBestiary::addBestiaryKill(const std::shared_ptr<Player> &player, const std::shared_ptr<MonsterType> &mtype, uint32_t amount /*= 1*/) {
-	uint16_t raceid = mtype->info.raceid;
-	if (raceid == 0 || !player || !mtype) {
+	if (!player || !mtype) {
+		return;
+	}
+
+	const uint16_t raceid = mtype->info.raceid;
+	if (raceid == 0) {
 		return;
 	}
 	uint32_t curCount = player->getBestiaryKillCount(raceid);
@@ -658,7 +662,7 @@ std::vector<uint16_t> IOBestiary::getBestiaryStageTwo(const std::shared_ptr<Play
 }
 
 int8_t IOBestiary::calculateDifficult(uint32_t chance) const {
-	float chanceInPercent = chance / 1000;
+	const double chanceInPercent = static_cast<double>(chance) / 1000.0;
 
 	if (chanceInPercent < 0.2) {
 		return 4;
