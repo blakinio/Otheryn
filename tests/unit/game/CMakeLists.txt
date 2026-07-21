@@ -7,6 +7,7 @@ target_compile_definitions(
             OAM030_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
             OAM031_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
             OAM032_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
+            OAM033_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
 )
 
 target_sources(
@@ -36,6 +37,7 @@ target_sources(
             oam_030_bosstiary_adapt_test.cpp
             oam_031_bestiary_adapt_test.cpp
             oam_032_titles_reuse_test.cpp
+            oam_033_charms_adapt_test.cpp
             player_stats_test.cpp
             random_mount_test.cpp
             spawn_monster_test.cpp
