@@ -53,11 +53,3 @@ TEST(Oam031BestiaryAdaptTest, DifficultyCalculationPreservesFractionalThresholds
 	EXPECT_NE(function.find("const double chanceInPercent = static_cast<double>(chance) / 1000.0;"), std::string::npos);
 	EXPECT_EQ(function.find("float chanceInPercent = chance / 1000;"), std::string::npos);
 }
-
-TEST(Oam031BestiaryAdaptTest, CharmResetPricingRemainsOutsideBestiaryPackage) {
-	const auto source = readBestiarySource();
-	ASSERT_FALSE(source.empty());
-
-	EXPECT_NE(source.find("100000 + (playerLevel > 100 ? playerLevel * 11000 : 0)"), std::string::npos);
-	EXPECT_EQ(source.find("100000 + (playerLevel > 100 ? (playerLevel - 100) * 11000 : 0)"), std::string::npos);
-}

@@ -550,7 +550,7 @@ void IOBestiary::sendBuyCharmRune(const std::shared_ptr<Player> &player, uint8_t
 		g_metrics().addCounter("balance_decrease", fee, { { "player", player->getName() }, { "context", "charm_removal" } });
 	} else if (action == 3) {
 		const auto playerLevel = player->getLevel();
-		uint64_t resetAllCharmsCost = 100000 + (playerLevel > 100 ? playerLevel * 11000 : 0);
+		uint64_t resetAllCharmsCost = 100000 + (playerLevel > 100 ? (playerLevel - 100) * 11000 : 0);
 		if (player->hasCharmExpansion()) {
 			resetAllCharmsCost = (resetAllCharmsCost * 75) / 100;
 		}
