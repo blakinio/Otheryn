@@ -1,11 +1,11 @@
 ---
 task_id: OTH-20260721-oam030-bosstiary-adapt
-status: implementing
+status: ready
 branch: dudantas/oam-030-bosstiary-adapt
 base_branch: main
 created: 2026-07-21
 updated: 2026-07-21
-related_pr: ""
+related_pr: "61"
 owned_paths:
   - docs/agents/tasks/active/OTH-20260721-oam030-bosstiary-adapt.md
   - docs/oam-030-bosstiary-adapt.md
@@ -30,11 +30,11 @@ Apply only the reviewed legacy PR #188 missing `boosted_boss` row initialization
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-21T09:55:00+02:00
-head: 68d48deea999990b1eab30858f3a85fc9fef7067
+updated_at: 2026-07-21T10:05:00+02:00
+head: c43d46ff54f9d6fd6c3921e744484acaf5cf3a25
 branch: dudantas/oam-030-bosstiary-adapt
-pr: none
-status: implementing
+pr: 61
+status: ready
 context_routes:
   - docs/oam-030-bosstiary-adapt.md
 owned_paths:
@@ -47,16 +47,17 @@ proven:
   - Target task-start main is 68d48deea999990b1eab30858f3a85fc9fef7067.
   - Target and fresh upstream share io_bosstiary.cpp blob 8e89ce79316e5c193e918661c50278f50d476c83.
   - Merged legacy PR 188 changes exactly one canonical bosstiary production site in IOBosstiary::loadBoostedBoss.
-  - The accepted donor removes an early no-row return and initializes the missing boosted_boss row before reroll.
+  - The accepted donor removes the early no-row return and initializes the missing boosted_boss row before reroll.
   - Later current-legacy multichannel leadership logic is independent and excluded.
+  - Final packaging diff contains exactly the five intended owned paths and no temporary helper or workflow path.
 derived:
   - OAM-030 target disposition is bosstiary ADAPT with one production recovery correction plus focused proof.
 unknown:
-  - Exact final target CI evidence until PR gating completes.
+  - Exact final ready-state target CI evidence until PR gating completes.
 conflicts: []
 first_failure:
-  marker: none
-  evidence: none
+  marker: temporary materializer anchor mismatch
+  evidence: helper workflows failed before final packaging; direct branch inspection proved the intended source hunk was materialized and all helper paths were removed before the final gate
 rejected_hypotheses:
   - Copy current legacy io_bosstiary.cpp wholesale.
   - Import Bestiary Charms monster-data protocol or maintained-client changes.
@@ -70,6 +71,9 @@ validation:
   - command: exact donor and ownership preflight
     result: PASS
     evidence: PR 188 has one isolated io_bosstiary.cpp hunk applicable to exact target/upstream code
+  - command: final packaging changed-file audit
+    result: PASS
+    evidence: PR 61 contains exactly five intended OAM-030 paths and no temporary materialization files
 blockers: []
-next_action: Materialize the bounded adaptation and focused proof, remove temporary materialization helpers, open the target PR, then require exact-head autofix CI Required Linux-debug Run Tests scope review and no-main-drift before expected-head squash merge.
+next_action: Mark PR 61 ready and require autofix CI Required and Linux-debug Run Tests success on one unchanged exact final head; then audit five-file scope comments reviews threads and target-main drift before expected-head squash merge.
 ```
