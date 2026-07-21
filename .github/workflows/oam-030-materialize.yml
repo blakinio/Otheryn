@@ -1,0 +1,54 @@
+name: OAM 030 Materialize
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: dudantas/oam-030-bosstiary-adapt
+          show-progress: false
+      - name: Materialize bounded source adaptation
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/io/io_bosstiary.cpp')
+          lines = path.read_text(encoding='utf-8').splitlines()
+          start = next(i for i, line in enumerate(lines) if line.strip() == 'void IOBosstiary::loadBoostedBoss() {')
+          first = next(i for i in range(start, len(lines)) if lines[i].strip() == 'if (!result) {')
+          close = next(i for i in range(first + 1, min(first + 8, len(lines))) if lines[i].strip() == '}')
+          if not any(line.strip() == 'return;' for line in lines[first:close + 1]):
+              raise SystemExit('first missing-result branch is not the expected early return')
+          del lines[first:close + 1]
+          second = next(i for i in range(start, len(lines)) if lines[i].strip() == 'if (!result) {')
+          else_line = next(i for i in range(second + 1, min(second + 8, len(lines))) if lines[i].strip() == '} else {')
+          replacement = [
+              '\tif (!result) {',
+              '\t\tg_logger().warn("[{}] No boosted boss row found. A new one will be selected.", __FUNCTION__);',
+              '\t\tif (!database.executeQuery("INSERT INTO `boosted_boss` (`boostname`, `date`, `raceid`) VALUES (\'default\', \'0\', \'0\')")) {',
+              '\t\t\tg_logger().error("[{}] Failed to initialize the boosted boss database row. (CODE 01)", __FUNCTION__);',
+              '\t\t\treturn;',
+              '\t\t}',
+              '\t} else {',
+          ]
+          lines[second:else_line + 1] = replacement
+          path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          PY
+      - name: Remove temporary helpers
+        run: git rm tools/agents/oam_030_materialize.py tools/agents/oam_030_materialize_v2.py .github/workflows/oam-030-materialize.yml
+      - name: Commit source adaptation and helper cleanup
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/io/io_bosstiary.cpp
+          git commit -m "fix(bosstiary): recover missing boosted boss row"
+          git push origin HEAD:dudantas/oam-030-bosstiary-adapt
