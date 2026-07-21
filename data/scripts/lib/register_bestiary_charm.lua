@@ -35,7 +35,7 @@ registerCharm.sounds = function(charm, mask)
 end
 
 registerCharm.category = function(charm, mask)
-	if mask.type then
+	if mask.category then
 		charm:category(mask.category)
 	end
 end
