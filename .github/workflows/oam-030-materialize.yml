@@ -4,27 +4,21 @@ on:
   pull_request:
     branches:
       - main
-  push:
-    branches:
-      - dudantas/oam-030-bosstiary-adapt
-    paths:
-      - .github/workflows/oam-030-materialize.yml
 
 permissions:
   contents: write
 
 jobs:
   materialize:
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
         with:
           ref: dudantas/oam-030-bosstiary-adapt
       - name: Materialize bounded OAM-030 adaptation
-        run: python tools/agents/oam_030_materialize.py
-      - name: Remove temporary materializer
-        run: git rm tools/agents/oam_030_materialize.py .github/workflows/oam-030-materialize.yml
+        run: python tools/agents/oam_030_materialize_v2.py
+      - name: Remove temporary materializers
+        run: git rm tools/agents/oam_030_materialize.py tools/agents/oam_030_materialize_v2.py .github/workflows/oam-030-materialize.yml
       - name: Commit materialized package
         run: |
           git config user.name github-actions[bot]
