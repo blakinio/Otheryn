@@ -1,6 +1,9 @@
 name: OAM 030 Materialize
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - dudantas/oam-030-bosstiary-adapt
@@ -12,6 +15,7 @@ permissions:
 
 jobs:
   materialize:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
