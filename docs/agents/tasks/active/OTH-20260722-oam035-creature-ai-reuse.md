@@ -1,11 +1,11 @@
 ---
 task_id: OTH-20260722-oam035-creature-ai-reuse
-status: implementing
+status: validating
 branch: dudantas/oam-035-creature-ai-reuse
 base_branch: main
 created: 2026-07-22
 updated: 2026-07-22
-related_pr: ""
+related_pr: "72"
 owned_paths:
   - docs/agents/tasks/active/OTH-20260722-oam035-creature-ai-reuse.md
   - docs/oam-035-creature-ai-reuse.md
@@ -35,11 +35,11 @@ Prove the bounded canonical `creature-ai` runtime is already present in the clea
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-22T09:45:00+02:00
-head: 4771350b44665c5a37b0c058b3d413c0c0de542d
+updated_at: 2026-07-22T10:12:00+02:00
+head: 963a90d208d3fb02483efb45f8b429693e61852f
 branch: dudantas/oam-035-creature-ai-reuse
-pr: none
-status: implementing
+pr: 72
+status: validating
 context_routes:
   - cpp-runtime
   - agent-governance
@@ -60,6 +60,7 @@ proven:
   - The target Monster core is wired to modular monster_targeting monster_pathfinding monster_combat_intention and MonsterComputeService boundaries.
   - Existing focused unit tests already cover monster targeting pathfinding combat intention compute service and relevance behavior.
   - Otheryn had no open pull requests at target task start.
+  - PR 72 is open as the single bounded OAM-035 target owner and changes exactly four intended proof/task paths with no production path.
 derived:
   - OAM-035 final disposition is creature-ai REUSE with proof-only target changes.
   - No production runtime or maintained-client mutation is required for this package.
@@ -80,10 +81,13 @@ changed_paths:
 validation:
   - command: fresh target upstream legacy blob ownership and open-PR preflight
     result: PASS
-    evidence: target and upstream owned core blobs match exactly legacy diverges and no open Otheryn writer exists
+    evidence: target and upstream owned core blobs match exactly legacy diverges and no open Otheryn writer existed at task start
   - command: existing focused creature AI unit-test inventory
     result: PASS
     evidence: targeting pathfinding combat intention compute service and relevance focused tests are already registered in canary_ut
+  - command: immutable-base changed-path audit
+    result: PASS
+    evidence: exactly four intended proof/task paths and no production change
 blockers: []
-next_action: Add the bounded OAM-035 proof document and source-contract regression test, register it in canary_ut, then open the target PR and require exact-head CI/Required and Linux-debug test success before expected-head squash merge.
+next_action: Require exact-current-head autofix CI Required and Linux-debug Run Tests success on PR 72, audit comments reviews threads and target-main drift, then expected-head squash merge if all gates remain clean.
 ```
