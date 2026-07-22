@@ -5,7 +5,7 @@ branch: dudantas/oam-036-boss-encounters-reuse
 base_branch: main
 created: 2026-07-22
 updated: 2026-07-22
-related_pr: ""
+related_pr: "74"
 owned_paths:
   - docs/agents/tasks/active/OTH-20260722-oam036-boss-encounters-reuse.md
   - docs/oam-036-boss-encounters-reuse.md
@@ -30,11 +30,11 @@ Prove the bounded canonical `boss-encounters` runtime is already present in the 
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-22T11:35:00+02:00
-head: 6275021bbb83dc28d2f5d6cf8db5b16aa7206544
+updated_at: 2026-07-22T11:40:00+02:00
+head: 630abcfecb381a3d5d7515c2e7250e6ee85cacf2
 branch: dudantas/oam-036-boss-encounters-reuse
-pr: none
-status: implementing
+pr: 74
+status: validating
 context_routes:
   - lua-runtime
   - agent-governance
@@ -52,6 +52,7 @@ proven:
   - Otheryn fresh upstream and legacy Canary share exact reward_boss.lua blob 72476dfcbdd8fd92d6b5bd3ad3015efef87cf2f3 and reward_chest.lua blob 4abe17ad2f3103f30f172f23ebdca391197f8646.
   - Semantic review confirms reward_boss owns reward-container serialization participation state and target-list activity while reward_chest owns boss-death scoring reward generation chest insertion offline save handoff and participation event accounting.
   - No stronger delivered legacy donor or open target writer was identified for the selected canonical roots.
+  - PR 74 is the single bounded OAM-036 target owner and changes exactly four intended proof/task paths with no production path.
 derived:
   - OAM-036 final disposition is boss-encounters REUSE if the bounded source-contract proof and exact-head target gates pass without production repair.
   - No maintained-client mutation is expected because the selected boundary is server-side encounter/reward lifecycle and does not alter the wire contract.
@@ -73,6 +74,9 @@ validation:
   - command: exact-root and semantic target preflight
     result: PASS
     evidence: exact canonical roots match upstream and legacy and reviewed lifecycle semantics map to boss-encounters ownership
+  - command: immutable-base changed-path audit
+    result: PASS
+    evidence: exactly four intended proof/task paths and no production change
 blockers: []
-next_action: Add the bounded OAM-036 proof document and source-contract regression test, register it in canary_ut, then open the target PR and require exact-head CI Required autofix and Linux-debug full tests before expected-head squash merge.
+next_action: Mark PR 74 ready and require exact-current-head autofix CI Required and Linux-debug full Run Tests success, audit comments reviews threads and target-main drift, then expected-head squash merge if all gates remain clean.
 ```
