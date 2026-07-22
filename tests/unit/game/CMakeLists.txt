@@ -9,6 +9,7 @@ target_compile_definitions(
             OAM032_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
             OAM033_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
             OAM034_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
+            OAM035_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
 )
 
 target_sources(
@@ -40,6 +41,7 @@ target_sources(
             oam_032_titles_reuse_test.cpp
             oam_033_charms_adapt_test.cpp
             oam_034_creature_definitions_adapt_test.cpp
+            oam_035_creature_ai_reuse_test.cpp
             player_stats_test.cpp
             random_mount_test.cpp
             spawn_monster_test.cpp
