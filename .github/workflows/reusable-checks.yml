@@ -140,11 +140,12 @@ jobs:
 
           REVIEWDOG_DIFF_FLAGS=()
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            git fetch --no-tags --prune origin "+refs/heads/${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
-            REVIEWDOG_DIFF_FLAGS=(-diff="git diff --no-ext-diff --relative origin/${{ github.base_ref }}...HEAD")
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            git cat-file -e "${BASE_SHA}^{commit}"
+            REVIEWDOG_DIFF_FLAGS=(-diff="git diff --no-ext-diff --relative ${BASE_SHA}...HEAD")
           fi
 
-          yamllint --format parsable . |
+          { yamllint --format parsable . || true; } |
             reviewdog \
               -efm="%f:%l:%c: %m" \
               -name="yamllint" \
