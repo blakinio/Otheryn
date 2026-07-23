@@ -5,7 +5,7 @@ branch: dudantas/oam-038-world-zones-reuse
 base_branch: main
 created: 2026-07-23
 updated: 2026-07-23
-related_pr: ""
+related_pr: "79"
 owned_paths:
   - docs/agents/tasks/active/OTH-20260723-oam038-world-zones-reuse.md
   - docs/oam-038-world-zones-reuse.md
@@ -32,10 +32,10 @@ Prove the bounded canonical `world-zones` runtime is already present in the clea
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-23T11:30:00+02:00
-head: 6b423d1a100f762f0b41874fffeed6ecd6c46be2
+updated_at: 2026-07-23T11:35:00+02:00
+head: f3c07348e15fc0294ec908d84f1be91a1ce3d32f
 branch: dudantas/oam-038-world-zones-reuse
-pr: null
+pr: 79
 status: validating
 context_routes:
   - cpp-runtime
@@ -58,7 +58,7 @@ derived:
   - OAM-038 final disposition is world-zones REUSE if the bounded source-contract proof and exact-head target gates pass without production repair.
   - No maintained-client mutation is expected because canonical world-zones has no client path and does not alter the wire contract.
 unknown:
-  - Exact final target CI Required and platform-gate evidence until the OAM-038 PR executes.
+  - Exact final target CI Required and platform-gate evidence until PR 79 executes.
   - Whether exact-head validation exposes a concrete world-zones-owned target defect requiring reclassification to ADAPT.
 conflicts: []
 first_failure:
@@ -82,7 +82,7 @@ validation:
     evidence: proof covers registry/index lifecycle synchronized weak membership caches dynamic cleanup removal variant and XML-loading surfaces without production mutation
   - command: immutable-base changed-path audit
     result: PASS
-    evidence: target branch is intended to change exactly four proof/task paths and no production path
+    evidence: target branch changes exactly four intended proof/task paths and no production path
 blockers: []
-next_action: Open the clean OAM-038 target proof PR, bind its PR number, require exact-current-head CI and Required gates, audit comments reviews review threads and target-main drift, then expected-head squash merge if all gates remain clean.
+next_action: Require exact-current-head CI and Required gates on PR 79, audit comments reviews review threads and target-main drift, then expected-head squash merge if all gates remain clean.
 ```
