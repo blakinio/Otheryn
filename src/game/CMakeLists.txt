@@ -19,4 +19,7 @@ target_sources(
             scheduling/task.cpp
             scheduling/save_manager.cpp
             zones/zone.cpp
+            instance/instance_manager.cpp
+            instance/instance_region_pool.cpp
+            instance/instance_arena_service.cpp
 )

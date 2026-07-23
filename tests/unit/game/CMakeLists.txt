@@ -48,6 +48,11 @@ target_sources(
             oam_036_boss_encounters_reuse_test.cpp
             oam_037_raids_reuse_test.cpp
             oam_038_world_zones_reuse_test.cpp
+            instance/instance_region_pool_test.cpp
+            instance/instance_manager_test.cpp
+            instance/instance_creature_binder_test.cpp
+            instance/instance_scoped_event_test.cpp
+            instance/instance_arena_service_test.cpp
             player_stats_test.cpp
             random_mount_test.cpp
             spawn_monster_test.cpp
