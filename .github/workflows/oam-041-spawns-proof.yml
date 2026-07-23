@@ -111,6 +111,7 @@ jobs:
             --from "$PROOF_FROM" \
             --to "$PROOF_TO" \
             --origin "$PROOF_ORIGIN" \
+            --sample-limit 10000 \
             --output artifacts/OTBM_REACHABILITY.json \
             --fail-on none
 
@@ -128,8 +129,6 @@ jobs:
             --output artifacts/OTBM_SPAWN_NPC_VALIDATION.json
 
       - name: Assemble compact proof provenance
-        env:
-          PYTHONPATH: canary-tools/tools/ai-agent
         shell: bash
         run: |
           python - <<'PY'
@@ -189,8 +188,6 @@ jobs:
           assert validation["format"] == "canary-otbm-spawn-npc-validation-v1"
           assert evidence["summary"]["placements"] > 0
           assert validation["summary"]["placements"] > 0
-          assert reachability["summary"]["findings"]["truncated"] is False
-          assert "reachability_diagnostics_truncated" not in validation["summary"]["findings"]["byCode"]
           (artifacts / "OAM_041_PROOF_SUMMARY.json").write_text(
               json.dumps(proof, indent=2, sort_keys=True) + "\n",
               encoding="utf-8",
@@ -209,3 +206,15 @@ jobs:
             artifacts/world.widx.json
           if-no-files-found: error
           retention-days: 14
+
+      - name: Require complete bounded correlation
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          reachability = json.loads(Path("artifacts/OTBM_REACHABILITY.json").read_text(encoding="utf-8"))
+          validation = json.loads(Path("artifacts/OTBM_SPAWN_NPC_VALIDATION.json").read_text(encoding="utf-8"))
+          assert reachability["summary"]["findings"]["truncated"] is False
+          assert "reachability_diagnostics_truncated" not in validation["summary"]["findings"]["byCode"]
+          PY
