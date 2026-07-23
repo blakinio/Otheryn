@@ -8,6 +8,7 @@ on:
 permissions:
   actions: read
   contents: read
+  pull-requests: read
 
 jobs:
   required:
@@ -27,23 +28,42 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          git cat-file -e "${BASE_SHA}^{commit}"
-          git diff --name-only "${BASE_SHA}...HEAD" > required-changed-files.txt
 
           python3 - <<'PY'
           import json
           import os
-          import subprocess
-          import sys
           import time
           import urllib.parse
           import urllib.request
 
-          changed = [line.strip() for line in open("required-changed-files.txt", encoding="utf-8") if line.strip()]
+          repository = os.environ["REPOSITORY"]
+          pr_number = os.environ["PR_NUMBER"]
+          head_sha = os.environ["HEAD_SHA"]
+          token = os.environ["GH_TOKEN"]
+          headers = {
+              "Accept": "application/vnd.github+json",
+              "Authorization": f"Bearer {token}",
+              "X-GitHub-Api-Version": "2022-11-28",
+          }
+
+          changed = []
+          page = 1
+          while True:
+              query = urllib.parse.urlencode({"per_page": 100, "page": page})
+              request = urllib.request.Request(
+                  f"https://api.github.com/repos/{repository}/pulls/{pr_number}/files?{query}",
+                  headers=headers,
+              )
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  files = json.load(response)
+              changed.extend(item["filename"] for item in files)
+              if len(files) < 100:
+                  break
+              page += 1
 
           ci_prefixes = (
               "src/",
@@ -81,9 +101,6 @@ jobs:
               print("Required gate passed: no CI workflow is applicable to the changed paths.")
               raise SystemExit(0)
 
-          repository = os.environ["REPOSITORY"]
-          head_sha = os.environ["HEAD_SHA"]
-          token = os.environ["GH_TOKEN"]
           pending = set(required)
           deadline = time.time() + 35 * 60
 
@@ -91,11 +108,7 @@ jobs:
               query = urllib.parse.urlencode({"head_sha": head_sha, "event": "pull_request", "per_page": 100})
               request = urllib.request.Request(
                   f"https://api.github.com/repos/{repository}/actions/runs?{query}",
-                  headers={
-                      "Accept": "application/vnd.github+json",
-                      "Authorization": f"Bearer {token}",
-                      "X-GitHub-Api-Version": "2022-11-28",
-                  },
+                  headers=headers,
               )
               with urllib.request.urlopen(request, timeout=30) as response:
                   runs = json.load(response).get("workflow_runs", [])
