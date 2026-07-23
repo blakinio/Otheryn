@@ -12,6 +12,7 @@ target_compile_definitions(
             OAM035_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
             OAM036_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
             OAM037_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
+            OAM038_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
 )
 
 target_sources(
@@ -46,6 +47,7 @@ target_sources(
             oam_035_creature_ai_reuse_test.cpp
             oam_036_boss_encounters_reuse_test.cpp
             oam_037_raids_reuse_test.cpp
+            oam_038_world_zones_reuse_test.cpp
             player_stats_test.cpp
             random_mount_test.cpp
             spawn_monster_test.cpp
