@@ -63,6 +63,7 @@ bool InstanceManager::activate(InstanceId id) {
 bool InstanceManager::close(InstanceId id) {
 	InstanceCleanupCallback callback;
 	InstanceMapRegion region;
+	bool runCleanup = false;
 
 	{
 		std::scoped_lock lock(mutex);
@@ -70,20 +71,24 @@ bool InstanceManager::close(InstanceId id) {
 		if (it == instances.end()) {
 			return false;
 		}
-		if (it->second.state == InstanceState::Closing || it->second.state == InstanceState::Destroyed) {
+		if (it->second.state == InstanceState::Destroyed) {
 			return true;
 		}
 
-		it->second.state = InstanceState::Closing;
-		callback = it->second.cleanupCallback;
 		region = it->second.region;
+		if (it->second.state != InstanceState::Closing) {
+			it->second.state = InstanceState::Closing;
+			callback = it->second.cleanupCallback;
+			runCleanup = true;
+		}
 	}
 
-	// Caller-supplied cleanup runs outside the manager lock. A thrown exception
-	// intentionally leaves the record Closing and the region reserved, which
-	// quarantines potentially dirty map space until the later recovery layer
-	// handles it explicitly.
-	if (callback) {
+	// Caller-supplied cleanup runs outside the manager lock exactly once. A
+	// thrown exception or remaining creature ownership intentionally leaves the
+	// record Closing and the region reserved. A later close() retries only the
+	// finalization step, allowing cleanup code to drain ownership asynchronously
+	// without running the cleanup callback twice.
+	if (runCleanup && callback) {
 		callback(id, region);
 	}
 
