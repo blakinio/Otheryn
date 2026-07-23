@@ -1,6 +1,6 @@
 ---
 task_id: OTH-20260723-oam037-raids-reuse
-status: implementing
+status: validating
 branch: dudantas/oam-037-raids-reuse
 base_branch: main
 created: 2026-07-23
@@ -31,8 +31,8 @@ Prove the bounded canonical `raids` runtime is already present in the clean Othe
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-23T09:24:00+02:00
-head: 4f07178857ec74d33a12af73b1b7dec82f9a07ef
+updated_at: 2026-07-23T09:30:00+02:00
+head: 0ddcc3f0b821fdd16b5605f2234ff8c80c0d88db
 branch: dudantas/oam-037-raids-reuse
 pr: 76
 status: validating
@@ -52,7 +52,7 @@ proven:
   - Semantic review maps registry load reload interval margin repeat periodic selection running state event ordering reset cleanup and announce single-spawn area-spawn script dispatch to the canonical raids roots.
   - Target uses DispatcherLane::Maintenance for periodic checks and raid event scheduling and handles initial subsequent and periodic scheduling failure without requiring a legacy donor import.
   - The reviewed older legacy Canary raids.cpp is not a stronger whole-module donor than the target and fresh upstream canonical roots.
-  - PR 76 is the single bounded OAM-037 target owner and is intended to change exactly four proof/task paths with no production path.
+  - PR 76 is the single bounded OAM-037 target owner and changes exactly four intended proof/task paths with no production path.
 derived:
   - OAM-037 final disposition is raids REUSE if the bounded source-contract proof and exact-head target gates pass without production repair.
   - No maintained-client mutation is expected because the selected boundary is server-side raid orchestration and does not alter the wire contract.
@@ -79,6 +79,9 @@ validation:
   - command: bounded source-contract proof construction
     result: PASS
     evidence: proof covers registry scheduler failure recovery lifecycle cleanup and all four canonical raid event kinds without production mutation
+  - command: immutable-base changed-path audit
+    result: PASS
+    evidence: PR 76 changes exactly the four intended proof/task paths and no production path
 blockers: []
-next_action: Require exact-current-head CI and Required platform gates for PR 76, audit changed paths comments reviews review threads and target-main drift, then expected-head squash merge if all gates remain clean.
+next_action: Require exact-current-head CI and Required platform gates for PR 76, audit comments reviews review threads and target-main drift, then expected-head squash merge if all gates remain clean.
 ```
