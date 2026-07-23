@@ -1,11 +1,11 @@
 ---
 task_id: OTH-20260723-oam037-raids-reuse
 status: validating
-branch: dudantas/oam-037-raids-reuse
+branch: dudantas/oam-037-raids-reuse-final
 base_branch: main
 created: 2026-07-23
 updated: 2026-07-23
-related_pr: "76"
+related_pr: "77"
 owned_paths:
   - docs/agents/tasks/active/OTH-20260723-oam037-raids-reuse.md
   - docs/oam-037-raids-reuse.md
@@ -31,10 +31,10 @@ Prove the bounded canonical `raids` runtime is already present in the clean Othe
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-23T09:34:00+02:00
-head: c593066976a771873bcc44f9dc2369b0eab1e8a8
-branch: dudantas/oam-037-raids-reuse
-pr: 76
+updated_at: 2026-07-23T09:38:00+02:00
+head: 61ec36de3ea486cf60ad6cbcd6b0a966d13cb684
+branch: dudantas/oam-037-raids-reuse-final
+pr: 77
 status: validating
 context_routes:
   - lua-runtime
@@ -52,13 +52,13 @@ proven:
   - Semantic review maps registry load reload interval margin repeat periodic selection running state event ordering reset cleanup and announce single-spawn area-spawn script dispatch to the canonical raids roots.
   - Target uses DispatcherLane::Maintenance for periodic checks and raid event scheduling and handles initial subsequent and periodic scheduling failure without requiring a legacy donor import.
   - The reviewed older legacy Canary raids.cpp is not a stronger whole-module donor than the target and fresh upstream canonical roots.
-  - PR 76 is the single bounded OAM-037 target owner and changes exactly four intended proof/task paths with no production path.
-  - PR 76 head was reconciled to the full five-commit branch state before final exact-head validation.
+  - The bounded target package changes exactly four intended proof/task paths with no production path.
+  - Staging PR 76 exposed connector-side PR head event reconciliation behavior and is superseded for final exact-head gating by a clean PR opened only after the complete branch state was assembled.
 derived:
   - OAM-037 final disposition is raids REUSE if the bounded source-contract proof and exact-head target gates pass without production repair.
   - No maintained-client mutation is expected because the selected boundary is server-side raid orchestration and does not alter the wire contract.
 unknown:
-  - Exact final target CI Required and platform-gate evidence until PR gating completes.
+  - Exact final target CI Required and platform-gate evidence until final PR gating completes.
   - Whether exact-head validation exposes a concrete raids-owned target defect requiring reclassification to ADAPT.
 conflicts: []
 first_failure:
@@ -67,6 +67,7 @@ first_failure:
 rejected_hypotheses:
   - Infer final REUSE from blob identity alone; this package adds semantic source-contract proof for the owned raid lifecycle.
   - Import the divergent legacy raids.cpp wholesale; target and fresh upstream retain stronger maintenance-lane scheduling and scheduling-failure safeguards.
+  - Merge staging PR 76 using workflow results from an earlier head; final validation requires workflows bound to the exact complete branch head.
   - Expand OAM-037 into boss encounters generic spawns raid content parity Bosstiary quests or protocol/client work because those are separate ownership boundaries.
 changed_paths:
   - docs/agents/tasks/active/OTH-20260723-oam037-raids-reuse.md
@@ -82,10 +83,10 @@ validation:
     evidence: proof covers registry scheduler failure recovery lifecycle cleanup and all four canonical raid event kinds without production mutation
   - command: immutable-base changed-path audit
     result: PASS
-    evidence: PR 76 changes exactly the four intended proof/task paths and no production path
-  - command: PR head reconciliation
+    evidence: target branch changes exactly the four intended proof/task paths and no production path
+  - command: staging PR exact-head safety audit
     result: PASS
-    evidence: reopened PR 76 now points to the complete branch state before the final synchronize push
+    evidence: earlier-head workflow evidence was rejected rather than reused for a newer branch head
 blockers: []
-next_action: Require exact-current-head CI and Required platform gates for PR 76, audit comments reviews review threads and target-main drift, then expected-head squash merge if all gates remain clean.
+next_action: Require exact-current-head CI and Required platform gates on the clean final OAM-037 PR, audit comments reviews review threads and target-main drift, then expected-head squash merge if all gates remain clean.
 ```
