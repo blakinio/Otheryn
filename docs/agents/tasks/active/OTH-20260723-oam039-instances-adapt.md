@@ -34,8 +34,8 @@ Adapt the bounded canonical `instances` subsystem into clean Otheryn without imp
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-23T13:00:00+02:00
-head: ed91b095763dd989d85f5d3545cd7aa2223a122e
+updated_at: 2026-07-23T13:10:00+02:00
+head: 0add27da10d73dd025798b22ae494822db14d780
 branch: dudantas/oam-039-instances-adapt
 pr: 81
 status: validating
@@ -60,22 +60,24 @@ proven:
   - Focused target tests cover region allocation lifecycle quarantine ownership inheritance binder rollback scoped-event liveness and bounded arena behavior.
   - The clean target deliberately does not import legacy data-canary arena coordinates; InstanceArenaService configuredRegions is empty by default and operates only against explicitly configured regions.
   - No Game Creature Lua talkaction protocol client map asset schema or persistence path is changed by the bounded adaptation.
+  - Exact-head 58c4d2cf2cb5f26d67974b78e9d8e16885eae702 passed autofix Fast Checks Lua Windows CMake Windows Solution macOS Docker Linux compilation runtime smoke and schema import; Linux-debug full tests exposed one owned lifecycle defect.
+  - The failing test was InstanceManagerTest.CleanupRunsExactlyOnceAndDirtyRegionIsQuarantined: after the first close quarantined a region with remaining creature ownership, a second close returned early for Closing state and failed to release the region after unregisterCreature drained ownership.
+  - Fix commit 0add27da10d73dd025798b22ae494822db14d780 changes Closing retries to skip the cleanup callback but retry finalization and region release once ownership is empty.
 derived:
-  - OAM-039 final disposition is instances ADAPT if exact-head target build and tests pass after any concrete target-API compatibility repairs limited to the owned package.
+  - OAM-039 final disposition remains instances ADAPT pending exact-head revalidation of the bounded lifecycle repair.
   - Default target instance runtime remains dormant/fail-closed without a separately owned Game/runtime configuration integration.
   - The adapted package establishes the reusable lifecycle and isolation foundation without claiming complete production instance activation.
 unknown:
-  - Exact compile/API compatibility of the legacy-derived canonical package against current Otheryn until target CI executes.
-  - Whether target CI reveals a concrete owned-package compatibility defect requiring a bounded source repair.
-  - Exact final target merge SHA and platform-gate evidence.
+  - Exact final target merge SHA and exact-head post-repair platform-gate evidence.
 conflicts: []
 first_failure:
-  marker: none
-  evidence: Target CI has not executed on the adapted package yet.
+  marker: InstanceManagerTest.CleanupRunsExactlyOnceAndDirtyRegionIsQuarantined
+  evidence: Linux-debug Run Tests on 58c4d2cf2cb5f26d67974b78e9d8e16885eae702 expected availableSlotCount 1 after ownership drain and retry close but observed 0 because Closing returned early; fixed in 0add27da10d73dd025798b22ae494822db14d780.
 rejected_hypotheses:
   - Classify as REUSE; clean target and fresh upstream lacked the canonical InstanceManager roots.
   - Copy legacy cross-module Game Creature Lua or talkaction wiring; those are interaction boundaries outside canonical ownership.
   - Import hard-coded data-canary arena coordinates; map content is outside OAM-039 and target map placement requires separate evidence.
+  - Weaken the quarantine test; the observed failure was a real lifecycle defect because drained Closing instances must be able to complete finalization without rerunning cleanup.
 changed_paths:
   - docs/agents/tasks/active/OTH-20260723-oam039-instances-adapt.md
   - docs/oam-039-instances-adapt.md
@@ -103,6 +105,9 @@ validation:
   - command: clean-target map adaptation
     result: PASS
     evidence: legacy data-canary coordinates are not imported and default arena configuration is fail-closed
+  - command: exact-head target CI on 58c4d2cf2cb5f26d67974b78e9d8e16885eae702
+    result: FAIL
+    evidence: one owned Linux-debug lifecycle test failed after all compile and runtime smoke gates passed; bounded repair committed as 0add27da10d73dd025798b22ae494822db14d780
 blockers: []
-next_action: Require exact-current-head autofix CI Required and full platform tests on PR 81, repair only concrete owned-package target incompatibilities, then audit review state and target-main drift before expected-head squash merge.
+next_action: Require exact-current-head autofix CI Required and full platform tests on PR 81, then audit review state and target-main drift before expected-head squash merge.
 ```
