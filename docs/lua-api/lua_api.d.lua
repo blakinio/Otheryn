@@ -3644,6 +3644,9 @@ function Player:isOffline() end
 function Player:isPlayer() end
 
 ---@return boolean|nil
+function Player:isPremium() end
+
+---@return boolean|nil
 function Player:isPromoted() end
 
 ---@return boolean|nil

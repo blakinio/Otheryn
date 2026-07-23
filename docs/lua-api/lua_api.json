@@ -6891,7 +6891,7 @@
       {
         "name": "isPremium",
         "params": [],
-        "return": "boolean",
+        "return": "boolean|nil",
         "source": "src/lua/functions/creatures/player/player_functions.cpp"
       },
       {
