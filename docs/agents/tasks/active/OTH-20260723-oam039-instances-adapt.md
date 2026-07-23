@@ -5,7 +5,7 @@ branch: dudantas/oam-039-instances-adapt
 base_branch: main
 created: 2026-07-23
 updated: 2026-07-23
-related_pr: ""
+related_pr: "81"
 owned_paths:
   - docs/agents/tasks/active/OTH-20260723-oam039-instances-adapt.md
   - docs/oam-039-instances-adapt.md
@@ -34,10 +34,10 @@ Adapt the bounded canonical `instances` subsystem into clean Otheryn without imp
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-23T12:50:00+02:00
-head: f61c51fb3a4a4c9d7a4d2fd3d97158d0f3d4219d
+updated_at: 2026-07-23T13:00:00+02:00
+head: ed91b095763dd989d85f5d3545cd7aa2223a122e
 branch: dudantas/oam-039-instances-adapt
-pr: null
+pr: 81
 status: validating
 context_routes:
   - cpp-runtime
@@ -104,5 +104,5 @@ validation:
     result: PASS
     evidence: legacy data-canary coordinates are not imported and default arena configuration is fail-closed
 blockers: []
-next_action: Open the bounded OAM-039 target ADAPT PR, bind its PR number, run exact-current-head autofix CI Required and full platform tests, repair only concrete owned-package target incompatibilities, then audit review state and target-main drift before expected-head squash merge.
+next_action: Require exact-current-head autofix CI Required and full platform tests on PR 81, repair only concrete owned-package target incompatibilities, then audit review state and target-main drift before expected-head squash merge.
 ```
