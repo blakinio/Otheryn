@@ -141,6 +141,7 @@ jobs:
         if: matrix.buildtype == 'linux-release'
         shell: bash
         env:
+          GH_TOKEN: ${{ github.token }}
           PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
           PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
           CURRENT_REPO: ${{ github.repository }}
@@ -157,11 +158,13 @@ jobs:
               git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
               git add docs/lua-api
               git commit -m "ci(lua-docs): regenerate lua api docs"
-              if ! git push origin "HEAD:$PR_HEAD_REF"; then
-                echo "Initial docs push failed, retrying after fetch/rebase..."
-                git fetch origin "$PR_HEAD_REF"
+              auth_header=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+              git_auth=(-c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth_header")
+              if ! git "${git_auth[@]}" push origin "HEAD:$PR_HEAD_REF"; then
+                echo "Initial docs push failed, retrying after authenticated fetch/rebase..."
+                git "${git_auth[@]}" fetch origin "$PR_HEAD_REF"
                 git rebase "origin/$PR_HEAD_REF"
-                if ! git push origin "HEAD:$PR_HEAD_REF"; then
+                if ! git "${git_auth[@]}" push origin "HEAD:$PR_HEAD_REF"; then
                   echo "Docs push still failed after retry (likely concurrent push). Continuing without failing this step."
                 fi
               fi
