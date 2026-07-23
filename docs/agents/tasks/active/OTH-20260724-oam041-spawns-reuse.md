@@ -5,7 +5,7 @@ branch: dudantas/oam-041-spawns-reuse-final
 base_branch: main
 created: 2026-07-24
 updated: 2026-07-24
-related_pr: ""
+related_pr: "88"
 owned_paths:
   - docs/agents/tasks/active/OTH-20260724-oam041-spawns-reuse.md
   - docs/oam-041-spawns-reuse.md
@@ -33,10 +33,10 @@ Prove the bounded canonical `spawns` module is already correctly represented in 
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-24T01:00:00+02:00
-head: 7ae7067b0a9b404287bf238d2f5c604925ece6d2
+updated_at: 2026-07-24T01:05:00+02:00
+head: f6823fbe34d02f9aedfa9cc66f71c04a27eb4c9f
 branch: dudantas/oam-041-spawns-reuse-final
-pr: null
+pr: 88
 status: validating
 context_routes:
   - agent-governance
@@ -57,13 +57,13 @@ proven:
   - Final bounded region 32824,31275,7 through 32873,31324,7 produced complete untruncated reachability diagnostics and confirmed 34 of 34 selected groups plus 39 of 39 selected static placements with zero correlation findings.
   - Temporary proof workflow was removed after artifact capture; intended delivery is exactly four proof/task paths with no production runtime datapack map binary protocol client schema or deployment mutation.
   - Two independent CI-only repairs merged to Otheryn main as dee95e2fa011d08daf15e5ba110220691a98b6e0 and 05b0a299d4e2bc9a0377323d7967b285244388fe; neither changes OAM-041 runtime or evidence inputs.
-  - Original PR 85 is superseded because its stale synthetic merge ref retained pre-repair reusable workflow definitions; this fresh branch starts from 05b0a299d4e2bc9a0377323d7967b285244388fe and preserves the identical four-path OAM package.
+  - Original PR 85 is superseded because its stale synthetic merge ref retained pre-repair reusable workflow definitions; fresh PR 88 starts from 05b0a299d4e2bc9a0377323d7967b285244388fe and preserves the identical four-path OAM package.
 derived:
   - Final OAM-041 target disposition is spawns REUSE if exact-final-head repository gates remain green.
   - Known Harlow ambiguity and unresolved dynamic Lua calls are explicit evidence boundaries, not authorization for guessed or broad source repair.
   - Raid registry scheduling and ordered event lifecycle remain outside OAM-041 because OAM-037 already proved canonical raids ownership.
 unknown:
-  - Exact final target CI Required and platform-gate evidence until the fresh current-main-based PR finishes validation.
+  - Exact final target CI Required and platform-gate evidence until PR 88 finishes validation.
   - Final comment review review-thread and target-main-drift state at merge time.
 conflicts: []
 first_failure:
@@ -90,7 +90,7 @@ validation:
     evidence: exact configured map and pinned tool provenance verified; source scan completed; reachability untruncated; 34/34 groups and 39/39 placements confirmed with zero correlation findings
   - command: current-main scope reconstruction
     result: PASS
-    evidence: branch starts from 05b0a299d4e2bc9a0377323d7967b285244388fe and recreates exactly the intended four OAM-041 paths
+    evidence: PR 88 branch starts from 05b0a299d4e2bc9a0377323d7967b285244388fe and recreates exactly the intended four OAM-041 paths
 blockers: []
-next_action: Open the fresh OAM-041 PR, record its exact number in this task, run exact-final-head CI and Required gates, audit changed paths comments reviews review threads and target-main drift, then expected-head squash merge if all gates remain clean.
+next_action: Run exact-final-head Otheryn CI and Required gates on PR 88, audit changed paths comments reviews review threads and target-main drift, then expected-head squash merge if all gates remain clean.
 ```
