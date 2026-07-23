@@ -13,6 +13,7 @@ target_compile_definitions(
             OAM036_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
             OAM037_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
             OAM038_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
+            OAM041_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
 )
 
 target_sources(
@@ -48,6 +49,7 @@ target_sources(
             oam_036_boss_encounters_reuse_test.cpp
             oam_037_raids_reuse_test.cpp
             oam_038_world_zones_reuse_test.cpp
+            oam_041_spawns_reuse_test.cpp
             instance/instance_region_pool_test.cpp
             instance/instance_manager_test.cpp
             instance/instance_creature_binder_test.cpp
