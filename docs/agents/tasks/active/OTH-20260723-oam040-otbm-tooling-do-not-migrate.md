@@ -5,7 +5,7 @@ branch: dudantas/oam-040-otbm-tooling-do-not-migrate
 base_branch: main
 created: 2026-07-23
 updated: 2026-07-23
-related_pr: ""
+related_pr: "83"
 owned_paths:
   - docs/agents/tasks/active/OTH-20260723-oam040-otbm-tooling-do-not-migrate.md
   - docs/oam-040-otbm-tooling-do-not-migrate.md
@@ -27,10 +27,10 @@ Prove whether the canonical `otbm-tooling` responsibility belongs inside clean O
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-23T14:30:00+02:00
-head: ea69c79c3a3ae905720c408fe6612a9f7b71e601
+updated_at: 2026-07-23T14:35:00+02:00
+head: 367d3c6a5e45aa4c4badfb740db021822aedc366
 branch: dudantas/oam-040-otbm-tooling-do-not-migrate
-pr: null
+pr: 83
 status: ready
 context_routes:
   - agent-governance
@@ -59,12 +59,12 @@ derived:
   - The canonical dependency graph remains intact because downstream world-content packages still depend on the external evidence responsibility and must pin their own exact tooling/report provenance.
   - EXPERIMENTAL_ONLY is weaker and inaccurate because the Canary tooling is an established deterministic evidence stack rather than merely experimental functionality.
 unknown:
-  - Exact final target PR head merge SHA and Required run evidence until this proof PR executes.
+  - Exact final target merge SHA and Required run evidence until PR 83 completes.
   - Exact evidence artifacts future spawns npcs or quests packages will consume; each downstream package must select and pin them independently.
 conflicts: []
 first_failure:
   marker: none
-  evidence: This is a documentation-only target disposition proof; target Required has not executed yet.
+  evidence: This is a documentation-only target disposition proof; target Required has not executed on the bound PR head yet.
 rejected_hypotheses:
   - REUSE the tool suite in Otheryn; there is no target-local runtime/product responsibility requiring the transfer.
   - ADAPT or REWRITE a target-local OTBM stack; the existing Canary deterministic evidence stack already owns that responsibility.
@@ -84,5 +84,5 @@ validation:
     result: PASS
     evidence: spawns npcs and quests may consume pinned cross-repository Canary evidence without requiring a target-local tooling copy
 blockers: []
-next_action: Open the two-path OAM-040 target disposition PR, bind its PR number, require exact-current-head Required success, audit scope comments reviews threads and target-main drift, then expected-head squash merge before Canary governance closure.
+next_action: Require exact-current-head Required success on PR 83, audit exactly two documentation paths plus comments reviews threads and target-main drift, then expected-head squash merge before Canary governance closure.
 ```
