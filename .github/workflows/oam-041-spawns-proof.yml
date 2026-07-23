@@ -22,9 +22,9 @@ jobs:
       CANARY_TOOLS_COMMIT: d1ad83056ec7930f067986909f66b8f20f1a1f44
       TARGET_HEAD: ${{ github.event.pull_request.head.sha }}
       MAP_SHA256: a80de1dda6a9aca3956a9d5b7fb2e0caebb451570d26853fc21beb40d5f31da2
-      PROOF_FROM: 33370,32620,0
-      PROOF_TO: 33420,32690,15
-      PROOF_ORIGIN: 33372,32665,12
+      PROOF_FROM: 32824,31275,7
+      PROOF_TO: 32873,31324,7
+      PROOF_ORIGIN: 32849,31300,7
     steps:
       - name: Checkout exact Otheryn PR head
         uses: actions/checkout@v4
@@ -189,6 +189,8 @@ jobs:
           assert validation["format"] == "canary-otbm-spawn-npc-validation-v1"
           assert evidence["summary"]["placements"] > 0
           assert validation["summary"]["placements"] > 0
+          assert reachability["summary"]["findings"]["truncated"] is False
+          assert "reachability_diagnostics_truncated" not in validation["summary"]["findings"]["byCode"]
           (artifacts / "OAM_041_PROOF_SUMMARY.json").write_text(
               json.dumps(proof, indent=2, sort_keys=True) + "\n",
               encoding="utf-8",
