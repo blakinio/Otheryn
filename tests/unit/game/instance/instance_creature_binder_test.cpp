@@ -5,7 +5,9 @@
 namespace {
 	struct FakeCreature {
 		uint32_t id;
-		[[nodiscard]] uint32_t getID() const { return id; }
+		[[nodiscard]] uint32_t getID() const {
+			return id;
+		}
 	};
 
 	InstanceMapRegion region(uint32_t slot, uint16_t x) {
