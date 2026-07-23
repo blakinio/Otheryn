@@ -31,8 +31,8 @@ Prove the bounded canonical `raids` runtime is already present in the clean Othe
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-23T09:30:00+02:00
-head: 0ddcc3f0b821fdd16b5605f2234ff8c80c0d88db
+updated_at: 2026-07-23T09:34:00+02:00
+head: c593066976a771873bcc44f9dc2369b0eab1e8a8
 branch: dudantas/oam-037-raids-reuse
 pr: 76
 status: validating
@@ -53,6 +53,7 @@ proven:
   - Target uses DispatcherLane::Maintenance for periodic checks and raid event scheduling and handles initial subsequent and periodic scheduling failure without requiring a legacy donor import.
   - The reviewed older legacy Canary raids.cpp is not a stronger whole-module donor than the target and fresh upstream canonical roots.
   - PR 76 is the single bounded OAM-037 target owner and changes exactly four intended proof/task paths with no production path.
+  - PR 76 head was reconciled to the full five-commit branch state before final exact-head validation.
 derived:
   - OAM-037 final disposition is raids REUSE if the bounded source-contract proof and exact-head target gates pass without production repair.
   - No maintained-client mutation is expected because the selected boundary is server-side raid orchestration and does not alter the wire contract.
@@ -82,6 +83,9 @@ validation:
   - command: immutable-base changed-path audit
     result: PASS
     evidence: PR 76 changes exactly the four intended proof/task paths and no production path
+  - command: PR head reconciliation
+    result: PASS
+    evidence: reopened PR 76 now points to the complete branch state before the final synchronize push
 blockers: []
 next_action: Require exact-current-head CI and Required platform gates for PR 76, audit comments reviews review threads and target-main drift, then expected-head squash merge if all gates remain clean.
 ```
