@@ -5,7 +5,7 @@ branch: dudantas/oam-043-quests-target-proof
 base_branch: main
 created: 2026-07-24
 updated: 2026-07-24
-last_verified_commit: "a7fda0930c38106d88eac58e5fd354cbc60f28d0"
+last_verified_commit: "7a783c65e83a9fead651e38f336b10cbffe7a19b"
 related_pr: "98"
 owned_paths:
   - data-otservbr-global/scripts/quests/hero_of_rathleton/actions_reward.lua
@@ -38,8 +38,8 @@ Exact three-way inventory, complete source scanning and configured-map correlati
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-24T13:30:00+02:00
-head: a7fda0930c38106d88eac58e5fd354cbc60f28d0
+updated_at: 2026-07-24T14:01:00+02:00
+head: 7a783c65e83a9fead651e38f336b10cbffe7a19b
 branch: dudantas/oam-043-quests-target-proof
 pr: 98
 status: validating
@@ -114,9 +114,9 @@ validation:
   - command: exact target prerequisite symbol search
     result: PASS
     evidence: Run 30089254012 proves the achievement catalogue, generic Encounter counter and absent account-wide quest APIs.
-  - command: final exact-head CI and Required
-    result: NOT_RUN
-    evidence: Final production/proof diff must complete repository gates after temporary evidence workflows are removed.
+  - command: final exact-head CI, Required and repository audit
+    result: PASS
+    evidence: Head 7a783c65e83a9fead651e38f336b10cbffe7a19b passed autofix 30090686762, CI 30090686923, Required 30090686740 and Repository Audit 30090564163 across Fast Checks, Lua, Linux debug/release with full tests, Windows CMake/Solution and macOS.
 blockers: []
-next_action: Complete exact-head CI and Required on PR 98, audit comments/reviews/threads and target-main drift, then squash-merge with the expected head.
+next_action: Require exact-head gates on this validation-only synchronization commit, audit comments/reviews/threads and target-main drift, then squash-merge PR 98 with the expected head.
 ```
