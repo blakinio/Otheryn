@@ -13,8 +13,11 @@ permissions:
   contents: read
 
 jobs:
-  inventory:
+  evidence:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      MAP_SHA256: a80de1dda6a9aca3956a9d5b7fb2e0caebb451570d26853fc21beb40d5f31da2
     steps:
       - name: Checkout Otheryn target
         uses: actions/checkout@v4
@@ -122,7 +125,6 @@ jobs:
           with summary.open("a") as handle:
               handle.write("# OAM-043 exact quest inventory\n\n")
               handle.write(f"Manifest SHA-256: `{manifest_payload['manifest_sha256']}`\n\n")
-              handle.write("## Baselines\n\n")
               for name, sha in manifest_payload["baselines"].items():
                   handle.write(f"- {name}: `{sha}`\n")
               handle.write("\n## File counts\n\n")
@@ -139,6 +141,44 @@ jobs:
               "manifest_sha256": manifest_payload["manifest_sha256"],
           }, sort_keys=True))
 
+      - name: Review every non-identical quest path
+        shell: python
+        run: |
+          import difflib
+          import json
+          from pathlib import Path
+
+          manifest = json.loads(Path("oam-043-quest-inventory.json").read_text())
+          output = []
+          for entry in manifest["entries"]:
+              if entry["classification"] == "all-identical":
+                  continue
+              path = entry["path"]
+              output.append(f"## {path} [{entry['classification']}]\n")
+              target = Path("target") / path
+              legacy = Path("legacy") / path
+              if target.is_file() and legacy.is_file():
+                  before = legacy.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
+                  after = target.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
+                  output.extend(difflib.unified_diff(before, after, fromfile=f"legacy/{path}", tofile=f"target/{path}"))
+              elif legacy.is_file():
+                  output.append("legacy-only file; current target and upstream intentionally omit this path\n")
+                  output.append(legacy.read_text(encoding="utf-8", errors="replace"))
+                  output.append("\n")
+          Path("oam-043-quest-divergence-review.txt").write_text("".join(output), encoding="utf-8")
+
+          needles = ("The Professors Nut", "The Professor's Nut")
+          matches = []
+          for path in Path("target").rglob("*.lua"):
+              text = path.read_text(encoding="utf-8", errors="ignore")
+              for needle in needles:
+                  if needle in text:
+                      matches.append({"path": path.relative_to("target").as_posix(), "needle": needle})
+          Path("oam-043-achievement-name-search.json").write_text(
+              json.dumps(matches, indent=2, sort_keys=True) + "\n"
+          )
+          print(json.dumps(matches, sort_keys=True))
+
       - name: Scan complete target quest source evidence
         env:
           PYTHONPATH: legacy/tools/ai-agent
@@ -153,35 +193,99 @@ jobs:
             --include 'data/scripts/quests/**/*.lua' \
             --output oam-043-quest-source-evidence.json
 
-      - name: Summarize quest source evidence
+      - name: Compile pinned native OTBM scanner
+        run: |
+          c++ -O2 -std=c++20 -Wall -Wextra -Wpedantic -Werror \
+            legacy/tools/ai-agent/otbm_item_audit_scan.cpp \
+            -o /tmp/otbm_item_audit_scan
+
+      - name: Download and verify configured world map
+        run: |
+          curl --fail --location --retry 3 \
+            --output /tmp/otservbr.otbm \
+            https://github.com/opentibiabr/canary/releases/download/v3.6.1/otservbr.otbm
+          echo "$MAP_SHA256  /tmp/otservbr.otbm" | sha256sum --check --strict
+
+      - name: Build deterministic World Index
+        env:
+          PYTHONPATH: legacy/tools/ai-agent
+        run: |
+          python legacy/tools/ai-agent/otbm_world_index_tool.py build \
+            /tmp/otservbr.otbm \
+            --scanner /tmp/otbm_item_audit_scan \
+            --output /tmp/world.widx \
+            --manifest oam-043-world-index.json
+
+      - name: Correlate complete quest evidence with world map
+        env:
+          PYTHONPATH: legacy/tools/ai-agent
+        run: |
+          python legacy/tools/ai-agent/quest_map_validation_tool.py validate \
+            oam-043-quest-source-evidence.json \
+            --world-index /tmp/world.widx \
+            --sample-limit 1 \
+            --output oam-043-quest-map-validation.json \
+            --fail-on none
+
+      - name: Assemble compact OAM-043 summary
         shell: python
         run: |
+          import hashlib
           import json
           import os
           from collections import Counter
           from pathlib import Path
 
+          def sha256(path):
+              digest = hashlib.sha256()
+              with Path(path).open("rb") as stream:
+                  for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                      digest.update(chunk)
+              return digest.hexdigest()
+
           evidence = json.loads(Path("oam-043-quest-source-evidence.json").read_text())
+          validation = json.loads(Path("oam-043-quest-map-validation.json").read_text())
+          inventory = json.loads(Path("oam-043-quest-inventory.json").read_text())
+          world = json.loads(Path("oam-043-world-index.json").read_text())
           unresolved_by_kind = Counter(item.get("kind", "unknown") for item in evidence["unresolved"])
           unresolved_by_reason = Counter(item.get("reason", "unknown") for item in evidence["unresolved"])
+          script_only = [item for item in validation["findings"] if item["classification"] == "script-only"]
           compact = {
-              "format": evidence["format"],
-              "sourceDigest": evidence["sourceDigest"],
-              "summary": evidence["summary"],
-              "unresolvedByKind": dict(sorted(unresolved_by_kind.items())),
-              "unresolvedByReason": dict(sorted(unresolved_by_reason.items())),
+              "format": "otheryn-oam-043-quest-evidence-summary-v1",
+              "targetHead": inventory["baselines"]["target"],
+              "inventory": {
+                  "manifestSha256": inventory["manifest_sha256"],
+                  "counts": inventory["counts"],
+                  "classifications": inventory["classifications"],
+              },
+              "source": {
+                  "digest": evidence["sourceDigest"],
+                  "summary": evidence["summary"],
+                  "unresolvedByKind": dict(sorted(unresolved_by_kind.items())),
+                  "unresolvedByReason": dict(sorted(unresolved_by_reason.items())),
+              },
+              "map": {
+                  "worldIndexManifest": world,
+                  "validationSummary": validation["summary"],
+                  "scriptOnlyCount": len(script_only),
+                  "scriptOnlySamples": script_only[:100],
+              },
+              "artifactSha256": {
+                  "inventory": sha256("oam-043-quest-inventory.json"),
+                  "sourceEvidence": sha256("oam-043-quest-source-evidence.json"),
+                  "mapValidation": sha256("oam-043-quest-map-validation.json"),
+                  "worldIndexManifest": sha256("oam-043-world-index.json"),
+                  "divergenceReview": sha256("oam-043-quest-divergence-review.txt"),
+              },
           }
-          Path("oam-043-quest-source-summary.json").write_text(
+          Path("oam-043-evidence-summary.json").write_text(
               json.dumps(compact, indent=2, sort_keys=True) + "\n"
           )
           with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as handle:
-              handle.write("\n# OAM-043 complete source scan\n\n")
-              handle.write(f"Source digest: `{compact['sourceDigest']}`\n\n")
-              for key, value in compact["summary"].items():
-                  handle.write(f"- {key}: `{json.dumps(value, sort_keys=True)}`\n")
-              handle.write("\n## Unresolved by kind\n\n")
-              for key, value in compact["unresolvedByKind"].items():
-                  handle.write(f"- {key}: {value}\n")
+              handle.write("\n# OAM-043 source and map correlation\n\n")
+              handle.write(f"Source digest: `{evidence['sourceDigest']}`\n\n")
+              handle.write(f"Source summary: `{json.dumps(evidence['summary'], sort_keys=True)}`\n\n")
+              handle.write(f"Map validation: `{json.dumps(validation['summary'], sort_keys=True)}`\n")
           print(json.dumps(compact, sort_keys=True))
 
       - name: Upload exact OAM-043 evidence
@@ -189,7 +293,12 @@ jobs:
         with:
           name: oam-043-quest-evidence
           path: |
+            oam-043-evidence-summary.json
             oam-043-quest-inventory.json
+            oam-043-quest-divergence-review.txt
+            oam-043-achievement-name-search.json
             oam-043-quest-source-evidence.json
-            oam-043-quest-source-summary.json
+            oam-043-quest-map-validation.json
+            oam-043-world-index.json
           if-no-files-found: error
+          retention-days: 30
