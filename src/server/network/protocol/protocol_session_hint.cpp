@@ -49,10 +49,6 @@ void ProtocolSessionHintStore::registerHint(
 	std::scoped_lock lock(mutex);
 	cleanupExpired(now);
 
-	if (hints.size() >= maxHints) {
-		[[maybe_unused]] auto nextHint = hints.erase(hints.begin());
-	}
-
 	Hint hint;
 	hint.id = nextHintId++;
 	hint.remoteIp = remoteIp;
@@ -74,6 +70,10 @@ void ProtocolSessionHintStore::registerHint(
 			return existingHint.allowedCharacterNames.contains(characterName);
 		});
 	});
+
+	if (hints.size() >= maxHints) {
+		[[maybe_unused]] auto nextHint = hints.erase(hints.begin());
+	}
 
 	[[maybe_unused]] auto &storedHint = hints.emplace_back(std::move(hint));
 }
@@ -135,6 +135,10 @@ std::optional<ProtocolProfileId> ProtocolSessionHintStore::consumeAndResolveProf
 	}
 
 	const auto now = std::chrono::steady_clock::now();
+	if (lease.expiresAt <= now) {
+		return std::nullopt;
+	}
+
 	std::scoped_lock lock(mutex);
 	cleanupExpired(now);
 
