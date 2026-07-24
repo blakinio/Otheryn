@@ -2,6 +2,7 @@
 
 #ifndef USE_PRECOMPILED_HEADERS
 	#include <chrono>
+	#include <cstddef>
 	#include <string>
 	#include <vector>
 #endif
@@ -12,6 +13,7 @@ namespace {
 	constexpr uint32_t replacementIp = 0x0A000003;
 	constexpr uint32_t ambiguousIp = 0x0A000004;
 	constexpr uint32_t blockedIp = 0x0A000005;
+	constexpr size_t hintCapacity = 512;
 }
 
 TEST(Oam045ProtocolSessionHandoffTest, CurrentHintIsOneShotAndRequiresExactSessionCharacterAndVersion) {
@@ -40,11 +42,15 @@ TEST(Oam045ProtocolSessionHandoffTest, ReusableHintCanBeReclaimedAndClearedByWir
 
 	const auto firstLease = store.claimByIp(reusableIp, tibia1100->initialBehavior);
 	ASSERT_TRUE(firstLease.has_value());
-	EXPECT_EQ(ProtocolProfileId::Tibia1100, store.consumeAndResolveProfile(*firstLease, "legacy-session", "Legacy Knight", 1100));
+	const auto firstMatch = store.consumeAndResolveProfile(*firstLease, "legacy-session", "Legacy Knight", 1100);
+	ASSERT_TRUE(firstMatch.has_value());
+	EXPECT_EQ(ProtocolProfileId::Tibia1100, *firstMatch);
 
 	const auto secondLease = store.claimByIp(reusableIp, tibia1100->initialBehavior);
 	ASSERT_TRUE(secondLease.has_value());
-	EXPECT_EQ(ProtocolProfileId::Tibia1100, store.consumeAndResolveProfile(*secondLease, "legacy-session", "Legacy Knight", 1100));
+	const auto secondMatch = store.consumeAndResolveProfile(*secondLease, "legacy-session", "Legacy Knight", 1100);
+	ASSERT_TRUE(secondMatch.has_value());
+	EXPECT_EQ(ProtocolProfileId::Tibia1100, *secondMatch);
 
 	store.clearReusableHintsByIp(reusableIp, tibia1100->initialBehavior);
 	EXPECT_FALSE(store.claimByIp(reusableIp).has_value());
@@ -63,7 +69,9 @@ TEST(Oam045ProtocolSessionHandoffTest, ExpiredLeaseCannotConsumeAStillValidReusa
 
 	const auto freshLease = store.claimByIp(reusableIp);
 	ASSERT_TRUE(freshLease.has_value());
-	EXPECT_EQ(ProtocolProfileId::Tibia1100, store.consumeAndResolveProfile(*freshLease, "lease-session", "Lease Knight", 1100));
+	const auto freshMatch = store.consumeAndResolveProfile(*freshLease, "lease-session", "Lease Knight", 1100);
+	ASSERT_TRUE(freshMatch.has_value());
+	EXPECT_EQ(ProtocolProfileId::Tibia1100, *freshMatch);
 }
 
 TEST(Oam045ProtocolSessionHandoffTest, RegisteringAnOverlappingCharacterReplacesTheOlderHint) {
@@ -76,6 +84,34 @@ TEST(Oam045ProtocolSessionHandoffTest, RegisteringAnOverlappingCharacterReplaces
 	ASSERT_EQ(1U, lease->candidateIds.size());
 	EXPECT_FALSE(store.consumeIfMatches(*lease, "old-session", "Replacement Knight", CLIENT_VERSION));
 	EXPECT_TRUE(store.consumeIfMatches(*lease, "new-session", "Replacement Knight", CLIENT_VERSION));
+}
+
+TEST(Oam045ProtocolSessionHandoffTest, ReplacementAtCapacityDoesNotEvictAnUnrelatedOldestHint) {
+	ProtocolSessionHintStore store;
+	constexpr uint32_t firstIp = 0x0C000000;
+	constexpr size_t replacementIndex = 100;
+
+	for (size_t index = 0; index < hintCapacity; ++index) {
+		store.registerHint(
+			firstIp + static_cast<uint32_t>(index),
+			ProtocolProfileId::Current,
+			"full-session-" + std::to_string(index),
+			{ "Full Knight " + std::to_string(index) }
+		);
+	}
+
+	store.registerHint(
+		firstIp + static_cast<uint32_t>(replacementIndex),
+		ProtocolProfileId::Current,
+		"replacement-session",
+		{ "Full Knight " + std::to_string(replacementIndex) }
+	);
+
+	EXPECT_TRUE(store.claimByIp(firstIp).has_value());
+	const auto replacementLease = store.claimByIp(firstIp + static_cast<uint32_t>(replacementIndex));
+	ASSERT_TRUE(replacementLease.has_value());
+	EXPECT_FALSE(store.consumeIfMatches(*replacementLease, "full-session-100", "Full Knight 100", CLIENT_VERSION));
+	EXPECT_TRUE(store.consumeIfMatches(*replacementLease, "replacement-session", "Full Knight 100", CLIENT_VERSION));
 }
 
 TEST(Oam045ProtocolSessionHandoffTest, MixedWireBehaviorsRequireAnExplicitBehaviorFilter) {
@@ -92,11 +128,15 @@ TEST(Oam045ProtocolSessionHandoffTest, MixedWireBehaviorsRequireAnExplicitBehavi
 
 	const auto currentLease = store.claimByIp(ambiguousIp, current->initialBehavior);
 	ASSERT_TRUE(currentLease.has_value());
-	EXPECT_EQ(ProtocolProfileId::Current, store.consumeAndResolveProfile(*currentLease, "modern-session", "Modern Knight", CLIENT_VERSION));
+	const auto currentMatch = store.consumeAndResolveProfile(*currentLease, "modern-session", "Modern Knight", CLIENT_VERSION);
+	ASSERT_TRUE(currentMatch.has_value());
+	EXPECT_EQ(ProtocolProfileId::Current, *currentMatch);
 
 	const auto legacyLease = store.claimByIp(ambiguousIp, tibia1100->initialBehavior);
 	ASSERT_TRUE(legacyLease.has_value());
-	EXPECT_EQ(ProtocolProfileId::Tibia1100, store.consumeAndResolveProfile(*legacyLease, "legacy-session", "Legacy Knight", 1100));
+	const auto legacyMatch = store.consumeAndResolveProfile(*legacyLease, "legacy-session", "Legacy Knight", 1100);
+	ASSERT_TRUE(legacyMatch.has_value());
+	EXPECT_EQ(ProtocolProfileId::Tibia1100, *legacyMatch);
 }
 
 TEST(Oam045ProtocolSessionHandoffTest, BlockedProfilesAreNotRegistered) {
@@ -108,9 +148,8 @@ TEST(Oam045ProtocolSessionHandoffTest, BlockedProfilesAreNotRegistered) {
 TEST(Oam045ProtocolSessionHandoffTest, CapacityEvictsTheOldestHint) {
 	ProtocolSessionHintStore store;
 	constexpr uint32_t firstIp = 0x0B000000;
-	constexpr size_t capacity = 512;
 
-	for (size_t index = 0; index <= capacity; ++index) {
+	for (size_t index = 0; index <= hintCapacity; ++index) {
 		store.registerHint(
 			firstIp + static_cast<uint32_t>(index),
 			ProtocolProfileId::Current,
@@ -120,5 +159,5 @@ TEST(Oam045ProtocolSessionHandoffTest, CapacityEvictsTheOldestHint) {
 	}
 
 	EXPECT_FALSE(store.claimByIp(firstIp).has_value());
-	EXPECT_TRUE(store.claimByIp(firstIp + static_cast<uint32_t>(capacity)).has_value());
+	EXPECT_TRUE(store.claimByIp(firstIp + static_cast<uint32_t>(hintCapacity)).has_value());
 }
