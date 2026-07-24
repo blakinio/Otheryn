@@ -135,6 +135,10 @@ std::optional<ProtocolProfileId> ProtocolSessionHintStore::consumeAndResolveProf
 	}
 
 	const auto now = std::chrono::steady_clock::now();
+	if (lease.expiresAt <= now) {
+		return std::nullopt;
+	}
+
 	std::scoped_lock lock(mutex);
 	cleanupExpired(now);
 
