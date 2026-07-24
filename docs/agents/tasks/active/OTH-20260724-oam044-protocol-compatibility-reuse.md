@@ -5,7 +5,7 @@ branch: dudantas/oam-044-protocol-compatibility-reuse
 base_branch: main
 created: 2026-07-24
 updated: 2026-07-24
-last_verified_commit: "bc2418234947fb8bffe03f6539a54d20d8aaaa1f"
+last_verified_commit: "29d196e1b7d084813e24d368bd9e70329e16d0b3"
 related_pr: "100"
 owned_paths:
   - docs/agents/tasks/active/OTH-20260724-oam044-protocol-compatibility-reuse.md
@@ -32,8 +32,8 @@ Exact target/current-upstream registry identity, maintained-client feature inven
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-24T17:46:00+02:00
-head: bc2418234947fb8bffe03f6539a54d20d8aaaa1f
+updated_at: 2026-07-24T18:05:00+02:00
+head: 29d196e1b7d084813e24d368bd9e70329e16d0b3
 branch: dudantas/oam-044-protocol-compatibility-reuse
 pr: 100
 status: validating
@@ -57,6 +57,7 @@ proven:
   - The server registry exposes six explicit profiles: current, Tibia 11.00, three CipSoft 8.60 variants and blocked OTCv8 8.60.
   - The focused target contract covers the complete profile manifest, support/mapper states, selected current server/client feature pairs and bounded current/1100/860 login metadata.
   - PR 100 changes exactly the two proof/task documents, one focused unit test and the existing unit-test source registration.
+  - Autofix run 30106675779, CI run 30106676001 and Required run 30106675816 passed on exact head 29d196e1b7d084813e24d368bd9e70329e16d0b3.
   - No production server, maintained-client, transport, login, session-handoff, packet, asset, schema or deployment path is changed.
 derived:
   - protocol-compatibility supports bounded REUSE because no target-owned defect is isolated and the selected current roots retain exact physical continuity.
@@ -91,11 +92,14 @@ validation:
     result: PASS
     evidence: The diff contains exactly four proof/test paths and no production mutation.
   - command: focused target protocol compatibility contract
-    result: NOT_RUN
-    evidence: The target test must run in the repository CI matrix.
-  - command: exact-head CI, Required and repository audit
-    result: NOT_RUN
-    evidence: The final PR head must pass repository gates before merge.
+    result: PASS
+    evidence: CI run 30106676001 compiled and executed the registered unit-test matrix successfully.
+  - command: exact-head CI and Required
+    result: PASS
+    evidence: Autofix 30106675779, CI 30106676001 and Required 30106675816 passed on head 29d196e1b7d084813e24d368bd9e70329e16d0b3.
+  - command: repository audit
+    result: PASS
+    evidence: Comments, reviews and review threads are empty; target main remains 3f3c15917610e45430aa3902d110806dd25e10a8 and PR 100 is mergeable.
 blockers: []
-next_action: Mark PR 100 ready, require exact-head gates, audit discussions and target-main drift, then squash-merge with the expected head.
+next_action: Require the final exact-head Autofix, CI and Required gates after this checkpoint synchronization, re-audit discussions and target-main drift, then squash-merge PR 100 with the expected head.
 ```
