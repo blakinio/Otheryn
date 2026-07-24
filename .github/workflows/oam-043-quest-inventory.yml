@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - dudantas/oam-043-quests-target-proof
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -16,6 +19,7 @@ jobs:
       - name: Checkout Otheryn target
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           path: target
 
       - name: Checkout current upstream Canary
@@ -38,6 +42,7 @@ jobs:
           import hashlib
           import json
           import os
+          import subprocess
           from collections import Counter
           from pathlib import Path
 
@@ -50,6 +55,11 @@ jobs:
               "upstream": Path("upstream"),
               "legacy": Path("legacy"),
           }
+
+          def revision(repo: Path):
+              return subprocess.check_output(
+                  ["git", "-C", str(repo), "rev-parse", "HEAD"], text=True
+              ).strip()
 
           def inventory(repo: Path):
               result = {}
@@ -95,11 +105,7 @@ jobs:
 
           manifest_payload = {
               "schema": "oam-043-quest-inventory-v1",
-              "baselines": {
-                  "target": os.environ.get("GITHUB_SHA"),
-                  "upstream": "7323503b3dc61ed86bf1f04a611b2d0aec64b35a",
-                  "legacy": "13ec3077babba0ac81bb1e30e79f0ea4827ae2fe",
-              },
+              "baselines": {name: revision(path) for name, path in repos.items()},
               "roots": roots,
               "counts": {name: len(items) for name, items in inventories.items()},
               "classifications": dict(sorted(classes.items())),
@@ -115,7 +121,10 @@ jobs:
           with summary.open("a") as handle:
               handle.write("# OAM-043 exact quest inventory\n\n")
               handle.write(f"Manifest SHA-256: `{manifest_payload['manifest_sha256']}`\n\n")
-              handle.write("## File counts\n\n")
+              handle.write("## Baselines\n\n")
+              for name, sha in manifest_payload["baselines"].items():
+                  handle.write(f"- {name}: `{sha}`\n")
+              handle.write("\n## File counts\n\n")
               for name, count in manifest_payload["counts"].items():
                   handle.write(f"- {name}: {count}\n")
               handle.write("\n## Classifications\n\n")
@@ -123,6 +132,7 @@ jobs:
                   handle.write(f"- {name}: {count}\n")
 
           print(json.dumps({
+              "baselines": manifest_payload["baselines"],
               "counts": manifest_payload["counts"],
               "classifications": manifest_payload["classifications"],
               "manifest_sha256": manifest_payload["manifest_sha256"],
