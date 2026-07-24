@@ -20,4 +20,6 @@ Otheryn target PR #92 final head `2168ff23a7415b9aea8f66b7051995e7fd148691` chan
 
 Canary governance PR #853 merged as `0dc3fa9d663af47f8808d2457c8108a63294c7c4`; Canary lifecycle PR #854 merged as `55f9e46ab0804ec2c7b58cfffc772a243234c956`; durable program reconciliation PR #856 merged as `bc4ae5861d7b9c172d9c15ce78181cb4c2be4ead`.
 
+Target lifecycle delivery is Otheryn PR #94 and remains limited to the active-task removal plus this archived record.
+
 With this target checkpoint archive, OAM-041 is formally complete. A fresh OAM-042 preflight may now select exactly one dependency-valid canonical package from current live repository state.
