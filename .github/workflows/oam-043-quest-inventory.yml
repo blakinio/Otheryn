@@ -1,0 +1,136 @@
+name: OAM-043 Quest Inventory
+
+on:
+  push:
+    branches:
+      - dudantas/oam-043-quests-target-proof
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Otheryn target
+        uses: actions/checkout@v4
+        with:
+          path: target
+
+      - name: Checkout current upstream Canary
+        uses: actions/checkout@v4
+        with:
+          repository: opentibiabr/canary
+          ref: 7323503b3dc61ed86bf1f04a611b2d0aec64b35a
+          path: upstream
+
+      - name: Checkout legacy Canary
+        uses: actions/checkout@v4
+        with:
+          repository: blakinio/canary
+          ref: 13ec3077babba0ac81bb1e30e79f0ea4827ae2fe
+          path: legacy
+
+      - name: Build exact three-way quest manifest
+        shell: python
+        run: |
+          import hashlib
+          import json
+          import os
+          from collections import Counter
+          from pathlib import Path
+
+          roots = (
+              "data-otservbr-global/scripts/quests",
+              "data/scripts/quests",
+          )
+          repos = {
+              "target": Path("target"),
+              "upstream": Path("upstream"),
+              "legacy": Path("legacy"),
+          }
+
+          def inventory(repo: Path):
+              result = {}
+              for root in roots:
+                  base = repo / root
+                  if not base.exists():
+                      continue
+                  for path in sorted(base.rglob("*")):
+                      if not path.is_file():
+                          continue
+                      relative = path.relative_to(repo).as_posix()
+                      result[relative] = hashlib.sha256(path.read_bytes()).hexdigest()
+              return result
+
+          inventories = {name: inventory(path) for name, path in repos.items()}
+          all_paths = sorted(set().union(*(set(items) for items in inventories.values())))
+
+          def classify(values):
+              present = {name: digest for name, digest in values.items() if digest is not None}
+              missing = sorted(set(values) - set(present))
+              if len(present) == 1:
+                  return f"{next(iter(present))}-only"
+              if missing:
+                  return "missing-" + "-".join(missing)
+              unique = set(present.values())
+              if len(unique) == 1:
+                  return "all-identical"
+              if present["target"] == present["upstream"]:
+                  return "target-upstream-identical-legacy-divergent"
+              if present["target"] == present["legacy"]:
+                  return "target-legacy-identical-upstream-divergent"
+              if present["upstream"] == present["legacy"]:
+                  return "upstream-legacy-identical-target-divergent"
+              return "all-divergent"
+
+          entries = []
+          classes = Counter()
+          for path in all_paths:
+              values = {name: inventories[name].get(path) for name in repos}
+              classification = classify(values)
+              classes[classification] += 1
+              entries.append({"path": path, "classification": classification, **values})
+
+          manifest_payload = {
+              "schema": "oam-043-quest-inventory-v1",
+              "baselines": {
+                  "target": os.environ.get("GITHUB_SHA"),
+                  "upstream": "7323503b3dc61ed86bf1f04a611b2d0aec64b35a",
+                  "legacy": "13ec3077babba0ac81bb1e30e79f0ea4827ae2fe",
+              },
+              "roots": roots,
+              "counts": {name: len(items) for name, items in inventories.items()},
+              "classifications": dict(sorted(classes.items())),
+              "entries": entries,
+          }
+          canonical = json.dumps(manifest_payload, sort_keys=True, separators=(",", ":")).encode()
+          manifest_payload["manifest_sha256"] = hashlib.sha256(canonical).hexdigest()
+
+          output = Path("oam-043-quest-inventory.json")
+          output.write_text(json.dumps(manifest_payload, indent=2, sort_keys=True) + "\n")
+
+          summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
+          with summary.open("a") as handle:
+              handle.write("# OAM-043 exact quest inventory\n\n")
+              handle.write(f"Manifest SHA-256: `{manifest_payload['manifest_sha256']}`\n\n")
+              handle.write("## File counts\n\n")
+              for name, count in manifest_payload["counts"].items():
+                  handle.write(f"- {name}: {count}\n")
+              handle.write("\n## Classifications\n\n")
+              for name, count in manifest_payload["classifications"].items():
+                  handle.write(f"- {name}: {count}\n")
+
+          print(json.dumps({
+              "counts": manifest_payload["counts"],
+              "classifications": manifest_payload["classifications"],
+              "manifest_sha256": manifest_payload["manifest_sha256"],
+          }, sort_keys=True))
+
+      - name: Upload exact quest inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: oam-043-quest-inventory
+          path: oam-043-quest-inventory.json
+          if-no-files-found: error
