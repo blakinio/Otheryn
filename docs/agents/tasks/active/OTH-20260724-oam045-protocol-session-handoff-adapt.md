@@ -5,9 +5,9 @@ branch: dudantas/oam-045-protocol-session-handoff-adapt
 base_branch: main
 created: 2026-07-24
 updated: 2026-07-24
-last_verified_commit: "81b9ce74b7c2d5b54036fe524e1d2d5b879308e6"
+last_verified_commit: "88f0b2ab5017ed9b02e79e42c0fb523bff73e966"
 related_issue: "102"
-related_pr: ""
+related_pr: "103"
 owned_paths:
   - docs/agents/tasks/active/OTH-20260724-oam045-protocol-session-handoff-adapt.md
   - docs/oam-045-protocol-session-handoff-adapt.md
@@ -34,10 +34,10 @@ The inherited state machine remains structurally suitable, but two package-owned
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-24T21:40:00+02:00
-head: 81b9ce74b7c2d5b54036fe524e1d2d5b879308e6
+updated_at: 2026-07-24T22:41:00+02:00
+head: 88f0b2ab5017ed9b02e79e42c0fb523bff73e966
 branch: dudantas/oam-045-protocol-session-handoff-adapt
-pr: none
+pr: 103
 status: validating
 context_routes:
   - agent-governance
@@ -58,6 +58,7 @@ proven:
   - The inherited registration path evicted the oldest hint before removing overlapping-character replacements when the store was full.
   - The adaptation adds one fail-closed lease-deadline guard and moves the unchanged capacity check after replacement cleanup.
   - Focused fixtures cover one-shot and reusable flows, lease expiry, ordinary replacement, replacement at capacity, mixed-wire ambiguity, blocked profiles and true capacity overflow.
+  - Otheryn feature PR 103 was opened from prepared head 88f0b2ab5017ed9b02e79e42c0fb523bff73e966 after the earlier create-PR endpoint blocker cleared.
 derived:
   - protocol-session-handoff requires ADAPT rather than REUSE because two package-owned invariants were ineffective.
   - Two bounded local changes are sufficient; no rewrite or ownership expansion is justified.
@@ -91,12 +92,11 @@ validation:
     evidence: ProtocolGame stores a lease returned by claimByIp, consumes it once before reset and fails closed for unmatched non-modern behavior.
   - command: focused protocol session handoff contract
     result: NOT_RUN
-    evidence: The feature PR must compile and execute the registered unit tests.
+    evidence: The final feature PR head must compile and execute the registered unit tests.
   - command: Otheryn exact-head gates and audit
     result: NOT_RUN
     evidence: Autofix, CI and Required must pass on the final PR head before merge.
 blockers:
-  - GitHub create-pull-request endpoint is returning HTTP 502 for the valid branch; issue 102 records the exact scope.
   - Otheryn feature PR exact-head validation and merge
-next_action: Retry creation of the bounded Otheryn feature PR from dudantas/oam-045-protocol-session-handoff-adapt, then synchronize exact PR/head metadata, require exact-head Autofix, CI and Required, audit discussions and Otheryn-main drift, and squash-merge with the expected head.
+next_action: Mark PR 103 ready, require exact-head Autofix, CI and Required, audit discussions and Otheryn-main drift, then squash-merge with the expected head.
 ```
