@@ -43,7 +43,13 @@
 
 ## Build Policy
 
-- Compile when the change is critical, complex, or likely to break compilation. For small documentation, script, or clearly non-build-affecting changes, avoid builds unless they add real validation value.
+- Validation is proportional to changed paths, risk and the current milestone; a commit or small task step does not by itself justify compilation.
+- During a multi-step task, run cheap focused checks after each step: syntax, formatting, schema/generated-file consistency and directly affected tests.
+- Defer compilation and other heavy validation until the end of a coherent milestone, phase or implementation package. A five-step OTBM or gameplay package should normally compile once after the five steps form one reviewable result, not after every step.
+- Compile earlier only when a step changes CMake/build manifests, source registration, dependencies, toolchains, generated compile inputs, public headers/ABI, or when later work requires a verified binary or compile breakage is a material risk.
+- Documentation, task-checkpoint, comment, metadata, script-only and other clearly non-build-affecting commits do not require compilation; use their focused validators instead.
+- Run the full applicable final validation once on the exact final head before merge. A later build-affecting commit invalidates it; a later docs-only commit needs only the checks selected by repository policy.
+- Record why a heavy build was run early or skipped when the choice is not obvious from changed paths.
 - When compiling, prioritize the correct known workflow below instead of guessing commands or creating new build trees, to avoid wasting time on environment or cache mistakes.
 - When adding, removing, or renaming C++ source/header files, update every maintained build entry point in the same change. For Canary server code this usually means the relevant `CMakeLists.txt` file and the tracked Visual Studio project `vcproj/canary.vcxproj`; for tests, update the relevant test `CMakeLists.txt` as well. Missing `.cpp` entries in `vcproj/canary.vcxproj` commonly appear as unresolved external linker errors when building `vcproj/canary.sln`.
 - Before building on Windows, inspect the repository build entry points instead of guessing:
