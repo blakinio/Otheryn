@@ -1,4 +1,4 @@
-name: OAM-043 Quest Inventory
+name: OAM-043 Quest Evidence
 
 on:
   push:
@@ -29,7 +29,7 @@ jobs:
           ref: 7323503b3dc61ed86bf1f04a611b2d0aec64b35a
           path: upstream
 
-      - name: Checkout legacy Canary
+      - name: Checkout legacy Canary evidence tooling
         uses: actions/checkout@v4
         with:
           repository: blakinio/canary
@@ -114,8 +114,9 @@ jobs:
           canonical = json.dumps(manifest_payload, sort_keys=True, separators=(",", ":")).encode()
           manifest_payload["manifest_sha256"] = hashlib.sha256(canonical).hexdigest()
 
-          output = Path("oam-043-quest-inventory.json")
-          output.write_text(json.dumps(manifest_payload, indent=2, sort_keys=True) + "\n")
+          Path("oam-043-quest-inventory.json").write_text(
+              json.dumps(manifest_payload, indent=2, sort_keys=True) + "\n"
+          )
 
           summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
           with summary.open("a") as handle:
@@ -138,9 +139,57 @@ jobs:
               "manifest_sha256": manifest_payload["manifest_sha256"],
           }, sort_keys=True))
 
-      - name: Upload exact quest inventory
+      - name: Scan complete target quest source evidence
+        env:
+          PYTHONPATH: legacy/tools/ai-agent
+        run: |
+          python legacy/tools/ai-agent/quest_map_validation_tool.py scan \
+            --repository-root target \
+            --source-root data \
+            --source-root data-otservbr-global \
+            --include 'data-otservbr-global/scripts/quests/*.lua' \
+            --include 'data-otservbr-global/scripts/quests/**/*.lua' \
+            --include 'data/scripts/quests/*.lua' \
+            --include 'data/scripts/quests/**/*.lua' \
+            --output oam-043-quest-source-evidence.json
+
+      - name: Summarize quest source evidence
+        shell: python
+        run: |
+          import json
+          import os
+          from collections import Counter
+          from pathlib import Path
+
+          evidence = json.loads(Path("oam-043-quest-source-evidence.json").read_text())
+          unresolved_by_kind = Counter(item.get("kind", "unknown") for item in evidence["unresolved"])
+          unresolved_by_reason = Counter(item.get("reason", "unknown") for item in evidence["unresolved"])
+          compact = {
+              "format": evidence["format"],
+              "sourceDigest": evidence["sourceDigest"],
+              "summary": evidence["summary"],
+              "unresolvedByKind": dict(sorted(unresolved_by_kind.items())),
+              "unresolvedByReason": dict(sorted(unresolved_by_reason.items())),
+          }
+          Path("oam-043-quest-source-summary.json").write_text(
+              json.dumps(compact, indent=2, sort_keys=True) + "\n"
+          )
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as handle:
+              handle.write("\n# OAM-043 complete source scan\n\n")
+              handle.write(f"Source digest: `{compact['sourceDigest']}`\n\n")
+              for key, value in compact["summary"].items():
+                  handle.write(f"- {key}: `{json.dumps(value, sort_keys=True)}`\n")
+              handle.write("\n## Unresolved by kind\n\n")
+              for key, value in compact["unresolvedByKind"].items():
+                  handle.write(f"- {key}: {value}\n")
+          print(json.dumps(compact, sort_keys=True))
+
+      - name: Upload exact OAM-043 evidence
         uses: actions/upload-artifact@v4
         with:
-          name: oam-043-quest-inventory
-          path: oam-043-quest-inventory.json
+          name: oam-043-quest-evidence
+          path: |
+            oam-043-quest-inventory.json
+            oam-043-quest-source-evidence.json
+            oam-043-quest-source-summary.json
           if-no-files-found: error
