@@ -1,15 +1,16 @@
 ---
 task_id: OTH-20260724-oam045-protocol-session-handoff-adapt
-status: active
+status: completed
 branch: dudantas/oam-045-protocol-session-handoff-adapt
 base_branch: main
 created: 2026-07-24
 updated: 2026-07-24
-last_verified_commit: "88f0b2ab5017ed9b02e79e42c0fb523bff73e966"
+completed: 2026-07-24T22:52:00+02:00
+last_verified_commit: "597ba62c558ed4e35db38502903ae83e0b2921ec"
 related_issue: "102"
 related_pr: "103"
 owned_paths:
-  - docs/agents/tasks/active/OTH-20260724-oam045-protocol-session-handoff-adapt.md
+  - docs/agents/tasks/archive/OTH-20260724-oam045-protocol-session-handoff-adapt.md
   - docs/oam-045-protocol-session-handoff-adapt.md
   - src/server/network/protocol/protocol_session_hint.cpp
   - tests/unit/server/network/protocol/oam_045_protocol_session_handoff_test.cpp
@@ -34,31 +35,33 @@ The inherited state machine remains structurally suitable, but two package-owned
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-24T22:41:00+02:00
-head: 88f0b2ab5017ed9b02e79e42c0fb523bff73e966
-branch: dudantas/oam-045-protocol-session-handoff-adapt
+updated_at: 2026-07-24T22:52:00+02:00
+head: 597ba62c558ed4e35db38502903ae83e0b2921ec
+branch: main
 pr: 103
-status: validating
+status: completed
 context_routes:
   - agent-governance
   - cross-repo
   - protocol-client
 owned_paths:
-  - docs/agents/tasks/active/OTH-20260724-oam045-protocol-session-handoff-adapt.md
+  - docs/agents/tasks/archive/OTH-20260724-oam045-protocol-session-handoff-adapt.md
   - docs/oam-045-protocol-session-handoff-adapt.md
   - src/server/network/protocol/protocol_session_hint.cpp
   - tests/unit/server/network/protocol/oam_045_protocol_session_handoff_test.cpp
   - tests/unit/server/CMakeLists.txt
 proven:
   - Canary OAM-045 preflight selected protocol-session-handoff with REVALIDATE and merged as 2798dce948d8bf27f9b1325356d6db4676a8b6ba.
-  - Task-start Otheryn main is e1eed52119ba21a29cb29cbac0793ed2a2b9d0c6 and reviewed upstream is 7323503b3dc61ed86bf1f04a611b2d0aec64b35a.
-  - Target, current upstream, legacy Canary and the OAM-006 tested target share header blob 446e7769196fb9a750e13c8402b38c8752243729 and implementation blob 3e57e16649e20121f52c6c4b67b632808b7af363 before adaptation.
+  - Task-start Otheryn main was e1eed52119ba21a29cb29cbac0793ed2a2b9d0c6 and reviewed upstream was 7323503b3dc61ed86bf1f04a611b2d0aec64b35a.
+  - Target, current upstream, legacy Canary and the OAM-006 tested target shared header blob 446e7769196fb9a750e13c8402b38c8752243729 and implementation blob 3e57e16649e20121f52c6c4b67b632808b7af363 before adaptation.
   - claimByIp assigns a 30-second lease deadline while reusable hints can live for 24 hours.
   - The inherited consume path did not inspect lease.expiresAt.
   - The inherited registration path evicted the oldest hint before removing overlapping-character replacements when the store was full.
   - The adaptation adds one fail-closed lease-deadline guard and moves the unchanged capacity check after replacement cleanup.
   - Focused fixtures cover one-shot and reusable flows, lease expiry, ordinary replacement, replacement at capacity, mixed-wire ambiguity, blocked profiles and true capacity overflow.
-  - Otheryn feature PR 103 was opened from prepared head 88f0b2ab5017ed9b02e79e42c0fb523bff73e966 after the earlier create-PR endpoint blocker cleared.
+  - Final feature head 77c46466c79fd5bda02ee7cdf9c07af97c110705 passed Autofix 30125033564, CI 30125033725 and Required 30125033619.
+  - PR 103 had no comments, reviews or review threads; Otheryn main remained e1eed52119ba21a29cb29cbac0793ed2a2b9d0c6 before merge.
+  - PR 103 squash-merged as 597ba62c558ed4e35db38502903ae83e0b2921ec.
 derived:
   - protocol-session-handoff requires ADAPT rather than REUSE because two package-owned invariants were ineffective.
   - Two bounded local changes are sufficient; no rewrite or ownership expansion is justified.
@@ -78,7 +81,7 @@ rejected_hypotheses:
   - Claim cryptographic or replay security from SHA-256 storage, mutex use or TTL enforcement.
   - Extend OAM-006 current-profile physical continuity to every branch and profile.
 changed_paths:
-  - docs/agents/tasks/active/OTH-20260724-oam045-protocol-session-handoff-adapt.md
+  - docs/agents/tasks/archive/OTH-20260724-oam045-protocol-session-handoff-adapt.md
   - docs/oam-045-protocol-session-handoff-adapt.md
   - src/server/network/protocol/protocol_session_hint.cpp
   - tests/unit/server/network/protocol/oam_045_protocol_session_handoff_test.cpp
@@ -91,12 +94,14 @@ validation:
     result: PASS
     evidence: ProtocolGame stores a lease returned by claimByIp, consumes it once before reset and fails closed for unmatched non-modern behavior.
   - command: focused protocol session handoff contract
-    result: NOT_RUN
-    evidence: The final feature PR head must compile and execute the registered unit tests.
+    result: PASS
+    evidence: CI 30125033725 compiled and executed the registered unit-test matrix successfully.
   - command: Otheryn exact-head gates and audit
-    result: NOT_RUN
-    evidence: Autofix, CI and Required must pass on the final PR head before merge.
-blockers:
-  - Otheryn feature PR exact-head validation and merge
-next_action: Mark PR 103 ready, require exact-head Autofix, CI and Required, audit discussions and Otheryn-main drift, then squash-merge with the expected head.
+    result: PASS
+    evidence: Final head 77c46466c79fd5bda02ee7cdf9c07af97c110705 passed Autofix, CI and Required; discussion audit was clean and target main had zero drift.
+  - command: feature merge
+    result: PASS
+    evidence: PR 103 squash-merged with expected head as 597ba62c558ed4e35db38502903ae83e0b2921ec.
+blockers: []
+next_action: NONE
 ```
