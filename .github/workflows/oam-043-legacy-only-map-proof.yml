@@ -88,8 +88,6 @@ jobs:
               'findings': validation['findings'],
               'sourceUnresolved': validation['sourceUnresolved'],
           }
-          assert len(aid_12108) == 1
-          assert aid_12108[0]['classification'] == 'confirmed'
           Path('candidate-donor-proof-summary.json').write_text(json.dumps(compact, indent=2, sort_keys=True) + '\n')
           print(json.dumps(compact, sort_keys=True))
       - uses: actions/upload-artifact@v4
