@@ -4,7 +4,10 @@
 
 `protocol-session-handoff → ADAPT`.
 
-The inherited state machine is retained, but one target-owned correctness defect requires a bounded production guard: a `ProtocolSessionHintLease` carries a 30-second `expiresAt` value that was not checked during consumption. This allowed an expired lease to consume a reusable hint whose independent lifetime can extend to 24 hours.
+The inherited state machine is retained, but two target-owned correctness defects require bounded production changes:
+
+1. a `ProtocolSessionHintLease` carries a 30-second `expiresAt` value that was not checked during consumption, allowing an expired lease to consume a reusable hint whose independent lifetime can extend to 24 hours;
+2. capacity eviction ran before overlapping-character replacement, so refreshing a hint in a full store could evict an unrelated oldest entry and then remove the replaced entry as well.
 
 ## Exact baselines
 
@@ -38,11 +41,19 @@ This package owns the bounded in-process protocol-profile hint state machine:
 
 It does not own account authentication, secure login-token issuance/redemption, transport framing/checksum/sequence/XTEA/compression, login packet serialization, game-world player ownership, generic distributed fencing or physical-client orchestration.
 
-## Isolated defect
+## Isolated defects
+
+### Ignored lease deadline
 
 `claimByIp()` sets `lease.expiresAt = now + 30 seconds`. Reusable hints can remain valid for 24 hours. The inherited `consumeAndResolveProfile()` checked only whether the lease object was structurally non-empty and then searched the still-valid hint collection; it never rejected `lease.expiresAt <= now`.
 
-Consequently, a stale lease could remain usable long after its claim window, provided its candidate reusable hint still existed. The lease deadline field was therefore semantically ineffective.
+Consequently, a stale lease could remain usable long after its claim window, provided its candidate reusable hint still existed. The lease deadline field was semantically ineffective.
+
+### Replacement evicted an unrelated hint at capacity
+
+The inherited registration order performed oldest-entry eviction as soon as the store was full, then removed any existing hint overlapping the new character set. When the new registration replaced an entry other than the oldest one, both the unrelated oldest entry and the replaced entry were removed before the new hint was appended, leaving only 511 entries.
+
+Replacement must first remove the superseded entry. Capacity eviction is required only if the store remains full after that replacement cleanup.
 
 ## Bounded adaptation
 
@@ -55,7 +66,9 @@ if (lease.expiresAt <= now) {
 }
 ```
 
-No TTL duration, hash representation, capacity policy, matching rule, reusable policy, profile registry, login flow or transport behavior is changed.
+`registerHint()` now removes overlapping character entries before applying the unchanged 512-entry capacity check. A true 513th independent registration still evicts the oldest entry; a replacement at capacity does not.
+
+No TTL duration, hash representation, maximum capacity, matching rule, reusable policy, profile registry, login flow or transport behavior is changed.
 
 ## Focused target contract
 
@@ -66,9 +79,10 @@ No TTL duration, hash representation, capacity policy, matching rule, reusable p
 - reusable reclaim, refresh and explicit behavior-scoped cleanup;
 - rejection of an expired lease while preserving the independently valid reusable hint;
 - overlapping-character replacement by a newer registration;
+- replacement at full capacity without eviction of an unrelated oldest hint;
 - fail-closed mixed-wire ambiguity and explicit behavior filtering;
 - blocked-profile registration rejection;
-- the 512-entry capacity boundary and oldest-entry eviction.
+- the 512-entry capacity boundary and oldest-entry eviction for a true additional entry.
 
 The fixture uses local store instances and the existing unit-test target. It does not add a second harness or a production test seam.
 
@@ -81,6 +95,7 @@ The fixture uses local store instances and the existing unit-test target. It doe
 - Tibia 11.00 hints are reusable under the reviewed non-modern initial wire behavior.
 - Blocked OTCv8 registration fails closed.
 - Expired leases fail closed after the adaptation.
+- Replacement and capacity eviction now preserve distinct invariants.
 
 ### Source-only
 
@@ -99,4 +114,4 @@ The fixture uses local store instances and the existing unit-test target. It doe
 
 ## Conclusion
 
-The exact inherited implementation cannot be accepted unchanged because the lease deadline was not enforced. A single package-owned guard plus focused deterministic fixtures supports bounded `ADAPT`; no broader rewrite or ownership expansion is justified.
+The exact inherited implementation cannot be accepted unchanged because the lease deadline was not enforced and replacement ordering could evict an unrelated hint at capacity. Two bounded package-owned changes plus focused deterministic fixtures support `ADAPT`; no broader rewrite or ownership expansion is justified.
