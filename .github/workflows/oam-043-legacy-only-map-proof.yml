@@ -1,4 +1,4 @@
-name: OAM-043 Legacy-only Map Proof
+name: OAM-043 Candidate Donor Map Proof
 
 on:
   pull_request:
@@ -27,7 +27,7 @@ jobs:
           repository: blakinio/canary
           ref: 13ec3077babba0ac81bb1e30e79f0ea4827ae2fe
           path: legacy
-      - name: Scan three legacy-only quest scripts
+      - name: Scan bounded candidate donor scripts
         env:
           PYTHONPATH: legacy/tools/ai-agent
         run: |
@@ -37,7 +37,8 @@ jobs:
             --include 'data-otservbr-global/scripts/quests/the_beginning/the_beginning_tutorial_moveevents.lua' \
             --include 'data-otservbr-global/scripts/quests/the_beginning/the_beginning_zirella_door.lua' \
             --include 'data-otservbr-global/scripts/quests/the_beginning/the_beginning_zirella_wood.lua' \
-            --output legacy-only-source-evidence.json
+            --include 'data-otservbr-global/scripts/quests/the_ancient_tombs/actions_oasis_lever_door.lua' \
+            --output candidate-donor-source-evidence.json
       - name: Compile OTBM scanner
         run: |
           c++ -O2 -std=c++20 -Wall -Wextra -Wpedantic -Werror \
@@ -57,39 +58,46 @@ jobs:
             /tmp/otservbr.otbm \
             --scanner /tmp/otbm_item_audit_scan \
             --output /tmp/world.widx \
-            --manifest legacy-only-world-index.json
-      - name: Correlate legacy-only mechanics
+            --manifest candidate-donor-world-index.json
+      - name: Correlate bounded candidate donor mechanics
         env:
           PYTHONPATH: legacy/tools/ai-agent
         run: |
           python legacy/tools/ai-agent/quest_map_validation_tool.py validate \
-            legacy-only-source-evidence.json \
+            candidate-donor-source-evidence.json \
             --world-index /tmp/world.widx \
             --sample-limit 10 \
-            --output legacy-only-map-validation.json \
+            --output candidate-donor-map-validation.json \
             --fail-on none
-      - name: Summarize legacy-only disposition evidence
+      - name: Summarize candidate donor disposition evidence
         shell: python
         run: |
           import json
           from pathlib import Path
-          source = json.loads(Path('legacy-only-source-evidence.json').read_text())
-          validation = json.loads(Path('legacy-only-map-validation.json').read_text())
+          source = json.loads(Path('candidate-donor-source-evidence.json').read_text())
+          validation = json.loads(Path('candidate-donor-map-validation.json').read_text())
+          aid_12108 = [
+              finding for finding in validation['findings']
+              if finding.get('kind') == 'actionId' and finding.get('value') == 12108
+          ]
           compact = {
               'sourceDigest': source['sourceDigest'],
               'sourceSummary': source['summary'],
               'validationSummary': validation['summary'],
+              'actionId12108': aid_12108,
               'findings': validation['findings'],
               'sourceUnresolved': validation['sourceUnresolved'],
           }
-          Path('legacy-only-proof-summary.json').write_text(json.dumps(compact, indent=2, sort_keys=True) + '\n')
+          assert len(aid_12108) == 1
+          assert aid_12108[0]['classification'] == 'confirmed'
+          Path('candidate-donor-proof-summary.json').write_text(json.dumps(compact, indent=2, sort_keys=True) + '\n')
           print(json.dumps(compact, sort_keys=True))
       - uses: actions/upload-artifact@v4
         with:
-          name: oam-043-legacy-only-map-proof
+          name: oam-043-candidate-donor-map-proof
           path: |
-            legacy-only-proof-summary.json
-            legacy-only-source-evidence.json
-            legacy-only-map-validation.json
-            legacy-only-world-index.json
+            candidate-donor-proof-summary.json
+            candidate-donor-source-evidence.json
+            candidate-donor-map-validation.json
+            candidate-donor-world-index.json
           if-no-files-found: error
