@@ -43,5 +43,5 @@ LuaScriptInterface::RegistryEntry::~RegistryEntry() {
 std::vector<LuaScriptInterface*> LuaScriptInterface::getRegisteredInterfaces() {
 	auto &registry = getLuaScriptInterfaceRegistry();
 	std::scoped_lock lock(registry.mutex);
-	return { registry.interfaces.begin(), registry.interfaces.end() };
+	return std::vector<LuaScriptInterface*>(registry.interfaces.begin(), registry.interfaces.end());
 }
