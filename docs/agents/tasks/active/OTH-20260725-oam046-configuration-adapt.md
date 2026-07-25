@@ -1,13 +1,13 @@
 ---
 task_id: OTH-20260725-oam046-configuration-adapt
-status: active
+status: review
 branch: dudantas/oam-046-configuration-adapt
 base_branch: main
 created: 2026-07-25
 updated: 2026-07-25
-last_verified_commit: "3571b35e960cffd5e0a6610de3bd930c7359f589"
+last_verified_commit: "99c28c8b7d33029808dc49d02e6c77f8456ee8f6"
 related_issue: ""
-related_pr: ""
+related_pr: "105"
 owned_paths:
   - docs/agents/tasks/active/OTH-20260725-oam046-configuration-adapt.md
   - docs/oam-046-configuration-adapt.md
@@ -35,11 +35,11 @@ The target configuration package remains structurally suitable, but successful l
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-25T12:00:00+02:00
-head: 3571b35e960cffd5e0a6610de3bd930c7359f589
+updated_at: 2026-07-25T12:20:00+02:00
+head: 99c28c8b7d33029808dc49d02e6c77f8456ee8f6
 branch: dudantas/oam-046-configuration-adapt
-pr: ""
-status: active
+pr: 105
+status: validating
 context_routes:
   - agent-governance
   - cross-repo
@@ -61,6 +61,7 @@ proven:
   - The adaptation parses enabled and disabled IDs into local vectors, uses fallback enabled IDs 101/102/103/118 with no disabled IDs and moves both current vectors into the retained members.
   - Adapted configmanager.cpp blob is 18a52bb1095576cc2147bf8581d1007fcef90215.
   - The focused fixture loads custom snapshot A, replacing custom snapshot B, then the omitted-table fallback twice and asserts exact enabled/disabled contents after each successful load.
+  - Otheryn PR 105 opened from head 99c28c8b7d33029808dc49d02e6c77f8456ee8f6 with exactly six package-owned paths.
 derived:
   - configuration requires ADAPT rather than REUSE because current successful-load snapshot replacement was ineffective.
   - One local parser correction and one focused contract are sufficient; no package rewrite or ownership expansion is justified.
@@ -99,5 +100,5 @@ blockers:
   - Otheryn exact-head Autofix, CI and Required validation
   - clean discussion and target-main drift audit
   - feature merge and lifecycle archive
-next_action: Open the Otheryn feature PR, synchronize its metadata once, require exact-head Autofix, CI and Required, audit discussions and main drift, then squash-merge with the expected head.
+next_action: Mark PR 105 ready, require exact-head Autofix, CI and Required, audit discussions and target-main drift, then squash-merge with the expected head.
 ```
