@@ -15,6 +15,43 @@
 #include "lua/global/lua_timer_event_descr.hpp"
 #include "lib/di/container.hpp"
 
+#ifndef USE_PRECOMPILED_HEADERS
+	#include <mutex>
+	#include <unordered_set>
+	#include <vector>
+#endif
+
+namespace {
+	struct LuaScriptInterfaceRegistry {
+		std::mutex mutex;
+		std::unordered_set<LuaScriptInterface*> interfaces;
+	};
+
+	LuaScriptInterfaceRegistry &getLuaScriptInterfaceRegistry() {
+		static LuaScriptInterfaceRegistry registry;
+		return registry;
+	}
+}
+
+LuaScriptInterface::RegistryEntry::RegistryEntry(LuaScriptInterface* initOwner) :
+	owner(initOwner) {
+	auto &registry = getLuaScriptInterfaceRegistry();
+	std::scoped_lock lock(registry.mutex);
+	registry.interfaces.insert(owner);
+}
+
+LuaScriptInterface::RegistryEntry::~RegistryEntry() {
+	auto &registry = getLuaScriptInterfaceRegistry();
+	std::scoped_lock lock(registry.mutex);
+	registry.interfaces.erase(owner);
+}
+
+std::vector<LuaScriptInterface*> LuaScriptInterface::getRegisteredInterfaces() {
+	auto &registry = getLuaScriptInterfaceRegistry();
+	std::scoped_lock lock(registry.mutex);
+	return std::vector<LuaScriptInterface*>(registry.interfaces.begin(), registry.interfaces.end());
+}
+
 bool LuaEnvironment::shuttingDown = false;
 
 LuaEnvironment &LuaEnvironment::getInstance() {
@@ -54,19 +91,47 @@ bool LuaEnvironment::initState() {
 	return true;
 }
 
+std::vector<LuaScriptInterface*> LuaEnvironment::getActiveChildInterfaces() const {
+	if (!luaState) {
+		return {};
+	}
+
+	std::vector<LuaScriptInterface*> childInterfaces;
+	for (auto* interface : LuaScriptInterface::getRegisteredInterfaces()) {
+		if (interface != this && interface->luaState == luaState) {
+			childInterfaces.push_back(interface);
+		}
+	}
+	return childInterfaces;
+}
+
 bool LuaEnvironment::reInitState() {
 	if (LuaEnvironment::isShuttingDown()) {
 		return false;
 	}
 
-	// TODO(lgrossi): get children, reload children
+	const auto childInterfaces = getActiveChildInterfaces();
 	closeState();
-	return initState();
+	if (!initState()) {
+		return false;
+	}
+
+	for (auto* interface : childInterfaces) {
+		if (!interface->initState()) {
+			closeState();
+			return false;
+		}
+	}
+	return true;
 }
 
 bool LuaEnvironment::closeState() {
 	if (!luaState) {
 		return false;
+	}
+
+	for (auto* interface : getActiveChildInterfaces()) {
+		static_cast<void>(interface->closeState());
 	}
 
 	for (const auto &areaEntry : areaIdMap) {

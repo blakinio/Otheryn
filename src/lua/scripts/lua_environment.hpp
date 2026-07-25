@@ -16,6 +16,10 @@
 
 #include "lua/global/lua_timer_event_descr.hpp"
 
+#ifndef USE_PRECOMPILED_HEADERS
+	#include <vector>
+#endif
+
 class AreaCombat;
 class Combat;
 class Cylinder;
@@ -55,6 +59,7 @@ public:
 	void collectGarbage() const;
 
 private:
+	[[nodiscard]] std::vector<LuaScriptInterface*> getActiveChildInterfaces() const;
 	void executeTimerEvent(uint32_t eventIndex);
 
 	std::unordered_map<uint32_t, LuaTimerEventDesc> timerEvents;
