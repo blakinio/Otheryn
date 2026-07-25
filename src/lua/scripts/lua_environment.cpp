@@ -54,19 +54,47 @@ bool LuaEnvironment::initState() {
 	return true;
 }
 
+std::vector<LuaScriptInterface*> LuaEnvironment::getActiveChildInterfaces() const {
+	if (!luaState) {
+		return {};
+	}
+
+	std::vector<LuaScriptInterface*> childInterfaces;
+	for (auto* interface : LuaScriptInterface::getRegisteredInterfaces()) {
+		if (interface != this && interface->luaState == luaState) {
+			childInterfaces.push_back(interface);
+		}
+	}
+	return childInterfaces;
+}
+
 bool LuaEnvironment::reInitState() {
 	if (LuaEnvironment::isShuttingDown()) {
 		return false;
 	}
 
-	// TODO(lgrossi): get children, reload children
+	const auto childInterfaces = getActiveChildInterfaces();
 	closeState();
-	return initState();
+	if (!initState()) {
+		return false;
+	}
+
+	for (auto* interface : childInterfaces) {
+		if (!interface->initState()) {
+			closeState();
+			return false;
+		}
+	}
+	return true;
 }
 
 bool LuaEnvironment::closeState() {
 	if (!luaState) {
 		return false;
+	}
+
+	for (auto* interface : getActiveChildInterfaces()) {
+		static_cast<void>(interface->closeState());
 	}
 
 	for (const auto &areaEntry : areaIdMap) {
