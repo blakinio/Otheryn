@@ -15,6 +15,43 @@
 #include "lua/global/lua_timer_event_descr.hpp"
 #include "lib/di/container.hpp"
 
+#ifndef USE_PRECOMPILED_HEADERS
+	#include <mutex>
+	#include <unordered_set>
+	#include <vector>
+#endif
+
+namespace {
+	struct LuaScriptInterfaceRegistry {
+		std::mutex mutex;
+		std::unordered_set<LuaScriptInterface*> interfaces;
+	};
+
+	LuaScriptInterfaceRegistry &getLuaScriptInterfaceRegistry() {
+		static LuaScriptInterfaceRegistry registry;
+		return registry;
+	}
+}
+
+LuaScriptInterface::RegistryEntry::RegistryEntry(LuaScriptInterface* initOwner) :
+	owner(initOwner) {
+	auto &registry = getLuaScriptInterfaceRegistry();
+	std::scoped_lock lock(registry.mutex);
+	registry.interfaces.insert(owner);
+}
+
+LuaScriptInterface::RegistryEntry::~RegistryEntry() {
+	auto &registry = getLuaScriptInterfaceRegistry();
+	std::scoped_lock lock(registry.mutex);
+	registry.interfaces.erase(owner);
+}
+
+std::vector<LuaScriptInterface*> LuaScriptInterface::getRegisteredInterfaces() {
+	auto &registry = getLuaScriptInterfaceRegistry();
+	std::scoped_lock lock(registry.mutex);
+	return std::vector<LuaScriptInterface*>(registry.interfaces.begin(), registry.interfaces.end());
+}
+
 bool LuaEnvironment::shuttingDown = false;
 
 LuaEnvironment &LuaEnvironment::getInstance() {
