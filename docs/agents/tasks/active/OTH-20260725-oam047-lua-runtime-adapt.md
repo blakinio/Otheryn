@@ -1,14 +1,14 @@
 ---
 task_id: OTH-20260725-oam047-lua-runtime-adapt
 coordination_id: OAM-047
-status: active
+status: review
 branch: dudantas/oam-047-lua-runtime-adapt
 base_branch: main
 created: 2026-07-25
 updated: 2026-07-25
-last_verified_commit: "415f559f829c83d79d9c609e7f421d2449e59d74"
+last_verified_commit: "768a7a62da0b959c6851a04402bfc6ba0f7a8ddf"
 related_issue: ""
-related_pr: ""
+related_pr: "107"
 owned_paths:
   - docs/agents/tasks/active/OTH-20260725-oam047-lua-runtime-adapt.md
   - docs/oam-047-lua-runtime-adapt.md
@@ -27,11 +27,11 @@ Final disposition: `lua-runtime → ADAPT`.
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-25T15:55:00+02:00
-head: 415f559f829c83d79d9c609e7f421d2449e59d74
+updated_at: 2026-07-25T16:31:00+02:00
+head: 768a7a62da0b959c6851a04402bfc6ba0f7a8ddf
 branch: dudantas/oam-047-lua-runtime-adapt
-pr: null
-status: implementing
+pr: 107
+status: validating
 context_routes:
   - agent-governance
   - cross-repo
@@ -88,5 +88,5 @@ validation:
     evidence: Autofix, CI and Required must pass before merge.
 blockers:
   - Otheryn feature PR exact-head validation and merge
-next_action: Open the Otheryn feature PR, require exact-head Autofix, CI and Required, audit discussions and target-main drift, then squash-merge with the expected head.
+next_action: Mark PR 107 ready, require exact-head Autofix, CI and Required, audit discussions and target-main drift, then squash-merge with the expected head.
 ```
