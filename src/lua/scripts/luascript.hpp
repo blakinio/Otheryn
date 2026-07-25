@@ -15,7 +15,10 @@
 #ifndef USE_PRECOMPILED_HEADERS
 	#include <filesystem>
 	#include <cstdint>
+	#include <vector>
 #endif
+
+class LuaEnvironment;
 
 struct LuaScriptFileMetadata {
 	uintmax_t size = 0;
@@ -92,10 +95,26 @@ protected:
 	std::map<int32_t, std::string> cacheFiles;
 
 private:
+	class RegistryEntry final {
+	public:
+		explicit RegistryEntry(LuaScriptInterface* owner);
+		~RegistryEntry();
+
+		RegistryEntry(const RegistryEntry &) = delete;
+		RegistryEntry &operator=(const RegistryEntry &) = delete;
+
+	private:
+		LuaScriptInterface* owner;
+	};
+
+	[[nodiscard]] static std::vector<LuaScriptInterface*> getRegisteredInterfaces();
 	std::string getMetricsScope() const;
 
 	std::string lastLuaError;
 	std::string interfaceName;
 	std::string loadingFile;
 	std::string loadedScriptName;
+	RegistryEntry registryEntry { this };
+
+	friend class LuaEnvironment;
 };
