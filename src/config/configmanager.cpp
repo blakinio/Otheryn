@@ -592,42 +592,43 @@ float ConfigManager::getFloat(const ConfigKey_t &key, const std::source_location
 }
 
 void ConfigManager::loadLuaOTCFeatures(lua_State* L) {
+	OTCFeatures enabledFeatures;
+	OTCFeatures disabledFeatures;
+
 	lua_getglobal(L, "OTCRFeatures");
 	if (!lua_istable(L, -1)) {
 		// Temp to avoid a bug in OTC if the "OTCRFeatures" array is not declared in config.lua.
-		enabledFeaturesOTC.push_back(101);
-		enabledFeaturesOTC.push_back(102);
-		enabledFeaturesOTC.push_back(103);
-		enabledFeaturesOTC.push_back(118);
+		enabledFeatures = { 101, 102, 103, 118 };
 		lua_pop(L, 1);
-		return;
-	}
-
-	lua_pushstring(L, "enableFeature");
-	lua_gettable(L, -2);
-	if (lua_istable(L, -1)) {
-		lua_pushnil(L);
-		while (lua_next(L, -2) != 0) {
-			const auto feature = static_cast<uint8_t>(lua_tointeger(L, -1));
-			enabledFeaturesOTC.push_back(feature);
-			lua_pop(L, 1);
+	} else {
+		lua_pushstring(L, "enableFeature");
+		lua_gettable(L, -2);
+		if (lua_istable(L, -1)) {
+			lua_pushnil(L);
+			while (lua_next(L, -2) != 0) {
+				const auto feature = static_cast<uint8_t>(lua_tointeger(L, -1));
+				enabledFeatures.push_back(feature);
+				lua_pop(L, 1);
+			}
 		}
-	}
-	lua_pop(L, 1);
+		lua_pop(L, 1);
 
-	lua_pushstring(L, "disableFeature");
-	lua_gettable(L, -2);
-	if (lua_istable(L, -1)) {
-		lua_pushnil(L);
-		while (lua_next(L, -2) != 0) {
-			const auto feature = static_cast<uint8_t>(lua_tointeger(L, -1));
-			disabledFeaturesOTC.push_back(feature);
-			lua_pop(L, 1);
+		lua_pushstring(L, "disableFeature");
+		lua_gettable(L, -2);
+		if (lua_istable(L, -1)) {
+			lua_pushnil(L);
+			while (lua_next(L, -2) != 0) {
+				const auto feature = static_cast<uint8_t>(lua_tointeger(L, -1));
+				disabledFeatures.push_back(feature);
+				lua_pop(L, 1);
+			}
 		}
+		lua_pop(L, 1);
+		lua_pop(L, 1);
 	}
-	lua_pop(L, 1);
 
-	lua_pop(L, 1);
+	enabledFeaturesOTC = std::move(enabledFeatures);
+	disabledFeaturesOTC = std::move(disabledFeatures);
 }
 OTCFeatures ConfigManager::getEnabledFeaturesOTC() const {
 	return enabledFeaturesOTC;
