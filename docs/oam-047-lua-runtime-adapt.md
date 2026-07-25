@@ -26,12 +26,13 @@ Ordinary `LuaScriptInterface::initState()` stores the shared main `lua_State*` a
 - A child rebind failure closes the replacement main state and already rebound children, preserving fail-closed behavior.
 - The adaptation resets interfaces only. It does not reload feature scripts or claim that every subsystem completed its own data/event reload.
 
+The registry implementation is compiled through the existing `lua_environment.cpp` source so both CMake and the maintained Visual Studio solution consume the same bounded implementation without expanding build-system ownership.
+
 Adapted blobs:
 
 - `luascript.hpp`: `0660238ca408687142d9a9e1c8d839c45ed9486d`.
 - `lua_environment.hpp`: `f684825b2351ca9d7e41fbc95649542386549497`.
-- `lua_environment.cpp`: `7b1c0fb41c5569269d884374f885b7b14d7bbc2c`.
-- new `lua_interface_registry.cpp`: `93dec34d3bb9e168fb96c4f1d2b0675a9de5d476`.
+- `lua_environment.cpp`: `fc246af01578788cd3fcfcc2b39655c94c42cc3b`.
 
 Focused fixtures prove:
 
@@ -41,6 +42,10 @@ Focused fixtures prove:
 - an uninitialized interface is not attached merely because an object exists;
 - a destroyed interface is removed before a later main reset;
 - the shared test interface follows the same bounded child lifecycle.
+
+## Build-path correction
+
+The first final-head CI attempt passed CMake, Linux, macOS and Docker paths but failed the maintained Windows Solution build because a newly separated registry translation unit was registered only in CMake. The correction folded the registry definitions into the already-supported `lua_environment.cpp` translation unit and restored the original scripts CMake source list. This preserves one implementation across both supported build paths without editing Visual Studio project ownership.
 
 ## Explicit boundaries
 
@@ -57,4 +62,4 @@ This package does not claim:
 
 Production reload ordering, callback timing during operator-triggered reloads, complete userdata lifetime safety and concurrency behavior remain `UNKNOWN`.
 
-`next_action`: open the Otheryn feature PR, require exact-head Autofix, CI and Required, audit discussions and target-main drift, then squash-merge with the expected head.
+`next_action`: require exact-head Autofix, CI and Required after the supported-build correction, audit discussions and target-main drift, then squash-merge with the expected head.
