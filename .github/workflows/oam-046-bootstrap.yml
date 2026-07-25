@@ -1,0 +1,342 @@
+name: OAM 046 bootstrap
+
+on:
+  push:
+    branches:
+      - dudantas/oam-046-configuration-adapt
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Materialize bounded target adaptation
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          source_path = Path("src/config/configmanager.cpp")
+          source = source_path.read_text(encoding="utf-8")
+          replacement = r'''void ConfigManager::loadLuaOTCFeatures(lua_State* L) {
+          	OTCFeatures nextEnabledFeatures;
+          	OTCFeatures nextDisabledFeatures;
+
+          	lua_getglobal(L, "OTCRFeatures");
+          	if (!lua_istable(L, -1)) {
+          		// Temp to avoid a bug in OTC if the "OTCRFeatures" array is not declared in config.lua.
+          		nextEnabledFeatures = { 101, 102, 103, 118 };
+          		lua_pop(L, 1);
+          		enabledFeaturesOTC = std::move(nextEnabledFeatures);
+          		disabledFeaturesOTC = std::move(nextDisabledFeatures);
+          		return;
+          	}
+
+          	lua_pushstring(L, "enableFeature");
+          	lua_gettable(L, -2);
+          	if (lua_istable(L, -1)) {
+          		lua_pushnil(L);
+          		while (lua_next(L, -2) != 0) {
+          			const auto feature = static_cast<uint8_t>(lua_tointeger(L, -1));
+          			nextEnabledFeatures.push_back(feature);
+          			lua_pop(L, 1);
+          		}
+          	}
+          	lua_pop(L, 1);
+
+          	lua_pushstring(L, "disableFeature");
+          	lua_gettable(L, -2);
+          	if (lua_istable(L, -1)) {
+          		lua_pushnil(L);
+          		while (lua_next(L, -2) != 0) {
+          			const auto feature = static_cast<uint8_t>(lua_tointeger(L, -1));
+          			nextDisabledFeatures.push_back(feature);
+          			lua_pop(L, 1);
+          		}
+          	}
+          	lua_pop(L, 1);
+
+          	lua_pop(L, 1);
+          	enabledFeaturesOTC = std::move(nextEnabledFeatures);
+          	disabledFeaturesOTC = std::move(nextDisabledFeatures);
+          }
+          OTCFeatures ConfigManager::getEnabledFeaturesOTC() const {'''
+          pattern = r"void ConfigManager::loadLuaOTCFeatures\(lua_State\* L\) \{.*?\n\}\nOTCFeatures ConfigManager::getEnabledFeaturesOTC\(\) const \{"
+          source, count = re.subn(pattern, replacement, source, count=1, flags=re.DOTALL)
+          if count != 1:
+              raise SystemExit(f"expected one loadLuaOTCFeatures replacement, got {count}")
+          source_path.write_text(source, encoding="utf-8")
+
+          cmake_path = Path("tests/unit/server/CMakeLists.txt")
+          cmake = cmake_path.read_text(encoding="utf-8")
+          test_entry = "            config/oam_046_configuration_snapshot_test.cpp\n"
+          if test_entry not in cmake:
+              cmake = cmake.replace(
+                  "    PRIVATE network/message/networkmessage_test.cpp\n",
+                  "    PRIVATE config/oam_046_configuration_snapshot_test.cpp\n            network/message/networkmessage_test.cpp\n",
+                  1,
+              )
+          cmake_path.write_text(cmake, encoding="utf-8")
+
+          test_path = Path("tests/unit/server/config/oam_046_configuration_snapshot_test.cpp")
+          test_path.parent.mkdir(parents=True, exist_ok=True)
+          test_path.write_text(r'''#include "config/configmanager.hpp"
+
+#ifndef USE_PRECOMPILED_HEADERS
+	#include <algorithm>
+	#include <atomic>
+	#include <filesystem>
+	#include <fstream>
+	#include <stdexcept>
+	#include <string>
+	#include <string_view>
+#endif
+
+namespace {
+	class TemporaryLuaConfig {
+	public:
+		TemporaryLuaConfig() : path(std::filesystem::temp_directory_path() / ("oam_046_configuration_" + std::to_string(sequence.fetch_add(1)) + ".lua")) { }
+
+		~TemporaryLuaConfig() {
+			std::error_code error;
+			std::filesystem::remove(path, error);
+		}
+
+		void write(const std::string_view content) const {
+			std::ofstream output(path, std::ios::trunc);
+			if (!output) {
+				throw std::runtime_error("failed to create temporary Lua configuration");
+			}
+			output << content;
+			if (!output) {
+				throw std::runtime_error("failed to write temporary Lua configuration");
+			}
+		}
+
+		[[nodiscard]] std::string string() const {
+			return path.string();
+		}
+
+	private:
+		inline static std::atomic_uint64_t sequence = 0;
+		std::filesystem::path path;
+	};
+
+	OTCFeatures sorted(OTCFeatures features) {
+		std::ranges::sort(features);
+		return features;
+	}
+}
+
+TEST(Oam046ConfigurationSnapshotTest, SuccessfulLoadsReplaceEnabledAndDisabledFeatureSnapshots) {
+	TemporaryLuaConfig file;
+	ConfigManager config;
+	config.setConfigFileLua(file.string());
+
+	file.write(R"(
+OTCRFeatures = {
+	enableFeature = { 101, 102 },
+	disableFeature = { 201 }
+}
+)");
+	ASSERT_TRUE(config.load());
+	EXPECT_EQ((OTCFeatures { 101, 102 }), sorted(config.getEnabledFeaturesOTC()));
+	EXPECT_EQ((OTCFeatures { 201 }), sorted(config.getDisabledFeaturesOTC()));
+
+	file.write(R"(
+OTCRFeatures = {
+	enableFeature = { 118 },
+	disableFeature = { 202, 203 }
+}
+)");
+	ASSERT_TRUE(config.load());
+	EXPECT_EQ((OTCFeatures { 118 }), sorted(config.getEnabledFeaturesOTC()));
+	EXPECT_EQ((OTCFeatures { 202, 203 }), sorted(config.getDisabledFeaturesOTC()));
+}
+
+TEST(Oam046ConfigurationSnapshotTest, EmptyFeatureTablesClearThePreviousSnapshot) {
+	TemporaryLuaConfig file;
+	ConfigManager config;
+	config.setConfigFileLua(file.string());
+
+	file.write("OTCRFeatures = { enableFeature = { 101 }, disableFeature = { 201 } }\n");
+	ASSERT_TRUE(config.load());
+
+	file.write("OTCRFeatures = { enableFeature = {}, disableFeature = {} }\n");
+	ASSERT_TRUE(config.load());
+	EXPECT_TRUE(config.getEnabledFeaturesOTC().empty());
+	EXPECT_TRUE(config.getDisabledFeaturesOTC().empty());
+}
+
+TEST(Oam046ConfigurationSnapshotTest, MissingFeatureTableReplacesTheSnapshotWithBoundedDefaults) {
+	TemporaryLuaConfig file;
+	ConfigManager config;
+	config.setConfigFileLua(file.string());
+
+	file.write("OTCRFeatures = { enableFeature = { 77 }, disableFeature = { 88 } }\n");
+	ASSERT_TRUE(config.load());
+
+	file.write("serverName = 'OAM-046'\n");
+	ASSERT_TRUE(config.load());
+	EXPECT_EQ((OTCFeatures { 101, 102, 103, 118 }), sorted(config.getEnabledFeaturesOTC()));
+	EXPECT_TRUE(config.getDisabledFeaturesOTC().empty());
+}
+
+TEST(Oam046ConfigurationSnapshotTest, FailedLoadPreservesTheLastSuccessfulFeatureSnapshot) {
+	TemporaryLuaConfig file;
+	ConfigManager config;
+	config.setConfigFileLua(file.string());
+
+	file.write("OTCRFeatures = { enableFeature = { 101 }, disableFeature = { 201 } }\n");
+	ASSERT_TRUE(config.load());
+
+	file.write("OTCRFeatures = {\n");
+	EXPECT_FALSE(config.load());
+	EXPECT_EQ((OTCFeatures { 101 }), config.getEnabledFeaturesOTC());
+	EXPECT_EQ((OTCFeatures { 201 }), config.getDisabledFeaturesOTC());
+}
+''', encoding="utf-8")
+
+          proof_path = Path("docs/oam-046-configuration-adapt.md")
+          proof_path.write_text(r'''# OAM-046 Configuration target proof
+
+Final disposition: `configuration → ADAPT`.
+
+## Exact baselines
+
+- Canary preflight PR #911 merged as `a1af14078de0450eb138a2f087e71104c03da4ca`.
+- Otheryn task-start main: `e8f683e61427e9967cbc180b837220d4b7487d85`.
+- reviewed current upstream: `opentibiabr/canary@7323503b3dc61ed86bf1f04a611b2d0aec64b35a`.
+- target `configmanager.hpp`: blob `c3027c491cbc326a3f66d2ed39a19ad7856ca6cf`.
+- target pre-adaptation `configmanager.cpp`: blob `48c0637ba870cb25d119c16fc21d4134d6bdac15`.
+- target/upstream `config_enums.hpp`: blob `1676d0ac445e4cd83e91fc57ca405b4a0dccfb55`.
+- target `config.lua.dist`: blob `add3df239fb22592b7c63d166f880d0c31098ba2`.
+
+## Isolated target defect
+
+`ConfigManager::loadLuaOTCFeatures()` appended parsed or fallback IDs directly to the retained enabled/disabled vectors. Every later successful load therefore accumulated duplicates and preserved IDs removed from the newer configuration. Empty feature tables could not clear the previous snapshot.
+
+## Bounded adaptation
+
+Each successful load now builds local enabled/disabled vectors and replaces both retained vectors only after the complete `OTCRFeatures` table is parsed. A missing table atomically replaces the snapshot with the existing bounded enabled defaults `{101, 102, 103, 118}` and an empty disabled list. A Lua file that fails before parsing leaves the last successful snapshot unchanged.
+
+Focused fixtures cover:
+
+- replacement of enabled and disabled snapshots across two successful loads;
+- clearing through valid empty tables;
+- replacement with the existing fallback defaults when `OTCRFeatures` is absent;
+- preservation of the last successful snapshot after Lua syntax failure.
+
+## Explicit boundaries
+
+This package does not claim:
+
+- exhaustive correspondence for every configuration key or default;
+- feature behavior controlled by configuration values;
+- maintained-client interpretation or physical-client effects of every feature ID;
+- production configuration correctness, secret management or environment policy;
+- concurrent reload safety, reader synchronization or atomic replacement of the complete configuration map;
+- generic cache invalidation, callback ordering, protocol correctness or gameplay parity.
+
+## Remaining unknowns
+
+Concurrent reload/read behavior, complete cache synchronization, production environment configuration and exhaustive key/default parity remain `UNKNOWN`.
+
+`next_action`: open the Otheryn feature PR, require exact-head Autofix, CI and Required, audit discussions and target-main drift, then squash-merge with the expected head.
+''', encoding="utf-8")
+
+          task_path = Path("docs/agents/tasks/active/OTH-20260725-oam046-configuration-adapt.md")
+          task_path.parent.mkdir(parents=True, exist_ok=True)
+          task_path.write_text(r'''---
+task_id: OTH-20260725-oam046-configuration-adapt
+coordination_id: OAM-046
+status: active
+branch: dudantas/oam-046-configuration-adapt
+base_branch: main
+created: 2026-07-25
+updated: 2026-07-25
+last_verified_commit: "e8f683e61427e9967cbc180b837220d4b7487d85"
+related_issue: ""
+related_pr: ""
+owned_paths:
+  - docs/agents/tasks/active/OTH-20260725-oam046-configuration-adapt.md
+  - docs/oam-046-configuration-adapt.md
+  - src/config/configmanager.cpp
+  - tests/unit/server/config/oam_046_configuration_snapshot_test.cpp
+  - tests/unit/server/CMakeLists.txt
+---
+
+# OAM-046 configuration adaptation
+
+Final disposition: `configuration → ADAPT`.
+
+```yaml
+checkpoint_version: 1
+updated_at: 2026-07-25T15:35:00+02:00
+head: e8f683e61427e9967cbc180b837220d4b7487d85
+branch: dudantas/oam-046-configuration-adapt
+pr: null
+status: implementing
+context_routes:
+  - agent-governance
+  - cross-repo
+  - engine-foundation
+owned_paths:
+  - docs/agents/tasks/active/OTH-20260725-oam046-configuration-adapt.md
+  - docs/oam-046-configuration-adapt.md
+  - src/config/configmanager.cpp
+  - tests/unit/server/config/oam_046_configuration_snapshot_test.cpp
+  - tests/unit/server/CMakeLists.txt
+proven:
+  - Canary OAM-046 preflight PR 911 merged as a1af14078de0450eb138a2f087e71104c03da4ca.
+  - Task-start Otheryn main is e8f683e61427e9967cbc180b837220d4b7487d85 and reviewed upstream is 7323503b3dc61ed86bf1f04a611b2d0aec64b35a.
+  - The pre-adaptation target implementation blob is 48c0637ba870cb25d119c16fc21d4134d6bdac15.
+  - Repeated successful loads append into retained OTCR feature vectors and preserve stale IDs.
+  - Local vectors followed by final move assignment provide bounded snapshot replacement.
+derived:
+  - configuration requires ADAPT rather than REUSE because reload-visible state is non-idempotent.
+  - The correction belongs inside configuration loading and does not require changing controlled feature behavior.
+unknown:
+  - Concurrent reload/read safety and complete cache synchronization.
+  - Exhaustive key/default parity across target, upstream and legacy.
+  - Production configuration, secret handling and maintained-client effects.
+conflicts: []
+first_failure:
+  marker: non-idempotent-otcr-feature-load
+  evidence: loadLuaOTCFeatures appends every parsed/default ID without replacing the retained snapshot.
+rejected_hypotheses:
+  - Finalize REUSE from shared headers, compilation or unrelated runtime tests.
+  - Expand into feature behavior, secrets, deployment, protocol or generic concurrent configuration redesign.
+changed_paths:
+  - docs/agents/tasks/active/OTH-20260725-oam046-configuration-adapt.md
+  - docs/oam-046-configuration-adapt.md
+  - src/config/configmanager.cpp
+  - tests/unit/server/config/oam_046_configuration_snapshot_test.cpp
+  - tests/unit/server/CMakeLists.txt
+validation:
+  - command: focused configuration snapshot contract
+    result: NOT_RUN
+    evidence: The final feature PR head must compile and execute the registered tests.
+  - command: exact-head Otheryn gates and audit
+    result: NOT_RUN
+    evidence: Autofix, CI and Required must pass before merge.
+blockers:
+  - Otheryn feature PR exact-head validation and merge
+next_action: Open the Otheryn feature PR, require exact-head Autofix, CI and Required, audit discussions and target-main drift, then squash-merge with the expected head.
+```
+''', encoding="utf-8")
+          PY
+
+          rm .github/workflows/oam-046-bootstrap.yml
+          git config user.name "oam-automation"
+          git config user.email "oam-automation@users.noreply.github.com"
+          git add src/config/configmanager.cpp tests/unit/server/CMakeLists.txt tests/unit/server/config/oam_046_configuration_snapshot_test.cpp docs/oam-046-configuration-adapt.md docs/agents/tasks/active/OTH-20260725-oam046-configuration-adapt.md .github/workflows/oam-046-bootstrap.yml
+          git commit -m "fix(oam): adapt configuration feature snapshots"
+          git push origin HEAD:${GITHUB_REF_NAME}
