@@ -6,9 +6,9 @@ branch: dudantas/oam-048-gameplay-analytics-disposition
 base_branch: main
 created: 2026-07-25
 updated: 2026-07-25
-last_verified_commit: "2eae639c33c0f7c7d32000b4ca9776696e719103"
+last_verified_commit: "3ce63124229b8d3f4e9ce669fddffbc7ca880626"
 related_issue: ""
-related_pr: ""
+related_pr: "109"
 owned_paths:
   - docs/agents/tasks/active/OTH-20260725-oam048-gameplay-analytics-disposition.md
   - docs/oam-048-gameplay-analytics-disposition.md
@@ -22,10 +22,10 @@ Final disposition: `gameplay-analytics → EXPERIMENTAL_ONLY`.
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-25T20:54:00+02:00
-head: 2eae639c33c0f7c7d32000b4ca9776696e719103
+updated_at: 2026-07-25T20:58:00+02:00
+head: 3ce63124229b8d3f4e9ce669fddffbc7ca880626
 branch: dudantas/oam-048-gameplay-analytics-disposition
-pr: pending
+pr: 109
 status: validating
 context_routes:
   - agent-governance
@@ -43,6 +43,7 @@ proven:
   - No canonical module depends on Gameplay Analytics and no Otheryn core startup/build/runtime root requires it.
   - Existing legacy dry-run and database tests do not establish target privacy, retention, deletion, capacity or production operations.
   - The target disposition adds no runtime, schema, workflow, data or test path.
+  - Otheryn PR 109 opened with exactly the target task and disposition report.
 derived:
   - Gameplay Analytics does not meet Otheryn core ownership criteria.
   - EXPERIMENTAL_ONLY preserves laboratory usefulness while preventing accidental core dependency or production activation.
@@ -74,9 +75,9 @@ validation:
     evidence: The report defines disabled, independent experimental boundaries and explicit privacy/production nonclaims.
   - command: exact-head Otheryn Required gate
     result: NOT_RUN
-    evidence: The disposition PR must be opened and validated.
+    evidence: PR 109 must pass Required on the synchronized head.
 blockers:
   - exact-head Otheryn Required gate
   - clean discussion and target-main drift audit
-next_action: Open the Otheryn disposition PR, require exact-head Required, audit discussions and target-main drift, then squash-merge and archive the target task.
+next_action: Require exact-head Required on PR 109, audit discussions and target-main drift, then squash-merge and archive the target task.
 ```
