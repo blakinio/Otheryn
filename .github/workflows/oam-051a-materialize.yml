@@ -77,7 +77,7 @@ jobs:
             src/server/network/protocol/protocolgame.cpp \
             tests/unit/players/CMakeLists.txt \
             tests/unit/players/oam_051_wheel_safety_adapt_test.cpp | sort)"
-          changed="$({ git diff --name-only; git diff --cached --name-only; } | sort -u)"
+          changed="$({ git diff --name-only; git diff --cached --name-only; git ls-files --others --exclude-standard; } | sort -u)"
           status=0
           {
             echo '--- git status --short ---'
@@ -86,6 +86,8 @@ jobs:
             git diff --name-only
             echo '--- staged paths ---'
             git diff --cached --name-only
+            echo '--- untracked paths ---'
+            git ls-files --others --exclude-standard
             echo '--- combined paths ---'
             printf '%s\n' "$changed"
             echo '--- expected paths ---'
