@@ -79,49 +79,86 @@ enum class ModuleCapability : uint64_t {
 
 [[nodiscard]] constexpr std::string_view moduleIdName(ModuleId id) {
 	switch (id) {
-		case ModuleId::EngineRuntime: return "engine-runtime";
-		case ModuleId::Scheduler: return "scheduler";
-		case ModuleId::NetworkTransport: return "network-transport";
-		case ModuleId::Protocol: return "protocol";
-		case ModuleId::Sessions: return "sessions";
-		case ModuleId::World: return "world";
-		case ModuleId::Players: return "players";
-		case ModuleId::Items: return "items";
-		case ModuleId::Creatures: return "creatures";
-		case ModuleId::Combat: return "combat";
-		case ModuleId::Persistence: return "persistence";
-		case ModuleId::LuaRuntime: return "lua-runtime";
-		case ModuleId::Observability: return "observability";
-		case ModuleId::Wheel: return "wheel";
-		case ModuleId::Prey: return "prey";
-		case ModuleId::Charms: return "charms";
-		case ModuleId::Bestiary: return "bestiary";
-		case ModuleId::Bosstiary: return "bosstiary";
-		case ModuleId::Forge: return "forge";
-		case ModuleId::Imbuements: return "imbuements";
-		case ModuleId::Market: return "market";
-		case ModuleId::Trade: return "trade";
-		case ModuleId::Bank: return "bank";
-		case ModuleId::Guilds: return "guilds";
-		case ModuleId::Houses: return "houses";
-		case ModuleId::Achievements: return "achievements";
-		case ModuleId::Instances: return "instances";
-		case ModuleId::BossEncounters: return "boss-encounters";
-		case ModuleId::Raids: return "raids";
-		case ModuleId::Quests: return "quests";
-		case ModuleId::Npcs: return "npcs";
-		case ModuleId::Spawns: return "spawns";
-		case ModuleId::Count: break;
+		case ModuleId::EngineRuntime:
+			return "engine-runtime";
+		case ModuleId::Scheduler:
+			return "scheduler";
+		case ModuleId::NetworkTransport:
+			return "network-transport";
+		case ModuleId::Protocol:
+			return "protocol";
+		case ModuleId::Sessions:
+			return "sessions";
+		case ModuleId::World:
+			return "world";
+		case ModuleId::Players:
+			return "players";
+		case ModuleId::Items:
+			return "items";
+		case ModuleId::Creatures:
+			return "creatures";
+		case ModuleId::Combat:
+			return "combat";
+		case ModuleId::Persistence:
+			return "persistence";
+		case ModuleId::LuaRuntime:
+			return "lua-runtime";
+		case ModuleId::Observability:
+			return "observability";
+		case ModuleId::Wheel:
+			return "wheel";
+		case ModuleId::Prey:
+			return "prey";
+		case ModuleId::Charms:
+			return "charms";
+		case ModuleId::Bestiary:
+			return "bestiary";
+		case ModuleId::Bosstiary:
+			return "bosstiary";
+		case ModuleId::Forge:
+			return "forge";
+		case ModuleId::Imbuements:
+			return "imbuements";
+		case ModuleId::Market:
+			return "market";
+		case ModuleId::Trade:
+			return "trade";
+		case ModuleId::Bank:
+			return "bank";
+		case ModuleId::Guilds:
+			return "guilds";
+		case ModuleId::Houses:
+			return "houses";
+		case ModuleId::Achievements:
+			return "achievements";
+		case ModuleId::Instances:
+			return "instances";
+		case ModuleId::BossEncounters:
+			return "boss-encounters";
+		case ModuleId::Raids:
+			return "raids";
+		case ModuleId::Quests:
+			return "quests";
+		case ModuleId::Npcs:
+			return "npcs";
+		case ModuleId::Spawns:
+			return "spawns";
+		case ModuleId::Count:
+			break;
 	}
 	return "invalid-module";
 }
 
 [[nodiscard]] constexpr std::string_view moduleCapabilityName(ModuleCapability capability) {
 	switch (capability) {
-		case ModuleCapability::MarketProtocol: return "market-protocol";
-		case ModuleCapability::ImbuementProtocol: return "imbuement-protocol";
-		case ModuleCapability::WheelProtocol: return "wheel-protocol";
-		case ModuleCapability::None: break;
+		case ModuleCapability::MarketProtocol:
+			return "market-protocol";
+		case ModuleCapability::ImbuementProtocol:
+			return "imbuement-protocol";
+		case ModuleCapability::WheelProtocol:
+			return "wheel-protocol";
+		case ModuleCapability::None:
+			break;
 	}
 	return "none";
 }
