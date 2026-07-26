@@ -83,7 +83,7 @@ if [[ -z "${backup_binlog_file}" || ! "${backup_binlog_position}" =~ ^[0-9]+$ ]]
 	exit 72
 fi
 
-read -r coordinate_file coordinate_position _ < "${verified_dir}/full/xtrabackup_binlog_info"
+read -r coordinate_file coordinate_position _ < "${verified_dir}/full/mariadb_backup_binlog_info"
 if [[ "${coordinate_file}" != "${backup_binlog_file}" || "${coordinate_position}" != "${backup_binlog_position}" ]]; then
 	echo "ERROR: manifest and physical-backup coordinates disagree" >&2
 	exit 72
@@ -160,6 +160,7 @@ fi
 docker run --detach \
 	--name "${PRS001_RESTORE_CONTAINER}" \
 	--network "${PRS001_NETWORK}" \
+	--env TZ=UTC \
 	--env MARIADB_ROOT_PASSWORD="${PRS001_DB_ROOT_PASSWORD}" \
 	--volume "${PRS001_RESTORE_VOLUME}:/var/lib/mysql" \
 	"${PRS001_MARIADB_IMAGE}" \
