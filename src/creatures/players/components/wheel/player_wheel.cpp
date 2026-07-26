@@ -2913,7 +2913,6 @@ void PlayerWheel::processActiveGems() {
 			g_logger().debug("[{}] Adding supreme modifier {} to player {} from {} gem affinity {} at effective grade {}", __FUNCTION__, modifierName, playerName, magic_enum::enum_name(quality), magic_enum::enum_name(affinity), effectiveGrades[2]);
 			m_modifierContext->addStrategies(supremeModifier, effectiveGrades[2]);
 		}
-
 	}
 
 	g_logger().debug("[{}] active gems: {} ", __FUNCTION__, activeGems.size());

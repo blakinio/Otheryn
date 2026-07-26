@@ -12,13 +12,13 @@
 #include "lib/logging/in_memory_logger.hpp"
 
 namespace {
-std::string readSource(const std::string &relativePath) {
-	std::ifstream input(std::string(OAM051_SOURCE_DIR) + "/" + relativePath);
-	EXPECT_TRUE(input.is_open()) << relativePath;
-	std::ostringstream buffer;
-	buffer << input.rdbuf();
-	return buffer.str();
-}
+	std::string readSource(const std::string &relativePath) {
+		std::ifstream input(std::string(OAM051_SOURCE_DIR) + "/" + relativePath);
+		EXPECT_TRUE(input.is_open()) << relativePath;
+		std::ostringstream buffer;
+		buffer << input.rdbuf();
+		return buffer.str();
+	}
 } // namespace
 
 class Oam051WheelSafetyAdaptTest : public ::testing::Test {
