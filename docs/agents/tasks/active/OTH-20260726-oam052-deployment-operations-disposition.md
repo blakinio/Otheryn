@@ -1,16 +1,16 @@
 ---
 task_id: OTH-20260726-oam052-deployment-operations-disposition
 coordination_id: OAM-052
-status: implementing
+status: validating
 agent: "GPT-5.6 Thinking"
 branch: dudantas/oam-052-deployment-operations-disposition
 base_branch: main
 created: 2026-07-26
 updated: 2026-07-26
-last_verified_commit: "d585c1b8120973d50a3e846fb9e3b063ef3019ff"
+last_verified_commit: "4acf49c32837bc957f9b285854c8703766b29531"
 risk: high
 related_issue: ""
-related_pr: ""
+related_pr: "136"
 depends_on:
   - Canary OAM-052 preflight PR 964 merged as 80d5daebd1804edc6208e2312733b5b484490587
 blocks:
@@ -47,11 +47,11 @@ The existing canonical package is Canary-owned reviewed-content staging and atom
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-26T18:10:00+02:00
-head: d585c1b8120973d50a3e846fb9e3b063ef3019ff
+updated_at: 2026-07-26T18:20:00+02:00
+head: 4acf49c32837bc957f9b285854c8703766b29531
 branch: dudantas/oam-052-deployment-operations-disposition
-pr: null
-status: implementing
+pr: 136
+status: validating
 context_routes:
   - agent-governance
   - cross-repo
@@ -72,6 +72,7 @@ proven:
   - PRS-008 remains the future owner of production Compose and hardening; no production Compose stack, scheduler, host supervisor or real endpoint exists in current target scope.
   - Open PR 133 owns typed startup configuration and explicitly excludes deployment changes.
   - No open Otheryn PR or branch owns OAM-052 or these two documentation paths.
+  - PR 136 contains exactly the target task and disposition report and introduces no runtime or deployment behavior.
 derived:
   - Copying Canary tools/deploy into Otheryn would duplicate laboratory/content-validation infrastructure without a proven target consumer.
   - The production-resilience roadmap is adjacent but not a migration destination for the Canary content-release implementation.
@@ -107,5 +108,5 @@ validation:
 blockers:
   - exact-head Otheryn Required gate
   - clean discussion, path and target-main drift audit
-next_action: Add the two-file target disposition, open the PR, bind its number into this checkpoint, require exact-head Required, then merge and archive before Canary governance.
+next_action: Require exact-current-head repository checks and Required on PR 136, then audit two-file scope, discussions and target-main drift before expected-head squash merge and separate lifecycle archive.
 ```
