@@ -1,6 +1,6 @@
 ---
 task_id: OTH-20260726-party-test-teardown-segfault
-status: investigating
+status: validating
 branch: dudantas/fix-party-test-teardown
 base_branch: main
 created: 2026-07-26
@@ -9,6 +9,7 @@ related_issue: "125"
 related_pr: "126"
 owned_paths:
   - .github/workflows/party-test-sanitizer.yml
+  - tests/unit/players/party_test.cpp
   - docs/agents/tasks/active/OTH-20260726-party-test-teardown-segfault.md
 required_reads:
   - AGENTS.md
@@ -19,6 +20,10 @@ required_reads:
   - src/creatures/players/grouping/party.hpp
   - src/creatures/players/player.cpp
   - src/creatures/players/player.hpp
+  - src/lua/scripts/lua_environment.cpp
+  - src/lua/scripts/luascript.cpp
+  - src/lua/creature/raids.hpp
+  - src/game/game.cpp
   - .github/workflows/ci.yml
   - .github/workflows/reusable-build-linux.yml
   - CMakePresets.json
@@ -26,7 +31,7 @@ search_first:
   - tests/unit
   - src/creatures/players/grouping
   - src/lib/di
-  - src/lua/creature
+  - src/lua
   - .github/workflows
 optional_reads:
   - docs/oam-023-parties-reuse.md
@@ -47,7 +52,7 @@ blakinio/Otheryn@38bb62192d25984d63f96c2637348b4adc82f6cd
 
 ## Reproduction evidence
 
-Ready-head CI for PR 123 failed twice on the same exact source head. The test body printed `OK`, then CTest recorded `SEGFAULT` during or after teardown:
+Ready-head CI for PR 123 failed twice on the same exact source head. The test body printed `OK`, then CTest recorded `SEGFAULT` during process teardown:
 
 ```text
 PartyTest.GetPlayersAndDisbandHandleNullEntries
@@ -62,97 +67,108 @@ Evidence:
 - all other ready-head CI platform jobs passed;
 - PRS-001 contains no Party runtime or Party test changes.
 
-## Current source inventory
+## Root cause
 
-- `party_test.cpp` installs a suite-scoped in-memory logger injector and sets the global DI test container.
-- The test directly constructs `Party` and three unit-test `Player` objects, manually inserts null/member/invitee entries, then invokes full `Party::disband()`.
-- `Party::disband()` enters production global event, callback and game services before clearing Party/player relationships.
-- The test assertions complete successfully; the process crashes only afterward.
-- Other fixtures use the same DI logger pattern, so the injector alone is not yet proven as the cause.
-- The prior OAM-023 proof does not call the full disband path with real Player objects.
-- `CMakePresets.json` provides `linux-debug-asan`, but standard CI does not execute that preset.
+Focused ASAN workflow run `30198967320`, job `89785504123`, reproduced the failure after 25 successful repetitions and identified a heap-use-after-free during process exit.
 
-## Bounded investigation plan
+The causal sequence is:
 
-1. Build only `canary_ut` with the existing `linux-debug-asan` preset.
-2. Run only the failing test repeatedly with ASAN/UBSAN and retain the complete log.
-3. Capture the first actionable stack or lifetime report.
-4. Decide whether the defect is:
-   - a test fixture/global-singleton lifetime problem;
-   - an invalid test setup that bypasses reciprocal Party invariants;
-   - a production Party teardown bug exposed by null entries;
-   - a Player/Party ownership-cycle cleanup defect.
-5. Apply the smallest deterministic fix at the proven boundary.
-6. Preserve null-entry coverage and full post-disband state assertions.
-7. Pass focused repeated execution, sanitizer evidence, full exact-head CI and `Required`.
+1. `Party::disband()` materializes `Events`, `EventsCallbacks` and `Game` inside the suite-scoped runtime test injector.
+2. The test body and all 25 repetitions pass.
+3. The process begins static destruction and destroys `LuaScriptInterfaceRegistry`.
+4. The static `PartyTest::injector_` is destroyed afterward.
+5. Destroying the injector destroys `Game`, then `Raids`, then its `LuaScriptInterface`.
+6. `LuaScriptInterface::closeState()` calls `LuaEnvironment::getInstance()`.
+7. Constructing that Lua environment attempts to register a new interface in the already-destroyed registry, producing the ASAN heap-use-after-free.
+
+This is a fixture-owned cross-translation-unit static destruction-order defect. It is not a Party assertion failure, reciprocal invitation defect, Player ownership cycle or production `Party::disband()` defect.
+
+## Selected fix
+
+- Replace the static value injector with a suite-owned `std::unique_ptr`.
+- Create and install it in `SetUpTestSuite()`.
+- Clear the global DI test-container pointer and explicitly destroy the injector in `TearDownTestSuite()`.
+- This destroys `Game` and its Lua-backed members while `LuaScriptInterfaceRegistry` is still alive.
+- Preserve the original null-entry setup, full `Party::disband()` call and every post-disband assertion.
 
 ## Explicit non-goals
 
 - no PRS-001 file changes;
 - no skipped or disabled Party test;
 - no weakening of repository `Required`;
+- no production Party, Player, Lua, Game or DI runtime mutation;
 - no broad Party feature refactor;
-- no protocol, client, persistence, schema or deployment changes;
-- no speculative production mutation before a diagnostic identifies the fault boundary.
+- no protocol, client, persistence, schema or deployment changes.
 
 ## Context checkpoint
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-26T12:50:00+02:00
-head: 021aaa59bcd07ca6b77a5b368c229eb09eeb09e1
+updated_at: 2026-07-26T13:22:00+02:00
+head: cac32dcc5819076562ee5099806a0a9a92515e42
 branch: dudantas/fix-party-test-teardown
 pr: 126
-status: investigating
+status: validating
 context_routes:
   - testing
   - player-lifecycle
   - party
+  - lua-lifecycle
   - ci
   - agent-governance
 owned_paths:
   - .github/workflows/party-test-sanitizer.yml
+  - tests/unit/players/party_test.cpp
   - docs/agents/tasks/active/OTH-20260726-party-test-teardown-segfault.md
 proven:
   - Task-start main is 38bb62192d25984d63f96c2637348b4adc82f6cd.
   - Issue 125 and draft PR 126 own only the repeated Party unit-test teardown SIGSEGV.
-  - Two Linux debug attempts reproduced the same post-success SEGFAULT on PartyTest.GetPlayersAndDisbandHandleNullEntries.
-  - The remaining 482 Linux debug tests and all other ready-head CI platform jobs passed.
-  - PRS-001 does not change Party runtime or Party test files.
-  - The failing test invokes full Party::disband after manually constructing Party membership and invitation lists.
-  - The test body assertions pass before the process crashes.
-  - Other unit fixtures use the same suite-scoped DI logger pattern without this known failure.
-  - Repository presets include linux-debug-asan with tests enabled.
+  - Two standard Linux debug attempts reproduced the same post-success process-exit failure.
+  - Focused ASAN run 30198967320 reproduced a heap-use-after-free after 25 successful test repetitions.
+  - LuaScriptInterfaceRegistry was destroyed before the static PartyTest injector.
+  - Static injector destruction then destroyed Game and Raids; LuaScriptInterface::closeState constructed LuaEnvironment and touched the freed registry.
+  - The defect is in fixture destruction ordering, not production Party behavior.
+  - The selected change destroys the test injector explicitly during TearDownTestSuite while the Lua registry is alive.
+  - Original null-entry coverage, full disband execution and post-disband assertions are unchanged.
 derived:
-  - The failure is a lifetime or teardown defect rather than an assertion failure.
-  - A focused sanitizer/repetition diagnostic is required before selecting a production or fixture fix.
+  - Early deterministic fixture cleanup removes reliance on cross-translation-unit static destruction order.
+  - No production Party, Player, Game, Lua or DI runtime change is required.
 unknown:
-  - Exact crashing frame and object lifetime.
-  - Whether reciprocal invitation state is required for valid disband setup.
-  - Whether the failure is in production Party teardown, test-only global services, or Player destruction.
+  - Exact-head result of the fixed focused ASAN repetition.
+  - Exact-head repository CI and Required results after the fixture fix.
 conflicts: []
 first_failure:
   marker: party-test-post-success-segfault
-  command: CI run 30197504976 jobs 89781674816 and 89782999565
-  result: OPEN
-  evidence: The named test prints OK and then both attempts terminate with SIGSEGV during or after teardown.
+  command: Party Test Sanitizer run 30198967320 job 89785504123
+  result: DIAGNOSED
+  evidence: ASAN reports heap-use-after-free in LuaScriptInterface::RegistryEntry during exit, caused by static injector destruction after LuaScriptInterfaceRegistry destruction.
 rejected_hypotheses:
   - Skip or disable the failing test.
   - Weaken Required or ignore Linux debug.
   - Modify PRS-001 to absorb the Party fix.
-  - Assume the suite-scoped injector is the cause without diagnostic evidence.
+  - Change production Party::disband behavior.
+  - Treat reciprocal invitation state or Player ownership as the root cause.
+  - Leak the test injector to suppress teardown.
 changed_paths:
+  - .github/workflows/party-test-sanitizer.yml
+  - tests/unit/players/party_test.cpp
   - docs/agents/tasks/active/OTH-20260726-party-test-teardown-segfault.md
 validation:
-  - command: repeated ready-head Linux debug evidence review
-    result: PASS
-    evidence: Two independent attempts reproduced the same single-test post-success SEGFAULT.
-  - command: source, ownership and sanitizer-preset inventory
-    result: PASS
-    evidence: Failing test, Party disband path, Player ownership, CI execution boundary and existing ASAN preset were inspected.
-  - command: focused sanitizer diagnostic
+  - command: standard Linux debug CI run 30197504976
+    result: FAIL_EXPECTED
+    evidence: Two attempts reproduce the same post-success SEGFAULT and isolate the original blocker.
+  - command: Party Test Sanitizer run 30198967320 job 89785504123
+    result: FAIL_EXPECTED
+    evidence: Baseline ASAN run identifies the exact exit-order heap-use-after-free after 25 successful repetitions.
+  - command: fixed focused ASAN repetition
     result: NOT_RUN
-    evidence: Run after adding the dedicated workflow.
-blockers: []
-next_action: Add and run the focused linux-debug-asan workflow for PartyTest.GetPlayersAndDisbandHandleNullEntries, then use its first actionable stack to select the smallest valid fix.
+    evidence: Run on the refreshed exact head after this checkpoint update.
+  - command: exact-head repository CI and Required
+    result: NOT_RUN
+    evidence: Run after the fixed focused diagnostic is green.
+blockers:
+  - fixed focused ASAN repetition on the refreshed exact head
+  - exact-head repository CI and Required
+  - final changed-path, discussion and main-drift audit before merge
+next_action: Confirm the refreshed Party Test Sanitizer run passes all 25 repetitions without ASAN or UBSAN findings, then mark PR 126 ready and run exact-head repository gates.
 ```
