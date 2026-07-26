@@ -1,12 +1,12 @@
 # OTH-20260726 — MGE-002 typed profile snapshot
 
-Status: **implementation ready for exact-head validation**
+Status: **validating exact final head**
 
 Issue: `#132`
 Branch: `dudantas/mge-002-typed-profile-snapshot`
 Pull request: `#133`
 Target repository: `blakinio/Otheryn`
-Base main before final implementation: `db10096f0ebb484f05883dbde4dd895744fbe8c6`
+Synchronized main: `d585c1b8120973d50a3e846fb9e3b063ef3019ff`
 
 ## Objective
 
@@ -40,13 +40,11 @@ Add a bounded typed immutable startup `GameProfile` snapshot with fail-closed va
 
 ```yaml
 checkpoint_version: 1
-updated_at: "2026-07-26T18:45:00+02:00"
-head: "db10096f0ebb484f05883dbde4dd895744fbe8c6"
+updated_at: "2026-07-26T19:05:00+02:00"
+head: "b581add19bbb584509b8fad0b52b2f3ec9812d8f"
 branch: "dudantas/mge-002-typed-profile-snapshot"
 pr: 133
-issue: 132
-base_main: "db10096f0ebb484f05883dbde4dd895744fbe8c6"
-status: "implementation_ready_for_validation"
+status: "validating"
 context_routes:
   - "docs/architecture/modular-game-engine-and-profiles.md"
   - "docs/architecture/current-engine-ownership-and-dependencies.md"
@@ -66,27 +64,49 @@ owned_paths:
   - "docs/architecture/typed-game-profile-snapshot.md"
   - "docs/agents/tasks/active/OTH-20260726-mge002-typed-profile-snapshot.md"
 proven:
-  - "MGE-001 inventory and modular-engine architecture contract are merged on main."
-  - "Main drift after task start does not overlap MGE-002 implementation paths."
-  - "The implementation publishes a shared_ptr<const GameProfile> only after validation."
+  - "MGE-001 inventory and the modular-engine architecture contract are merged on main."
+  - "The branch is synchronized through main d585c1b8120973d50a3e846fb9e3b063ef3019ff."
+  - "The implementation publishes shared_ptr<const GameProfile> only after successful validation."
+  - "ConfigManager reload preserves the startup-only snapshot and selected compatibility values."
+  - "The PR diff contains exactly the thirteen declared MGE-002 paths and no transport workflow or payload."
 derived:
   - "Snapshot-backed compatibility getters keep selected legacy consumers on the startup contract without a broad caller migration."
 unknown:
-  - "Module dependencies and lifecycle remain future MGE packages."
+  - "Module dependency graphs and lifecycle remain future MGE packages."
 conflicts: []
-first_failure: null
+first_failure:
+  marker: "resolved-checkpoint-contract"
+  evidence: "The staged task used an obsolete checkpoint shape; this commit converts it to the current portable checkpoint contract before final validation."
 rejected_hypotheses:
   - "A typed profile snapshot is equivalent to a ModuleRegistry."
   - "Selecting an existing legacy protocol as the primary profile is authorized by MGE-002."
+changed_paths:
+  - "config.lua.dist"
+  - "docs/agents/tasks/active/OTH-20260726-mge002-typed-profile-snapshot.md"
+  - "docs/architecture/typed-game-profile-snapshot.md"
+  - "src/canary_server.cpp"
+  - "src/config/configmanager.cpp"
+  - "src/config/configmanager.hpp"
+  - "src/config/game_profile.hpp"
+  - "src/server/network/protocol/protocol_port_utils.hpp"
+  - "src/server/network/protocol/protocol_profile.cpp"
+  - "src/server/network/protocol/protocol_profile.hpp"
+  - "tests/unit/config/CMakeLists.txt"
+  - "tests/unit/config/mge_002_game_profile_test.cpp"
+  - "vcproj/canary.vcxproj"
 validation:
-  local_structure: "pass"
-  focused_tests: "pending_ci"
-  required_exact_head: "pending"
-  changed_paths: "pending"
-  secret_scan: "pending"
-  discussions: "pending"
-  reviews: "pending"
-  main_drift: "pending"
+  - command: "revision-bounded payload materialization"
+    result: "PASS"
+    evidence: "Run 30211701188 verified all payload hashes, synchronized current main, checked exact paths and committed the implementation."
+  - command: "exact changed-path audit"
+    result: "PASS"
+    evidence: "PR 133 lists exactly the thirteen declared implementation, test and documentation paths."
+  - command: "focused and repository CI"
+    result: "NOT_RUN"
+    evidence: "A trusted checkpoint commit is triggering final exact-head workflows."
+  - command: "Required exact head"
+    result: "NOT_RUN"
+    evidence: "Pending the final trusted head produced by this checkpoint update."
 blockers: []
-next_action: "Run focused and Required validation on the exact final head, then squash merge and archive this lifecycle record."
+next_action: "Require exact-head CI and Required success, audit discussions, reviews, secrets, paths and main drift, then squash merge PR 133 and archive the task."
 ```
