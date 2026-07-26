@@ -9,6 +9,10 @@
 
 #pragma once
 
+#ifndef USE_PRECOMPILED_HEADERS
+	#include <array>
+#endif
+
 #include "creatures/players/components/wheel/wheel_spells.hpp"
 
 class PlayerWheel;
@@ -17,6 +21,7 @@ enum CombatType_t : uint8_t;
 enum Vocation_t : uint16_t;
 
 enum class WheelGemAffinity_t : uint8_t;
+enum class WheelGemQuality_t : uint8_t;
 enum class WheelGemBasicModifier_t : uint8_t;
 enum class WheelGemSupremeModifier_t : uint8_t;
 enum class WheelStat_t : uint8_t;
@@ -113,4 +118,6 @@ public:
 	[[maybe_unused]] static int32_t getHealthValue(Vocation_t vocation, WheelGemBasicModifier_t modifier);
 	[[maybe_unused]] static int32_t getManaValue(Vocation_t vocation, WheelGemBasicModifier_t modifier);
 	[[maybe_unused]] static int32_t getCapacityValue(Vocation_t vocation, WheelGemBasicModifier_t modifier);
+
+	static std::array<uint8_t, 3> getEffectiveGrades(WheelGemQuality_t quality, uint8_t basicGrade1, uint8_t basicGrade2, uint8_t supremeGrade);
 };
