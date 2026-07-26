@@ -77,7 +77,7 @@ docker exec \
 			--target-dir="${backup_root}/full" \
 			--binlog-info=ON
 
-		test -s "${backup_root}/full/xtrabackup_checkpoints"
+		test -s "${backup_root}/full/mariadb_backup_checkpoints"
 		test -s "${backup_root}/full/mariadb_backup_binlog_info"
 
 		backup_completed_at="$(mariadb \
