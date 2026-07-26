@@ -65,10 +65,12 @@ TEST(Prs002DirtyPlayerCheckpointContractTest, AcknowledgesExactGenerationAndCoal
 
 TEST(Prs002DirtyPlayerCheckpointContractTest, MarksOnlyTrackedPlayerStorageMutations) {
 	const auto managerHeader = readSource("src/game/scheduling/save_manager.hpp");
-	const auto marker = functionBody(managerHeader, "void markPlayerDirty", "private:");
+	const auto marker = functionBody(managerHeader, "static void markPlayerDirty", "private:");
 	expectContains(std::string(marker), "persistenceStateFor(player)->markDirty();");
+	EXPECT_EQ(marker.find("getInstance"), std::string_view::npos);
 	EXPECT_EQ(marker.find("savePlayer("), std::string_view::npos);
 	EXPECT_EQ(marker.find("schedulePlayer("), std::string_view::npos);
+	expectContains(managerHeader, "inline static std::mutex m_playerPersistenceMutex;");
 
 	const auto storage = readSource("src/creatures/players/components/player_storage.cpp");
 	const auto ingest = functionBody(storage, "void PlayerStorage::ingest", "void PlayerStorage::add");
@@ -77,11 +79,13 @@ TEST(Prs002DirtyPlayerCheckpointContractTest, MarksOnlyTrackedPlayerStorageMutat
 
 	const auto add = functionBody(storage, "void PlayerStorage::add", "int32_t PlayerStorage::get");
 	expectContains(std::string(add), "if (shouldTrackModification)");
-	expectContains(std::string(add), "g_saveManager().markPlayerDirty(m_player.getPlayer());");
+	expectContains(std::string(add), "SaveManager::markPlayerDirty(m_player.getPlayer());");
+	EXPECT_EQ(add.find("g_saveManager"), std::string_view::npos);
 	EXPECT_EQ(add.find("savePlayer("), std::string_view::npos);
 
 	const auto remove = functionBody(storage, "bool PlayerStorage::remove", "void PlayerStorage::prepareForPersist");
-	expectContains(std::string(remove), "g_saveManager().markPlayerDirty(m_player.getPlayer());");
+	expectContains(std::string(remove), "SaveManager::markPlayerDirty(m_player.getPlayer());");
+	EXPECT_EQ(remove.find("g_saveManager"), std::string_view::npos);
 	EXPECT_EQ(remove.find("savePlayer("), std::string_view::npos);
 }
 
