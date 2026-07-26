@@ -1,0 +1,88 @@
+name: PRS-001 Backup PITR
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/prs001-backup-pitr.yml"
+      - "deploy/production/README.md"
+      - "deploy/production/mariadb/99-resilience.cnf.example"
+      - "deploy/production/backup/**"
+      - "tests/integration/production-resilience/prs001-drill.sh"
+      - "docs/agents/tasks/active/OTH-20260726-prs001-backup-pitr-foundation.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prs001-backup-pitr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backup-pitr-drill:
+    name: Backup and PITR drill
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout pull request head
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          show-progress: false
+
+      - name: Validate script syntax
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash -n deploy/production/backup/take-full-backup.sh
+          bash -n deploy/production/backup/publish-recovery-set.sh
+          bash -n deploy/production/backup/verify-recovery-set.sh
+          bash -n deploy/production/backup/restore-pitr.sh
+          bash -n tests/integration/production-resilience/prs001-drill.sh
+
+      - name: Validate task checkpoint
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python tools/agents/checkpoint.py \
+            docs/agents/tasks/active/OTH-20260726-prs001-backup-pitr-foundation.md \
+            --require-checkpoint
+
+      - name: Confirm disposable runner dependencies
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          docker version --format '{{.Server.Version}}'
+          gpg --version | head -n 1
+          python3 --version
+          sha256sum --version | head -n 1
+          tar --version | head -n 1
+
+      - name: Run disposable recovery drill
+        shell: bash
+        env:
+          PRS001_KEEP_WORKDIR: "0"
+        run: |
+          set -uo pipefail
+          drill_log="${RUNNER_TEMP}/prs001-drill.log"
+          set +e
+          bash tests/integration/production-resilience/prs001-drill.sh >"${drill_log}" 2>&1
+          drill_status=$?
+          set -e
+          tail -n 30 "${drill_log}"
+          if [[ ${drill_status} -ne 0 ]]; then
+            first_error="$(grep -m 1 -E 'ERROR:|error:|Error:' "${drill_log}" || true)"
+            echo "::error title=PRS-001 drill failed::${first_error:-See the retained drill log artifact}"
+            exit "${drill_status}"
+          fi
+
+      - name: Retain disposable drill log
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: prs001-drill-log
+          path: ${{ runner.temp }}/prs001-drill.log
+          if-no-files-found: error
+          retention-days: 1
