@@ -6,15 +6,12 @@ base_branch: main
 created: 2026-07-26
 updated: 2026-07-26
 related_issue: "122"
-related_pr: ""
+related_pr: "123"
 owned_paths:
   - docs/agents/tasks/active/OTH-20260726-prs001-backup-pitr-foundation.md
 required_reads:
   - AGENTS.md
   - docs/agents/CONTEXT_HANDOFF.md
-  - docs/agents/CONTEXT_ROUTING.md
-  - docs/agents/BUILD_TEST_MATRIX.md
-  - docs/agents/EXECUTION_MODE_ROUTING.md
   - docs/agents/PRODUCTION_RESILIENCE_IMPLEMENTATION.md
   - docs/architecture/production-resilience-and-recovery.md
   - docs/operations/backup-and-pitr-policy.md
@@ -54,6 +51,7 @@ blakinio/Otheryn@4eedf835621e2a64d093dd5096b4b28e632e50f3
 - The local quickstart uses `mariadb:11.4`, named volumes and restart/health behavior, but it is not a production backup or PITR deployment.
 - Repository search found no existing `mariadb-backup` implementation.
 - PR 121 owns only the modular-engine architecture task and document; it does not overlap this initial task path.
+- `docs/agents/CONTEXT_ROUTING.md`, `docs/agents/BUILD_TEST_MATRIX.md` and `docs/agents/EXECUTION_MODE_ROUTING.md` do not exist in this repository and were removed from required reads.
 
 ## Accepted target contract
 
@@ -117,10 +115,10 @@ Every injected failure must return non-zero, identify the first failure and reta
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-26T11:17:00+02:00
-head: 4eedf835621e2a64d093dd5096b4b28e632e50f3
+updated_at: 2026-07-26T11:23:00+02:00
+head: 3d0a78458774e7b0b546f76a412a9b7e55a55340
 branch: dudantas/prs-001-backup-pitr-foundation
-pr: none
+pr: 123
 status: investigating
 context_routes:
   - operations
@@ -135,10 +133,13 @@ proven:
   - Task-start main is 4eedf835621e2a64d093dd5096b4b28e632e50f3.
   - Issue 122 owns PRS-001 and excludes PRS-002 through PRS-008.
   - The production-resilience architecture task is merged and formally archived.
+  - Draft PR 123 initially changes only the active PRS-001 task record.
   - deploy/production is non-runnable and its MariaDB option file is design-only.
   - The local quickstart uses mariadb:11.4 and must remain unchanged.
   - Repository search found no existing mariadb-backup implementation.
   - Open PR 121 changes only its own task and modular-engine architecture document.
+  - Three initially referenced governance files do not exist and were removed from required reads.
+  - Exact-head Required run 30196242411 passed on 3d0a78458774e7b0b546f76a412a9b7e55a55340.
 derived:
   - PRS-001 requires a separate disposable integration harness rather than extending the local quickstart.
   - Exact implementation paths must be selected only after CI and tooling inventory.
@@ -172,9 +173,15 @@ validation:
   - command: existing backup-tooling search
     result: PASS
     evidence: No repository mariadb-backup implementation was found; the quickstart remains a separate non-production boundary.
-  - command: checkpoint contract validation
+  - command: required-read path existence audit
+    result: PASS
+    evidence: Three absent governance filenames were removed; all remaining required reads exist.
+  - command: exact-head Required 30196242411
+    result: PASS
+    evidence: Required completed successfully on initial task head 3d0a78458774e7b0b546f76a412a9b7e55a55340.
+  - command: python tools/agents/checkpoint.py docs/agents/tasks/active/OTH-20260726-prs001-backup-pitr-foundation.md --require-checkpoint
     result: NOT_RUN
-    evidence: Run after the task record is committed on its branch.
+    evidence: The connector-only environment has no repository checkout; confirm through exact-head repository CI or a later execution environment before merge.
 blockers: []
 next_action: Inventory current CI, production-boundary and test infrastructure, select the exact disposable PRS-001 topology and pinned MariaDB version, then update owned paths before changing implementation files.
 ```
