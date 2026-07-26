@@ -89,7 +89,14 @@ if [[ "${coordinate_file}" != "${backup_binlog_file}" || "${coordinate_position}
 	exit 72
 fi
 
-mapfile -t archived_binlogs < <(find "${verified_dir}/binlogs" -maxdepth 1 -type f -name 'mariadb-bin.[0-9]*' -printf '%f\n' | sort)
+mapfile -t archived_binlogs < <(
+	find "${verified_dir}/binlogs" \
+		-maxdepth 1 \
+		-type f \
+		-regextype posix-extended \
+		-regex '.*/mariadb-bin\.[0-9]+' \
+		-printf '%f\n' | sort
+)
 if [[ ${#archived_binlogs[@]} -eq 0 ]]; then
 	echo "ERROR: no archived binlogs are available" >&2
 	exit 72
@@ -106,7 +113,7 @@ numbers = []
 for name in files:
     match = pattern.fullmatch(name)
     if not match:
-        raise SystemExit("invalid archived binlog filename")
+        raise SystemExit(f"invalid archived binlog filename: {name}")
     numbers.append(int(match.group(1)))
 if coordinate not in files:
     raise SystemExit("backup coordinate binlog is missing from the archive")
