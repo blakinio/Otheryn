@@ -19,6 +19,13 @@ jobs:
         with:
           ref: dudantas/mge-002-typed-profile-snapshot
           fetch-depth: 0
+      - name: Synchronize current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git merge --no-edit origin/main
       - name: Verify and apply revision-bounded payload
         shell: bash
         run: |
@@ -91,7 +98,5 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "feat(config): add typed startup game profile snapshot"
           git push origin HEAD:dudantas/mge-002-typed-profile-snapshot
