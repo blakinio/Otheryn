@@ -1,15 +1,16 @@
 # OTH-20260726 — MGE-002 typed profile snapshot
 
-Status: **implementation validated; final documentation head pending Required**
+Status: **synchronized current main; final exact-head validation pending**
 
 Issue: `#132`
 Branch: `dudantas/mge-002-typed-profile-snapshot`
 Pull request: `#133`
 Target repository: `blakinio/Otheryn`
-Synchronized main: `d585c1b8120973d50a3e846fb9e3b063ef3019ff`
-Validated code head: `953a0af93e7df64309dd524ada31ebdedefdac06`
-CI run: `30213109871` — success
-Required run: `30213109809` — success
+Synchronized main: `7ba0ac1ae6450378ad2fb4f85ccc9026309f902e`
+Validated code head before synchronization: `953a0af93e7df64309dd524ada31ebdedefdac06`
+Synchronization merge head: `d7d20458d002f003cc7c9c8a86c846fab9643875`
+Previous CI run: `30213109871` — success
+Previous Required run: `30213109809` — success
 
 ## Objective
 
@@ -45,11 +46,11 @@ Add a bounded typed immutable startup `GameProfile` snapshot with fail-closed va
 
 ```yaml
 checkpoint_version: 1
-updated_at: "2026-07-26T19:56:00+02:00"
-head: "953a0af93e7df64309dd524ada31ebdedefdac06"
+updated_at: "2026-07-26T20:52:00+02:00"
+head: "d7d20458d002f003cc7c9c8a86c846fab9643875"
 branch: "dudantas/mge-002-typed-profile-snapshot"
 pr: 133
-status: "implementation_validated_final_docs_required_pending"
+status: "synchronized_final_exact_head_validation_pending"
 context_routes:
   - "docs/architecture/modular-game-engine-and-profiles.md"
   - "docs/architecture/current-engine-ownership-and-dependencies.md"
@@ -72,12 +73,14 @@ owned_paths:
   - "docs/agents/tasks/active/OTH-20260726-mge002-typed-profile-snapshot.md"
 proven:
   - "MGE-001 inventory and the modular-engine architecture contract are merged on main."
-  - "The branch is synchronized through main d585c1b8120973d50a3e846fb9e3b063ef3019ff."
+  - "The branch is synchronized through main 7ba0ac1ae6450378ad2fb4f85ccc9026309f902e."
+  - "The eight commits added after the previous baseline changed persistence scheduling and unrelated lifecycle/evidence paths only; they did not overlap MGE-002 ownership."
+  - "The one-shot synchronization workflow removed itself before the synchronization merge head d7d20458d002f003cc7c9c8a86c846fab9643875."
   - "The implementation publishes shared_ptr<const GameProfile> only after successful validation."
   - "ConfigManager reload preserves the startup-only snapshot and selected compatibility values."
   - "Explicit test fixture overrides do not mutate or republish the immutable startup GameProfile."
-  - "CI run 30213109871 succeeded on code head 953a0af93e7df64309dd524ada31ebdedefdac06."
-  - "Required run 30213109809 succeeded on the same code head."
+  - "CI run 30213109871 succeeded on pre-sync code head 953a0af93e7df64309dd524ada31ebdedefdac06."
+  - "Required run 30213109809 succeeded on the same pre-sync code head."
   - "PR 133 contains exactly fifteen declared implementation, fixture, test and documentation paths."
 derived:
   - "Snapshot-backed compatibility getters keep selected legacy consumers on the startup contract without a broad caller migration."
@@ -109,14 +112,14 @@ changed_paths:
 validation:
   - command: "revision-bounded payload materialization"
     result: "PASS"
-    evidence: "Run 30211701188 verified payload hashes, synchronized current main, checked exact paths and committed the implementation."
-  - command: "full repository CI"
+    evidence: "Run 30211701188 verified payload hashes, synchronized the earlier main, checked exact paths and committed the implementation."
+  - command: "pre-sync full repository CI"
     result: "PASS"
     evidence: "Run 30213109871 passed fast checks, Lua tests, Linux debug/release, macOS, Windows, Docker, runtime smoke tests and the full Linux debug test suite."
-  - command: "Required exact code head"
+  - command: "pre-sync Required exact code head"
     result: "PASS"
     evidence: "Run 30213109809 succeeded on 953a0af93e7df64309dd524ada31ebdedefdac06."
-  - command: "exact changed-path audit"
+  - command: "exact changed-path audit after current-main synchronization"
     result: "PASS"
     evidence: "PR 133 lists exactly fifteen declared paths and no temporary payload, workflow or script."
   - command: "discussion and review audit"
@@ -125,12 +128,12 @@ validation:
   - command: "secret-pattern scan"
     result: "PASS"
     evidence: "Final unified diff contains no credential, token, private-key or secret assignment material."
-  - command: "main drift audit"
+  - command: "current-main synchronization audit"
     result: "PASS"
-    evidence: "Main remains d585c1b8120973d50a3e846fb9e3b063ef3019ff, matching the PR base."
-  - command: "final documentation head Required"
-    result: "NOT_RUN"
-    evidence: "This documentation-only checkpoint commit triggers the last exact-head Required run."
+    evidence: "Branch contains main 7ba0ac1ae6450378ad2fb4f85ccc9026309f902e and remains exactly fifteen paths ahead."
+  - command: "trusted checkpoint exact-head CI and Required"
+    result: "PENDING"
+    evidence: "This trusted checkpoint commit follows the bot-authored synchronization merge and triggers the final exact-head workflows."
 blockers: []
-next_action: "Require success on the final documentation head, re-audit live PR state, then squash merge PR 133 with expected_head_sha and archive the lifecycle task."
+next_action: "Require exact-head CI, autofix and Required success on this trusted checkpoint commit, re-audit live PR state and main drift, then squash merge PR 133 with expected_head_sha and archive the lifecycle task."
 ```
