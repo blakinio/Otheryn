@@ -63,6 +63,28 @@ TEST(Prs002DirtyPlayerCheckpointContractTest, AcknowledgesExactGenerationAndCoal
 	EXPECT_EQ(scheduleDirty.find("markDirty"), std::string_view::npos);
 }
 
+TEST(Prs002DirtyPlayerCheckpointContractTest, MarksOnlyTrackedPlayerStorageMutations) {
+	const auto managerHeader = readSource("src/game/scheduling/save_manager.hpp");
+	const auto marker = functionBody(managerHeader, "void markPlayerDirty", "private:");
+	expectContains(std::string(marker), "persistenceStateFor(player)->markDirty();");
+	EXPECT_EQ(marker.find("savePlayer("), std::string_view::npos);
+	EXPECT_EQ(marker.find("schedulePlayer("), std::string_view::npos);
+
+	const auto storage = readSource("src/creatures/players/components/player_storage.cpp");
+	const auto ingest = functionBody(storage, "void PlayerStorage::ingest", "void PlayerStorage::add");
+	expectContains(std::string(ingest), "add(row.key, row.value, true, false);");
+	EXPECT_EQ(ingest.find("markPlayerDirty"), std::string_view::npos);
+
+	const auto add = functionBody(storage, "void PlayerStorage::add", "int32_t PlayerStorage::get");
+	expectContains(std::string(add), "if (shouldTrackModification)");
+	expectContains(std::string(add), "g_saveManager().markPlayerDirty(m_player.getPlayer());");
+	EXPECT_EQ(add.find("savePlayer("), std::string_view::npos);
+
+	const auto remove = functionBody(storage, "bool PlayerStorage::remove", "void PlayerStorage::prepareForPersist");
+	expectContains(std::string(remove), "g_saveManager().markPlayerDirty(m_player.getPlayer());");
+	EXPECT_EQ(remove.find("savePlayer("), std::string_view::npos);
+}
+
 TEST(Prs002DirtyPlayerCheckpointContractTest, PreservesSaveOutcomeAndDomainBoundaries) {
 	const auto manager = readSource("src/game/scheduling/save_manager.cpp");
 	expectContains(manager, "Player::PlayerLock lock(player);");
@@ -85,12 +107,12 @@ TEST(Prs002DirtyPlayerCheckpointContractTest, DoesNotMistakeSaveSideLockForMutat
 	EXPECT_EQ(addSkillAdvance.find("mutex"), std::string_view::npos);
 }
 
-TEST(Prs002DirtyPlayerCheckpointContractTest, RecordsGenerationSafeTargetBeforeBroadMutationInstrumentation) {
+TEST(Prs002DirtyPlayerCheckpointContractTest, RecordsGenerationSafeTargetAndBoundedMutationCoverage) {
 	const auto contract = readSource("docs/architecture/prs-002-dirty-player-checkpoint-contract.md");
 	expectContains(contract, "Every persistence-relevant mutation advances a monotonic dirty generation.");
 	expectContains(contract, "The save result acknowledges only the captured generation.");
 	expectContains(contract, "A mutation during save remains dirty");
 	expectContains(contract, "Queue coalescing is based on generation, not wall-clock timestamps.");
 	expectContains(contract, "Session/revision fencing remains PRS-004");
-	expectContains(contract, "Slice B — SaveManager integration");
+	expectContains(contract, "Slice C — bounded mutation coverage");
 }
