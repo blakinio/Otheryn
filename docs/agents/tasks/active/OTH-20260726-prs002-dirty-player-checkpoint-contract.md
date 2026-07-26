@@ -1,15 +1,15 @@
 ---
 task_id: OTH-20260726-prs002-dirty-player-checkpoint-contract
-status: implementing
+status: validating
 branch: dudantas/prs-002-dirty-player-checkpoint-contract
 base_branch: main
 created: 2026-07-26
 updated: 2026-07-26
 related_issue: "137"
-related_pr: "none"
+related_pr: "139"
 owned_paths:
   - docs/architecture/prs-002-dirty-player-checkpoint-contract.md
-  - tests/unit/game/prs_002_dirty_player_checkpoint_contract_test.cpp
+  - tests/unit/game/prs_002_dirty-player-checkpoint-contract_test.cpp
   - tests/unit/game/CMakeLists.txt
   - docs/agents/tasks/active/OTH-20260726-prs002-dirty-player-checkpoint-contract.md
 required_reads:
@@ -44,11 +44,11 @@ This milestone owns only the current-behavior inventory, accepted generation/ack
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-26T20:18:00+02:00
-head: d585c1b8120973d50a3e846fb9e3b063ef3019ff
+updated_at: 2026-07-26T20:24:00+02:00
+head: a7e904a00c0d2b40ed8f9c717a26573edd9a7c6e
 branch: dudantas/prs-002-dirty-player-checkpoint-contract
-pr: none
-status: implementing
+pr: 139
+status: validating
 context_routes:
   - production-resilience
   - player-persistence
@@ -58,7 +58,7 @@ context_routes:
   - agent-governance
 owned_paths:
   - docs/architecture/prs-002-dirty-player-checkpoint-contract.md
-  - tests/unit/game/prs_002_dirty_player_checkpoint_contract_test.cpp
+  - tests/unit/game/prs_002_dirty-player-checkpoint-contract_test.cpp
   - tests/unit/game/CMakeLists.txt
   - docs/agents/tasks/active/OTH-20260726-prs002-dirty-player-checkpoint-contract.md
 proven:
@@ -90,7 +90,7 @@ rejected_hypotheses:
   - Add a production timer or claim a 60-second RPO before controlled crash evidence.
 changed_paths:
   - docs/architecture/prs-002-dirty-player-checkpoint-contract.md
-  - tests/unit/game/prs_002_dirty_player_checkpoint_contract_test.cpp
+  - tests/unit/game/prs_002_dirty-player-checkpoint-contract_test.cpp
   - tests/unit/game/CMakeLists.txt
   - docs/agents/tasks/active/OTH-20260726-prs002-dirty-player-checkpoint-contract.md
 validation:
@@ -98,11 +98,11 @@ validation:
     result: PASS
     evidence: Exact source establishes async scheduling, object pinning, timestamp coalescing, save result propagation and the SQL/post-commit KV boundary.
   - command: python tools/agents/checkpoint.py docs/agents/tasks/active/OTH-20260726-prs002-dirty-player-checkpoint-contract.md --require-checkpoint
-    result: NOT_RUN
-    evidence: Run after the task file is committed on the working branch.
+    result: PASS
+    evidence: Local validator accepted the compact checkpoint before publication on the synchronized branch.
   - command: focused PRS-002 unit source-contract test
     result: NOT_RUN
     evidence: Run through exact-head repository CI after the draft PR is opened.
 blockers: []
-next_action: Commit the discovery contract and source-characterization test, open a draft PR, run exact-head checkpoint and CI validation, then implement only Slice A PlayerPersistenceState after the discovery milestone is green.
+next_action: Require exact-head CI and Required on PR 139, fix only discovery-contract failures, then mark ready and merge after a clean four-path discussion and main-drift audit.
 ```
