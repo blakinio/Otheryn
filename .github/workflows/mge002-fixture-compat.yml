@@ -1,7 +1,9 @@
 name: MGE-002 Fixture Compatibility
 
 on:
-  pull_request:
+  push:
+    branches:
+      - 'dudantas/mge-002-typed-profile-snapshot'
     paths:
       - '.github/workflows/mge002-fixture-compat.yml'
   workflow_dispatch:
@@ -11,7 +13,7 @@ permissions:
 
 jobs:
   apply:
-    if: github.head_ref == 'dudantas/mge-002-typed-profile-snapshot' || github.ref == 'refs/heads/dudantas/mge-002-typed-profile-snapshot'
+    if: github.ref == 'refs/heads/dudantas/mge-002-typed-profile-snapshot'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
