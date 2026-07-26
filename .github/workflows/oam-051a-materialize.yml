@@ -103,6 +103,33 @@ jobs:
           echo "status=$status" >> "$GITHUB_OUTPUT"
           exit 0
 
+      - name: Commit bounded adaptation
+        id: commit
+        if: steps.materialize.outputs.status == '0' && steps.scope.outputs.status == '0'
+        shell: bash
+        run: |
+          set +e
+          {
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add \
+              src/creatures/players/components/wheel/player_wheel.cpp \
+              src/creatures/players/components/wheel/player_wheel.hpp \
+              src/creatures/players/components/wheel/wheel_gems.cpp \
+              src/creatures/players/components/wheel/wheel_gems.hpp \
+              src/io/functions/iologindata_load_player.cpp \
+              src/server/network/protocol/protocolgame.cpp \
+              tests/unit/players/CMakeLists.txt \
+              tests/unit/players/oam_051_wheel_safety_adapt_test.cpp
+            git status --short
+            git diff --cached --check
+            git commit -m "fix(wheel): adapt OAM-051A safety invariants"
+            git push origin HEAD:dudantas/oam-051a-wheel-safety-adapt
+          } > /tmp/oam-051a-commit.log 2>&1
+          status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
       - name: Preserve materializer diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -118,22 +145,9 @@ jobs:
           cat /tmp/oam-051a-scope.log
           exit 1
 
-      - name: Commit bounded adaptation
-        if: steps.materialize.outputs.status == '0' && steps.scope.outputs.status == '0'
+      - name: Fail on commit error
+        if: steps.commit.outputs.status != '0'
         shell: bash
         run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            src/creatures/players/components/wheel/player_wheel.cpp \
-            src/creatures/players/components/wheel/player_wheel.hpp \
-            src/creatures/players/components/wheel/wheel_gems.cpp \
-            src/creatures/players/components/wheel/wheel_gems.hpp \
-            src/io/functions/iologindata_load_player.cpp \
-            src/server/network/protocol/protocolgame.cpp \
-            tests/unit/players/CMakeLists.txt \
-            tests/unit/players/oam_051_wheel_safety_adapt_test.cpp
-          git diff --cached --check
-          git commit -m "fix(wheel): adapt OAM-051A safety invariants"
-          git push origin HEAD:dudantas/oam-051a-wheel-safety-adapt
+          cat /tmp/oam-051a-commit.log
+          exit 1
