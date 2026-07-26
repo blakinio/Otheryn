@@ -6,7 +6,7 @@ base_branch: main
 created: 2026-07-26
 updated: 2026-07-26
 related_issue: "116"
-related_pr: ""
+related_pr: "117"
 owned_paths:
   - docs/architecture/production-resilience-and-recovery.md
   - docs/operations/backup-and-pitr-policy.md
@@ -41,10 +41,10 @@ Define a durable, evidence-bounded architecture for game-process crash recovery,
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-26T09:52:00+02:00
-head: ce14090e3dd5c2da115afbc81384ff9ad49655cb
+updated_at: 2026-07-26T09:56:00+02:00
+head: edd30610e2e30e2f6c52ed97113178cc9c2d030c
 branch: dudantas/production-resilience-contract
-pr: null
+pr: 117
 status: validating
 context_routes:
   - architecture
@@ -71,6 +71,7 @@ proven:
   - The backup policy requires prepared, checksummed, encrypted off-host backups and isolated exact-time restore drills before production readiness is claimed.
   - The agent guide defines bounded PRS-001 through PRS-008 implementation packages and failure-injection gates.
   - deploy/production is established only as a non-runnable future ownership boundary; the MariaDB option file is explicitly design-only and not mounted anywhere.
+  - Draft PR 117 starts from exact task base ff90e93d872b6b47720f711483a9832203d5258d and contains exactly the seven owned paths.
 derived:
   - Canary/Otheryn can use container restarts for process availability while keeping database state authoritative after an ordinary channel crash.
   - Safe future multichannel persistence requires database-enforced revision/session fencing rather than Redis-only leases.
@@ -80,6 +81,7 @@ unknown:
   - Real database size, write rate, backup duration and acceptable measured checkpoint interval.
   - Exact source paths and schema design for PRS-002 through PRS-006.
   - Whether repository documentation/checkpoint validators accept the final text unchanged.
+  - Exact-head draft PR CI and Required outcome.
 conflicts: []
 first_failure:
   marker: no-production-recovery-contract
@@ -112,15 +114,18 @@ validation:
   - command: scope and safety audit
     result: PASS
     evidence: Only documentation, a non-runnable deployment boundary and a design-only option example are changed; no runtime, schema, workflow, quickstart or production data path changes.
+  - command: draft PR creation and exact changed-path audit
+    result: PASS
+    evidence: PR 117 is open as draft with exactly seven owned paths and zero target-base drift at creation.
   - command: checkpoint validator
     result: NOT_RUN
-    evidence: Requires repository checkout or CI after this task record is committed.
+    evidence: Requires repository checkout or CI on the committed task record.
   - command: exact-head Required
     result: NOT_RUN
-    evidence: PR not yet opened.
+    evidence: Awaiting PR 117 workflow results.
 blockers:
   - checkpoint/documentation validation
-  - draft PR creation and exact-head Required
-  - clean changed-path and discussion audit
-next_action: Open a draft PR for the seven owned paths, run the checkpoint and applicable documentation/Required gates, then repair only contract or formatting defects without starting PRS-001 implementation.
+  - exact-head draft PR CI and Required
+  - clean discussion and target-main drift audit
+next_action: Inspect PR 117 exact-head CI and Required, repair only documentation/checkpoint defects, then mark the PR ready without starting PRS-001 implementation.
 ```
