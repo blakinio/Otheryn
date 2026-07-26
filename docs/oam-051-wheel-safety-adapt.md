@@ -1,12 +1,19 @@
-# OAM-051 Wheel safety adaptation
+# OAM-051 Wheel safety and Task Shop adaptation
 
 ## Disposition
 
 `wheel-of-destiny → ADAPT`
 
-OAM-051A is limited to server-side safety and state-integrity corrections selected by Canary OAM-051 preflight and reviewed in Canary PR #220. It preserves Otheryn architecture and does not claim current Tibia 15.25 parity.
+OAM-051 is complete as two bounded server-side packages selected through Canary governance:
+
+- OAM-051A integrates Wheel safety and state-integrity corrections;
+- OAM-051B integrates only the Hunting Task Shop Bonus Promotion points contract.
+
+Together they preserve Otheryn architecture and maintained current-protocol shapes without claiming complete Tibia 15.25 Wheel or Taskboard parity.
 
 ## Delivered boundary
+
+### OAM-051A — Wheel safety
 
 - parse and validate the complete Wheel allocation before committing slot or active-gem state;
 - reject point decreases outside an eligible temple;
@@ -15,53 +22,76 @@ OAM-051A is limited to server-side safety and state-integrity corrections select
 - enforce the revealed-gem cap and restore reserved gems/fragments if a later money mutation fails;
 - clear and validate in-memory/KV/DB Wheel state during load;
 - load permanent point sources before validating the persisted allocation;
-- reject truncated or invalid current-protocol Wheel gem actions without changing opcodes or payload layouts;
-- add deterministic behavior and source-boundary tests.
+- reject truncated or invalid current-protocol Wheel gem actions without changing opcodes or payload layouts.
+
+### OAM-051B — Bonus Promotion points
+
+- reserve SQL-backed PlayerStorage key `1000006` as `wheel.hunting_task_shop_points`;
+- expose exactly one Shop offer, id `0`, type `4`, bounded to `0..50` purchased points;
+- preserve the accepted cost progression, display offset and statuses `0`, `2` and `4`;
+- reject malformed, trailing and wrong-offer Shop Buy packets before mutation;
+- persist the Hunting Task balance and purchased count through the same player SQL transaction;
+- keep Wheel KV outside the purchase contract;
+- include the clamped purchased count in Wheel extra-point accounting and the official Wheel Task Shop points field;
+- preserve empty Bounty and Weekly response shims.
 
 ## Target-specific integration
 
-The donor was pinned to Canary PR #220 squash `35ff51ac022e36d215db9d0fa86053b326a0bdf0`. Ordinary Wheel files accepted the selected safety hunks directly. `player_wheel.cpp` required semantic rebasing because the target had drifted from the donor parent.
+The OAM-051A donor was pinned to Canary PR #220 squash `35ff51ac022e36d215db9d0fa86053b326a0bdf0`. Ordinary Wheel files accepted the selected safety hunks directly. `player_wheel.cpp` required semantic rebasing because the target had drifted from the donor parent.
 
-The initial three-way application failed only on `player_wheel.cpp`. Selective application accepted 23 of 25 hunks. The remaining lifecycle hunk was adapted against current Otheryn to remove destroyed gems from KV, clear stale active copies by UUID, persist rotated affinity and reload bonuses. The other rejected donor hunk required no target change because current Otheryn already returned on an invalid active-gem index without clearing existing state.
+OAM-051B was selected by Canary preflight PR #959 merge `9e865b68b9197b28450002412ca1720683cf1f64`. The maintained OTClient baseline `ce4329ee13b39576915240605c2fe6657096c517` confirmed the bounded Shop and Wheel field shapes. Target persistence analysis selected PlayerStorage instead of Wheel KV so the purchased count and Hunting Task balance remain in the same SQL transaction.
 
-Temporary materialization workflow and helper files were removed before review. The final feature PR contained only eight implementation/test paths plus this report and the task checkpoint.
+No whole legacy file was copied. Temporary materialization and branch-synchronization helpers were removed before each package's final validation.
 
 ## Preserved exclusions
 
-- Hunting Task Shop Promotion Points and its persistence/client contract;
+- maintained-client Taskboard UI and assets;
+- Bounty, Weekly, Soulpit and other Task Shop offers;
 - Wheel balance constants, formulas, areas and effect ordering;
 - full Vessel Resonance damage/healing bonuses;
 - Gift of Life mana, Ballistic Mastery, Healing Link, Battle Healing and Blessing changes;
 - critical healing, stances, replacement spells and Strong Ice Wave geometry;
 - legacy protocol parser changes in `src/game/game.cpp`;
-- maintained-client, generated Lua API, map, schema and deployment changes.
+- generated Lua API, map, schema and deployment changes.
 
 The existing Supreme Grade II value of `12000000` remains unchanged. No `WheelBalance` dependency or full-resonance bonus helper was imported.
 
-## Immutable baselines
+## Immutable baselines and merges
 
-- Otheryn task-start target: `ff90e93d872b6b47720f711483a9832203d5258d`;
+### OAM-051A
+
+- task-start target: `ff90e93d872b6b47720f711483a9832203d5258d`;
 - Canary governance: `a4a35495d4a8dc047bd3315b95c9fb577ac597af`;
 - selected donor: `35ff51ac022e36d215db9d0fa86053b326a0bdf0`;
 - exact final feature head: `1f4ce3c11f6acf292775daac886e9dace7e8280f`;
-- target PR: `#115`;
-- target squash merge: `47863ce250bce73c1b9af3077f82e9bf6e99e3d1`.
+- target PR `#115`, squash merge `47863ce250bce73c1b9af3077f82e9bf6e99e3d1`.
+
+### OAM-051B
+
+- Canary preflight: `9e865b68b9197b28450002412ca1720683cf1f64`;
+- maintained OTClient baseline: `ce4329ee13b39576915240605c2fe6657096c517`;
+- exact final feature head: `a507abc5d6b9aa3158f9b009a715d5aee0b4c43c`;
+- target PR `#128`, squash merge `546eac0a00ec620e7293d0548e30662024464084`.
 
 ## Final validation evidence
 
-- exact source-path and exclusion audit: pass;
-- materializer exact-scope audit: pass for the eight approved implementation/test paths;
-- temporary-helper removal audit: pass;
-- `autofix.ci` run `30193154587`: pass; formatting-only changes;
-- full CI run `30193154684`: pass on exact head `1f4ce3c11f6acf292775daac886e9dace7e8280f`;
-- Fast Checks and Lua Tests: pass;
-- Linux debug: compile, Canary runtime smoke, schema import and all C++ tests pass;
-- Linux release: compile plus Canary and Global runtime smoke pass;
-- macOS compile and runtime smoke: pass;
-- Windows CMake compile/runtime smoke and Windows Solution build: pass;
-- Docker image build/export/validation: pass;
-- Required run `30193154608`: pass on the same exact head;
-- final comments, reviews and review-thread audit: clean;
-- target-main drift audit: clean before expected-head squash merge.
+### OAM-051A
 
-Static/source assertions and the full repository gates prove the selected integration and exclusions. They do not claim physical-client gameplay, DB failure injection, Task Shop transaction durability or full Wheel parity.
+- `autofix.ci` run `30193154587`: pass;
+- full CI run `30193154684`: pass;
+- Required run `30193154608`: pass;
+- final discussion and target-main drift audits: clean.
+
+### OAM-051B
+
+- Repository Audit run `30206237389`: pass;
+- `autofix.ci` run `30206237391`: pass;
+- full CI run `30206237518`: pass;
+- Required run `30206237406`: pass;
+- Linux debug full C++ tests, schema import and Canary smoke: pass;
+- Linux release Canary and Global smoke: pass;
+- macOS, both Windows variants and Docker validation: pass;
+- final discussion audit: clean;
+- exact seven-path audit and `behind_by: 0` target-main comparison: pass before expected-head merge.
+
+Static/source assertions and full repository gates prove the selected integrations and exclusions. They do not claim physical maintained-client Taskboard acceptance or deferred Wheel/Taskboard parity behavior.
