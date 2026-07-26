@@ -1,0 +1,125 @@
+name: Party Test Sanitizer
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/party-test-sanitizer.yml"
+      - "tests/unit/players/party_test.cpp"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: party-test-sanitizer-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  focused-asan:
+    name: Focused ASAN repetition
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CC: gcc-13
+      CXX: g++-13
+      VCPKG_BINARY_SOURCES: "clear;nuget,https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json,read;nugettimeout,600"
+      VCPKG_NUGET_API_KEY: ${{ github.token }}
+    steps:
+      - name: Checkout pull request head
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          show-progress: false
+
+      - name: Validate active task checkpoint when present
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          task="docs/agents/tasks/active/OTH-20260726-party-test-teardown-segfault.md"
+          if [[ -f "${task}" ]]; then
+            python tools/agents/checkpoint.py "${task}" --require-checkpoint
+          else
+            echo "Active Party teardown task is archived; checkpoint validation is not applicable."
+          fi
+
+      - name: Install Linux dependencies
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ccache ninja-build gcc-13 g++-13 mono-complete
+          sudo ln -sf /usr/bin/ninja /usr/bin/ninja-build
+
+      - name: Read vcpkg baseline
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          baseline="$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+          print(json.loads(Path('vcpkg.json').read_text())['builtin-baseline'])
+          PY
+          )"
+          echo "VCPKG_GIT_COMMIT_ID=${baseline}" >> "${GITHUB_ENV}"
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitURL: "https://github.com/microsoft/vcpkg.git"
+          vcpkgGitCommitId: ${{ env.VCPKG_GIT_COMMIT_ID }}
+
+      - name: Configure focused ASAN build
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cmake --preset linux-debug-asan \
+            -DTOGGLE_BIN_FOLDER=ON \
+            -DOPTIONS_ENABLE_CCACHE=ON \
+            -DOPTIONS_ENABLE_SCCACHE=OFF
+
+      - name: Build unit tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cmake --build build/linux-debug-asan --target canary_ut --parallel 2
+
+      - name: Run failing test repeatedly under ASAN
+        id: diagnostic
+        shell: bash
+        env:
+          ASAN_OPTIONS: "abort_on_error=1:detect_leaks=0:fast_unwind_on_malloc=0:strict_init_order=1:check_initialization_order=1:symbolize=1"
+          UBSAN_OPTIONS: "halt_on_error=1:print_stacktrace=1"
+        run: |
+          set -uo pipefail
+          log="${RUNNER_TEMP}/party-test-asan.log"
+          binary="$(find build/linux-debug-asan -type f -name canary_ut -perm -111 -print -quit)"
+          if [[ -z "${binary}" ]]; then
+            echo "ERROR: canary_ut binary was not found" | tee "${log}"
+            exit 66
+          fi
+          echo "Binary: ${binary}" | tee "${log}"
+          set +e
+          "${binary}" \
+            --gtest_filter=PartyTest.GetPlayersAndDisbandHandleNullEntries \
+            --gtest_repeat=25 \
+            --gtest_break_on_failure \
+            2>&1 | tee -a "${log}"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ ${status} -ne 0 ]]; then
+            echo "::error title=Party ASAN diagnostic failed::Focused test exited ${status}; see retained log"
+            exit "${status}"
+          fi
+
+      - name: Retain sanitizer log
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: party-test-asan-log
+          path: ${{ runner.temp }}/party-test-asan.log
+          if-no-files-found: warn
+          retention-days: 3
