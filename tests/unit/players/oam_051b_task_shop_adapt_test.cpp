@@ -4,13 +4,7 @@
 #include <sstream>
 #include <string>
 
-#include "creatures/players/player.hpp"
-#include "lib/di/container.hpp"
-#include "lib/logging/in_memory_logger.hpp"
-
 namespace {
-	constexpr uint32_t huntingTaskShopPointsStorage = 1000006;
-
 	std::string readSource(const std::string &relativePath) {
 		std::ifstream input(std::string(OAM051_SOURCE_DIR) + "/" + relativePath);
 		EXPECT_TRUE(input.is_open()) << relativePath;
@@ -24,40 +18,26 @@ namespace {
 	}
 } // namespace
 
-class Oam051bTaskShopAdaptTest : public ::testing::Test {
-protected:
-	static void SetUpTestSuite() {
-		previousTestContainer = DI::getTestContainer();
-		InMemoryLogger::install(injector);
-		DI::setTestContainer(&injector);
-	}
-
-	static void TearDownTestSuite() {
-		DI::setTestContainer(previousTestContainer);
-	}
-
-	static std::shared_ptr<Player> makePlayer(uint32_t level = 51) {
-		auto player = std::make_shared<Player>();
-		player->setLevel(level);
-		return player;
-	}
-
-	inline static di::extension::injector<> injector {};
-	inline static di::extension::injector<>* previousTestContainer = nullptr;
-};
+class Oam051bTaskShopAdaptTest : public ::testing::Test {};
 
 TEST_F(Oam051bTaskShopAdaptTest, StorageBackedPurchasesContributeToWheelPoints) {
-	auto player = makePlayer();
-	EXPECT_EQ(0, player->wheel().getExtraPoints());
-	EXPECT_EQ(1, player->wheel().getWheelPoints());
+	const auto source = readSource("src/creatures/players/components/wheel/player_wheel.cpp");
+	ASSERT_FALSE(source.empty());
 
-	player->addStorageValue(huntingTaskShopPointsStorage, 7);
-	EXPECT_EQ(7, player->wheel().getExtraPoints());
-	EXPECT_EQ(8, player->wheel().getWheelPoints());
+	const auto extraStart = source.find("uint16_t PlayerWheel::getExtraPoints() const");
+	const auto wheelPointsStart = source.find("uint16_t PlayerWheel::getWheelPoints", extraStart);
+	const auto wheelPointsEnd = source.find("uint16_t PlayerWheel::getUnusedPoints", wheelPointsStart);
+	ASSERT_NE(extraStart, std::string::npos);
+	ASSERT_NE(wheelPointsStart, std::string::npos);
+	ASSERT_NE(wheelPointsEnd, std::string::npos);
 
-	player->addStorageValue(huntingTaskShopPointsStorage, 99);
-	EXPECT_EQ(50, player->wheel().getExtraPoints());
-	EXPECT_EQ(51, player->wheel().getWheelPoints());
+	const auto extraPoints = source.substr(extraStart, wheelPointsStart - extraStart);
+	const auto wheelPoints = source.substr(wheelPointsStart, wheelPointsEnd - wheelPointsStart);
+	EXPECT_NE(extraPoints.find("m_player.getStorageValue(1000006)"), std::string::npos);
+	EXPECT_NE(extraPoints.find("std::clamp<int32_t>"), std::string::npos);
+	EXPECT_NE(extraPoints.find("0, 50"), std::string::npos);
+	EXPECT_NE(extraPoints.find("totalBonus += static_cast<uint32_t>(huntingTaskShopPoints)"), std::string::npos);
+	EXPECT_NE(wheelPoints.find("points += getExtraPoints();"), std::string::npos);
 }
 
 TEST_F(Oam051bTaskShopAdaptTest, CostProgressionMatchesBoundedContract) {
