@@ -6,8 +6,9 @@ base_branch: main
 created: 2026-07-26
 updated: 2026-07-26
 related_issue: "125"
-related_pr: ""
+related_pr: "126"
 owned_paths:
+  - .github/workflows/party-test-sanitizer.yml
   - docs/agents/tasks/active/OTH-20260726-party-test-teardown-segfault.md
 required_reads:
   - AGENTS.md
@@ -20,6 +21,7 @@ required_reads:
   - src/creatures/players/player.hpp
   - .github/workflows/ci.yml
   - .github/workflows/reusable-build-linux.yml
+  - CMakePresets.json
 search_first:
   - tests/unit
   - src/creatures/players/grouping
@@ -68,19 +70,21 @@ Evidence:
 - The test assertions complete successfully; the process crashes only afterward.
 - Other fixtures use the same DI logger pattern, so the injector alone is not yet proven as the cause.
 - The prior OAM-023 proof does not call the full disband path with real Player objects.
+- `CMakePresets.json` provides `linux-debug-asan`, but standard CI does not execute that preset.
 
 ## Bounded investigation plan
 
-1. Add a focused Linux diagnostic that runs only the failing test repeatedly with AddressSanitizer and UndefinedBehaviorSanitizer where repository toolchains permit.
-2. Capture the first actionable stack or lifetime report.
-3. Decide whether the defect is:
+1. Build only `canary_ut` with the existing `linux-debug-asan` preset.
+2. Run only the failing test repeatedly with ASAN/UBSAN and retain the complete log.
+3. Capture the first actionable stack or lifetime report.
+4. Decide whether the defect is:
    - a test fixture/global-singleton lifetime problem;
    - an invalid test setup that bypasses reciprocal Party invariants;
    - a production Party teardown bug exposed by null entries;
    - a Player/Party ownership-cycle cleanup defect.
-4. Apply the smallest deterministic fix at the proven boundary.
-5. Preserve null-entry coverage and full post-disband state assertions.
-6. Pass focused repeated execution, sanitizer evidence, full exact-head CI and `Required`.
+5. Apply the smallest deterministic fix at the proven boundary.
+6. Preserve null-entry coverage and full post-disband state assertions.
+7. Pass focused repeated execution, sanitizer evidence, full exact-head CI and `Required`.
 
 ## Explicit non-goals
 
@@ -95,10 +99,10 @@ Evidence:
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-26T12:45:00+02:00
-head: 38bb62192d25984d63f96c2637348b4adc82f6cd
+updated_at: 2026-07-26T12:50:00+02:00
+head: 021aaa59bcd07ca6b77a5b368c229eb09eeb09e1
 branch: dudantas/fix-party-test-teardown
-pr: none
+pr: 126
 status: investigating
 context_routes:
   - testing
@@ -107,16 +111,18 @@ context_routes:
   - ci
   - agent-governance
 owned_paths:
+  - .github/workflows/party-test-sanitizer.yml
   - docs/agents/tasks/active/OTH-20260726-party-test-teardown-segfault.md
 proven:
   - Task-start main is 38bb62192d25984d63f96c2637348b4adc82f6cd.
-  - Issue 125 owns only the repeated Party unit-test teardown SIGSEGV.
+  - Issue 125 and draft PR 126 own only the repeated Party unit-test teardown SIGSEGV.
   - Two Linux debug attempts reproduced the same post-success SEGFAULT on PartyTest.GetPlayersAndDisbandHandleNullEntries.
   - The remaining 482 Linux debug tests and all other ready-head CI platform jobs passed.
   - PRS-001 does not change Party runtime or Party test files.
   - The failing test invokes full Party::disband after manually constructing Party membership and invitation lists.
   - The test body assertions pass before the process crashes.
   - Other unit fixtures use the same suite-scoped DI logger pattern without this known failure.
+  - Repository presets include linux-debug-asan with tests enabled.
 derived:
   - The failure is a lifetime or teardown defect rather than an assertion failure.
   - A focused sanitizer/repetition diagnostic is required before selecting a production or fixture fix.
@@ -141,12 +147,12 @@ validation:
   - command: repeated ready-head Linux debug evidence review
     result: PASS
     evidence: Two independent attempts reproduced the same single-test post-success SEGFAULT.
-  - command: initial source and ownership inventory
+  - command: source, ownership and sanitizer-preset inventory
     result: PASS
-    evidence: Failing test, Party disband path, Player ownership and CI execution boundary were inspected.
+    evidence: Failing test, Party disband path, Player ownership, CI execution boundary and existing ASAN preset were inspected.
   - command: focused sanitizer diagnostic
     result: NOT_RUN
-    evidence: Add after exact workflow and compiler flags are selected.
+    evidence: Run after adding the dedicated workflow.
 blockers: []
-next_action: Add a focused sanitizer and repeated-execution diagnostic for PartyTest.GetPlayersAndDisbandHandleNullEntries, then use its first actionable stack to select the smallest valid fix.
+next_action: Add and run the focused linux-debug-asan workflow for PartyTest.GetPlayersAndDisbandHandleNullEntries, then use its first actionable stack to select the smallest valid fix.
 ```
