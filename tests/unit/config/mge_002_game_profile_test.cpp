@@ -204,3 +204,24 @@ gameProtocolPort = 7300
 	EXPECT_EQ(manager.getString(MAP_NAME), "initial-map");
 	EXPECT_EQ(manager.getNumber(GAME_PORT), 7200);
 }
+
+
+TEST(Mge002GameProfileTest, ExplicitTestOverrideDoesNotMutateStartupSnapshot) {
+	TemporaryProfileConfig configFile;
+	configFile.write("coreDirectory = 'startup-core'\n");
+
+	ConfigManager manager;
+	manager.setConfigFileLua(configFile.getPath().string());
+	ASSERT_TRUE(manager.load());
+	const auto profile = manager.getGameProfile();
+	ASSERT_NE(profile, nullptr);
+	ASSERT_EQ(profile->content.coreDirectory, "startup-core");
+
+	manager.setStartupStringOverrideForTests(CORE_DIRECTORY, "fixture-core");
+	EXPECT_EQ(manager.getString(CORE_DIRECTORY), "fixture-core");
+	EXPECT_EQ(manager.getGameProfile(), profile);
+	EXPECT_EQ(profile->content.coreDirectory, "startup-core");
+
+	manager.clearStartupStringOverrideForTests(CORE_DIRECTORY);
+	EXPECT_EQ(manager.getString(CORE_DIRECTORY), "startup-core");
+}

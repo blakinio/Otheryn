@@ -655,6 +655,14 @@ GameProfileSnapshot ConfigManager::getGameProfile() const {
 	return std::atomic_load_explicit(&gameProfileSnapshot, std::memory_order_acquire);
 }
 
+void ConfigManager::setStartupStringOverrideForTests(ConfigKey_t key, std::string value) {
+	startupStringOverridesForTests.insert_or_assign(key, std::move(value));
+}
+
+void ConfigManager::clearStartupStringOverrideForTests(ConfigKey_t key) {
+	startupStringOverridesForTests.erase(key);
+}
+
 bool ConfigManager::reload() {
 	m_configString.clear();
 	m_configInteger.clear();
@@ -740,6 +748,10 @@ float ConfigManager::loadFloatConfig(lua_State* L, const ConfigKey_t &key, const
 }
 
 const std::string &ConfigManager::getString(const ConfigKey_t &key, const std::source_location &location /*= std::source_location::current()*/) const {
+	if (const auto testOverride = startupStringOverridesForTests.find(key); testOverride != startupStringOverridesForTests.end()) {
+		return testOverride->second;
+	}
+
 	if (const auto profile = getGameProfile()) {
 		switch (key) {
 			case CORE_DIRECTORY:

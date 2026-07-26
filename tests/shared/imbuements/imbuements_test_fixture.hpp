@@ -38,11 +38,13 @@ namespace test::imbuements {
 			previousConfigFile_ = g_configManager().getConfigFileLua();
 			(void)g_configManager().setConfigFileLua("tests/fixture/config/imbuements_test.lua");
 			ASSERT_TRUE(g_configManager().reload());
+			g_configManager().setStartupStringOverrideForTests(CORE_DIRECTORY, "tests/fixture/core");
 			ASSERT_TRUE(g_vocations().reload());
 			ASSERT_TRUE(g_imbuements().reload());
 		}
 
 		void TearDown() override {
+			g_configManager().clearStartupStringOverrideForTests(CORE_DIRECTORY);
 			(void)g_configManager().setConfigFileLua(previousConfigFile_);
 			(void)g_configManager().reload();
 			(void)g_vocations().reload();

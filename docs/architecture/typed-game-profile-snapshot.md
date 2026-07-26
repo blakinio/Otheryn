@@ -65,6 +65,10 @@ The following startup paths use the snapshot directly or through snapshot-backed
 
 This is intentionally not a migration of every `ConfigManager` caller.
 
+## Test-fixture compatibility
+
+Normal reload remains unable to replace snapshot-owned startup values. Integration fixtures that intentionally load alternate core content must use the explicit `setStartupStringOverrideForTests`/`clearStartupStringOverrideForTests` scope around fixture loading. The override changes compatibility getter resolution only, does not mutate or republish `GameProfile`, and has no production caller.
+
 ## Non-goals
 
 - no `ModuleRegistry` or dependency graph;
