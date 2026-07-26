@@ -14,6 +14,7 @@
 #include "creatures/players/grouping/familiars.hpp"
 #include "creatures/players/storages/storages.hpp"
 #include "game/scheduling/dispatcher.hpp"
+#include "game/scheduling/save_manager.hpp"
 #include "lua/callbacks/events_callbacks.hpp"
 #include "lua/creature/events.hpp"
 
@@ -54,16 +55,24 @@ void PlayerStorage::ingest(const std::vector<PlayerStorageRow> &rows) {
 }
 
 void PlayerStorage::add(const uint32_t key, const int32_t value, const bool shouldStorageUpdate /* = false*/, const bool shouldTrackModification /*= true*/) {
+	const auto markTrackedMutation = [this, shouldTrackModification] {
+		if (shouldTrackModification) {
+			SaveManager::markPlayerDirty(m_player.getPlayer());
+		}
+	};
+
 	if (isStorageKeyInRange(key, PSTRG_RESERVED_RANGE_START, PSTRG_RESERVED_RANGE_SIZE)) {
 		if (isStorageKeyInRange(key, PSTRG_OUTFITS_RANGE_START, PSTRG_OUTFITS_RANGE_SIZE)) {
 			m_player.outfits.emplace_back(
 				value >> 16,
 				value & 0xFF
 			);
+			markTrackedMutation();
 			return;
 		}
 		if (isStorageKeyInRange(key, PSTRG_FAMILIARS_RANGE_START, PSTRG_FAMILIARS_RANGE_SIZE)) {
 			m_player.familiars.emplace_back(value >> 16);
+			markTrackedMutation();
 			return;
 		}
 
@@ -90,6 +99,8 @@ void PlayerStorage::add(const uint32_t key, const int32_t value, const bool shou
 		m_modifiedKeys.erase(key);
 		m_removedKeys.insert(key);
 	}
+
+	markTrackedMutation();
 }
 
 int32_t PlayerStorage::get(const uint32_t key) const {
@@ -115,6 +126,7 @@ bool PlayerStorage::remove(const uint32_t key) {
 	m_storageMap.erase(key);
 	m_modifiedKeys.erase(key);
 	m_removedKeys.insert(key);
+	SaveManager::markPlayerDirty(m_player.getPlayer());
 	return true;
 }
 
