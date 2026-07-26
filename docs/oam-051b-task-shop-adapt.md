@@ -64,25 +64,26 @@ For official Wheel payloads, the existing Monk quest flag remains a byte and the
 - Canary OAM-051B preflight merge: `9e865b68b9197b28450002412ca1720683cf1f64`;
 - Otheryn task base: `38bb62192d25984d63f96c2637348b4adc82f6cd`;
 - maintained OTClient baseline: `ce4329ee13b39576915240605c2fe6657096c517`;
-- target draft PR: `#128`.
+- exact final feature head: `a507abc5d6b9aa3158f9b009a715d5aee0b4c43c`;
+- target PR: `#128`;
+- target squash merge: `546eac0a00ec620e7293d0548e30662024464084`.
 
-## Validation contract
+## Final validation evidence
 
-Focused tests cover:
-
-- storage-backed Wheel accounting and clamp;
-- representative costs for points 1, 2, 49 and 50;
-- exact storage reservation;
-- exact Shop response fields and statuses;
-- wrong-offer, insufficient-balance, cap and rollback source boundaries;
-- missing/truncated/trailing packet rejection;
-- Bounty and Weekly non-regression;
-- storage load before Wheel slot validation;
-- no Wheel KV mirror;
-- official Wheel payload reporting;
-- Task Hunting and PlayerStorage SQL transaction ownership before separate KV staging.
-
-Final acceptance additionally requires exact-head affected repository builds/tests and `Required`.
+- exact source-path and exclusion audit: pass for seven declared paths;
+- temporary workflow and helper removal audit: pass;
+- Repository Audit run `30206237389`: pass on exact head `a507abc5d6b9aa3158f9b009a715d5aee0b4c43c`;
+- `autofix.ci` run `30206237391`: pass without moving the final head;
+- full CI run `30206237518`: pass on the same exact head;
+- Fast Checks and Lua Tests: pass;
+- Linux debug: compile, Canary runtime smoke, schema import and all C++ tests pass;
+- Linux release: compile plus Canary and Global runtime smoke pass;
+- macOS compile and runtime smoke: pass;
+- Windows CMake compile/runtime smoke and Windows Solution build: pass;
+- Docker image build/export/validation: pass;
+- Required run `30206237406`: pass on the same exact head;
+- final comments, reviews and review-thread audit: clean;
+- target-main comparison: `behind_by: 0` before expected-head squash merge.
 
 ## Preserved exclusions
 
@@ -92,3 +93,5 @@ Final acceptance additionally requires exact-head affected repository builds/tes
 - no legacy parser transfer;
 - no schema migration, map, deployment or production action;
 - no physical-client acceptance claim until separately exercised.
+
+Static/source assertions and the full repository gates prove the bounded server integration and exclusions. The maintained client has no complete shipped Taskboard UI, so physical-client acceptance remains a separate evidence boundary.
