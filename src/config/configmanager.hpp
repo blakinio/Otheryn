@@ -48,6 +48,11 @@ public:
 	}
 	[[nodiscard]] GameProfileSnapshot getGameProfile() const;
 
+	// Test fixtures that intentionally load alternate startup content must opt in
+	// explicitly. Normal reload never changes snapshot-owned values.
+	void setStartupStringOverrideForTests(ConfigKey_t key, std::string value);
+	void clearStartupStringOverrideForTests(ConfigKey_t key);
+
 	[[nodiscard]] const std::string &getString(const ConfigKey_t &key, const std::source_location &location = std::source_location::current()) const;
 	[[nodiscard]] int32_t getNumber(const ConfigKey_t &key, const std::source_location &location = std::source_location::current()) const;
 	[[nodiscard]] bool getBoolean(const ConfigKey_t &key, const std::source_location &location = std::source_location::current()) const;
@@ -62,6 +67,7 @@ private:
 	mutable std::unordered_map<ConfigKey_t, float> m_configFloat;
 
 	std::unordered_map<ConfigKey_t, ConfigValue> configs;
+	std::unordered_map<ConfigKey_t, std::string> startupStringOverridesForTests;
 	std::string loadStringConfig(lua_State* L, const ConfigKey_t &key, const char* identifier, const std::string &defaultValue);
 	int32_t loadIntConfig(lua_State* L, const ConfigKey_t &key, const char* identifier, const int32_t &defaultValue);
 	bool loadBoolConfig(lua_State* L, const ConfigKey_t &key, const char* identifier, const bool &defaultValue);
