@@ -10,7 +10,7 @@ completed: 2026-07-26
 related_pr: "136"
 feature_head: "b0e6a965399008a9834f8449c95981d78885ed10"
 feature_merge: "2afcaef4a3d023a7ec987e4380e80905534fdd2b"
-lifecycle_pr: "pending"
+lifecycle_pr: "138"
 owned_paths:
   - docs/oam-052-deployment-operations-disposition.md
   - docs/agents/tasks/archive/OTH-20260726-oam052-deployment-operations-disposition.md
@@ -34,11 +34,11 @@ The Canary reviewed-content staging and atomic datapack release stack remains la
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-26T18:35:00+02:00
-head: 2afcaef4a3d023a7ec987e4380e80905534fdd2b
-branch: main
-pr: 136
-status: completed
+updated_at: 2026-07-26T18:40:00+02:00
+head: 0dc7612879ca1767142f3a5c2e9ef32a1a5b836d
+branch: dudantas/oam-052-deployment-operations-lifecycle
+pr: 138
+status: validating
 context_routes:
   - agent-governance
   - cross-repo
@@ -52,6 +52,7 @@ proven:
   - Comments, reviews and review threads were empty; comparison to target main was behind by 0.
   - PR 136 squash-merged with expected-head protection as 2afcaef4a3d023a7ec987e4380e80905534fdd2b.
   - No runtime, deployment script, workflow, Compose, scheduler, schema, map/datapack content, endpoint, secret or host action was added.
+  - Lifecycle PR 138 contains only active-task deletion, archive addition and report evidence update.
 derived:
   - Canary content-release tooling remains useful without becoming target production ownership.
   - Any future Otheryn release mechanism requires a separately authorized target-owned package.
@@ -75,11 +76,11 @@ validation:
   - command: Otheryn Required 30214361783
     result: PASS
     evidence: Required completed successfully on exact feature head b0e6a965399008a9834f8449c95981d78885ed10.
-  - command: final path discussion and drift audit
+  - command: final feature path discussion and drift audit
     result: PASS
-    evidence: Two intended files, no discussions and behind_by 0 before expected-head merge.
+    evidence: Two intended files, no discussions and behind_by 0 before expected-head feature merge.
 blockers:
-  - lifecycle archive merge
+  - lifecycle exact-head Required and merge
   - Canary governance and durable reconciliation
-next_action: Merge the lifecycle archive, then finalize Canary governance and durable OAM-052 reconciliation before any OAM-053 work.
+next_action: Require exact-head Required on PR 138, audit lifecycle paths, discussions and main drift, then merge before Canary governance.
 ```
