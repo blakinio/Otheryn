@@ -68,27 +68,28 @@ namespace {
 		return fmt::format("{}.{:02d}", version / 100, version % 100);
 	}
 
-	[[nodiscard]] std::string getClientProtocolPortSummary(bool includeOldProtocolProfiles) {
+	[[nodiscard]] std::string getClientProtocolPortSummary(const GameProfile &profile) {
 		std::vector<std::string> entries;
-		entries.emplace_back(fmt::format("{} -> {}", formatClientVersion(ProtocolProfileRegistry::getCurrentProfile().clientVersion), protocol_port_utils::getModernGamePort()));
+		const auto* selectedProtocol = ProtocolProfileRegistry::getProfile(profile.protocolProfile);
+		entries.emplace_back(fmt::format("{} -> {}", formatClientVersion(selectedProtocol ? selectedProtocol->clientVersion : ProtocolProfileRegistry::getCurrentProfile().clientVersion), profile.network.modernGamePort));
 
-		if (includeOldProtocolProfiles) {
+		if (profile.allowOldProtocolProfiles) {
 			if (const auto* tibia1100 = ProtocolProfileRegistry::getProfile(ProtocolProfileId::Tibia1100);
 			    tibia1100 && ProtocolProfileRegistry::isProfileAllowed(tibia1100->id)) {
-				entries.emplace_back(fmt::format("11.00 -> {}", protocol_port_utils::getLegacy1100GamePort()));
+				entries.emplace_back(fmt::format("11.00 -> {}", profile.network.legacy1100GamePort));
 			}
 
 			if (const auto* cipsoft860 = ProtocolProfileRegistry::getProfile(ProtocolProfileId::Cipsoft860Vanilla);
 			    cipsoft860 && ProtocolProfileRegistry::isProfileAllowed(cipsoft860->id)) {
-				entries.emplace_back(fmt::format("8.60 -> {}", protocol_port_utils::getLegacy860GamePort()));
+				entries.emplace_back(fmt::format("8.60 -> {}", profile.network.legacy860GamePort));
 			}
 		}
 
-		return fmt::format("login {} | world {}", g_configManager().getNumber(LOGIN_PORT), fmt::join(entries, ", "));
+		return fmt::format("login {} | world {}", profile.network.loginPort, fmt::join(entries, ", "));
 	}
 
-	void warnLegacy860WorldIpConfiguration(Logger &logger, bool allowOldProtocol) {
-		if (!allowOldProtocol) {
+	void warnLegacy860WorldIpConfiguration(Logger &logger, const GameProfile &profile) {
+		if (!profile.allowOldProtocolProfiles) {
 			return;
 		}
 
@@ -176,15 +177,20 @@ int CanaryServer::run() {
 				if (!generateLuaApiDocs()) {
 					logger.warn("Lua API documentation generation failed; continuing startup.");
 				}
+				const auto gameProfile = g_configManager().getGameProfile();
+				if (!gameProfile) {
+					throw FailedToInitializeCanary("Validated game profile snapshot was not published");
+				}
 				validateDatapack();
 
-				const auto allowOldProtocol = g_configManager().getBoolean(OLD_PROTOCOL);
+				const auto* selectedProtocol = ProtocolProfileRegistry::getProfile(gameProfile->protocolProfile);
+				logger.info("Game profile: {} (protocol {})", gameProfile->id, selectedProtocol ? selectedProtocol->name : "unknown");
 				logger.info(
 					"Allowed client protocols: {} ({})",
-					ProtocolProfileRegistry::getAllowedClientProtocolDescription(allowOldProtocol),
-					getClientProtocolPortSummary(allowOldProtocol)
+					ProtocolProfileRegistry::getAllowedClientProtocolDescription(gameProfile->allowOldProtocolProfiles),
+					getClientProtocolPortSummary(*gameProfile)
 				);
-				warnLegacy860WorldIpConfiguration(logger, allowOldProtocol);
+				warnLegacy860WorldIpConfiguration(logger, *gameProfile);
 
 #ifdef FEATURE_METRICS
 				metrics::Options metricsOptions;
@@ -312,32 +318,36 @@ int CanaryServer::run() {
 }
 
 void CanaryServer::setWorldType() {
-	const std::string worldType = asLowerCaseString(g_configManager().getString(WORLD_TYPE));
-	if (worldType == "pvp") {
-		g_game().setWorldType(WORLD_TYPE_PVP);
-	} else if (worldType == "no-pvp") {
-		g_game().setWorldType(WORLD_TYPE_NO_PVP);
-	} else if (worldType == "pvp-enforced") {
-		g_game().setWorldType(WORLD_TYPE_PVP_ENFORCED);
-	} else {
-		throw FailedToInitializeCanary(
-			fmt::format(
-				"Unknown world type: {}, valid world types are: pvp, no-pvp and pvp-enforced",
-				g_configManager().getString(WORLD_TYPE)
-			)
-		);
+	const auto profile = g_configManager().getGameProfile();
+	if (!profile) {
+		throw FailedToInitializeCanary("Game profile snapshot is unavailable while setting world type");
 	}
 
-	logger.info("World type set as {}", asUpperCaseString(worldType));
+	switch (profile->rules.worldType) {
+		case GameProfileWorldType::Pvp:
+			g_game().setWorldType(WORLD_TYPE_PVP);
+			break;
+		case GameProfileWorldType::NoPvp:
+			g_game().setWorldType(WORLD_TYPE_NO_PVP);
+			break;
+		case GameProfileWorldType::PvpEnforced:
+			g_game().setWorldType(WORLD_TYPE_PVP_ENFORCED);
+			break;
+	}
+
+	logger.info("World type set as {}", asUpperCaseString(std::string(gameProfileWorldTypeName(profile->rules.worldType))));
 }
 
 void CanaryServer::loadMaps() const {
 	try {
-		g_game().loadMainMap(g_configManager().getString(MAP_NAME));
+		const auto profile = g_configManager().getGameProfile();
+		if (!profile) {
+			throw FailedToInitializeCanary("Game profile snapshot is unavailable while loading maps");
+		}
+		g_game().loadMainMap(profile->content.mapName);
 
-		// If "mapCustomEnabled" is true on config.lua, then load the custom map
-		if (g_configManager().getBoolean(TOGGLE_MAP_CUSTOM)) {
-			g_game().loadCustomMaps(g_configManager().getString(DATA_DIRECTORY) + "/world/custom/");
+		if (profile->content.loadCustomMaps) {
+			g_game().loadCustomMaps(profile->content.dataPackDirectory + "/world/custom/");
 		}
 		Zone::refreshAll();
 	} catch (const std::exception &err) {
@@ -468,11 +478,13 @@ void CanaryServer::loadConfigLua() {
 }
 
 void CanaryServer::validateDatapack() {
-	// If "USE_ANY_DATAPACK_FOLDER" is set to true then you can choose any datapack folder for your server
-	const auto useAnyDatapack = g_configManager().getBoolean(USE_ANY_DATAPACK_FOLDER);
-	const auto datapackName = g_configManager().getString(DATA_DIRECTORY);
+	const auto profile = g_configManager().getGameProfile();
+	if (!profile) {
+		throw FailedToInitializeCanary("Game profile snapshot is unavailable while validating datapack");
+	}
+	const auto &datapackName = profile->content.dataPackDirectory;
 
-	if (!useAnyDatapack && datapackName != "data-canary" && datapackName != "data-otservbr-global") {
+	if (!profile->content.allowAnyDatapackFolder && datapackName != "data-canary" && datapackName != "data-otservbr-global") {
 		throw FailedToInitializeCanary(fmt::format("The datapack folder name '{}' is wrong. Valid names: 'data-canary', "
 		                                           "'data-otservbr-global', or set USE_ANY_DATAPACK_FOLDER = true in config.lua.",
 		                                           datapackName));
@@ -529,7 +541,11 @@ void CanaryServer::loadModules() {
 		logger.info("Loaded {} in {:.3f} ms", moduleName, duration);
 	};
 
-	auto coreFolder = g_configManager().getString(CORE_DIRECTORY);
+	const auto profile = g_configManager().getGameProfile();
+	if (!profile) {
+		throw FailedToInitializeCanary("Game profile snapshot is unavailable while loading modules");
+	}
+	const auto coreFolder = profile->content.coreDirectory;
 	timedLoad("proficiencies.json", [] {
 		return WeaponProficiency::loadFromJson();
 	});

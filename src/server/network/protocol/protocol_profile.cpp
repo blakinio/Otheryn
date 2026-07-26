@@ -12,6 +12,7 @@
 #ifndef USE_PRECOMPILED_HEADERS
 	#include <algorithm>
 	#include <array>
+	#include <cctype>
 	#include <string>
 	#include <string_view>
 	#include <vector>
@@ -430,6 +431,19 @@ const ProtocolProfile* ProtocolProfileRegistry::getProfile(ProtocolProfileId id)
 		default:
 			return nullptr;
 	}
+}
+
+const ProtocolProfile* ProtocolProfileRegistry::resolveByName(std::string_view name) {
+	std::string normalizedName(name);
+	std::ranges::transform(normalizedName, normalizedName.begin(), [](unsigned char character) {
+		return static_cast<char>(std::tolower(character));
+	});
+	for (const auto* profile : registeredProfiles) {
+		if (profile && profile->name == normalizedName) {
+			return profile;
+		}
+	}
+	return nullptr;
 }
 
 const ProtocolProfile* ProtocolProfileRegistry::resolveByClientVersion(uint16_t version, ClientWireFamily family /*= ClientWireFamily::CipsoftVanilla*/) {

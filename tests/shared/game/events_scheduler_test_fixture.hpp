@@ -36,6 +36,7 @@ namespace test::events_scheduler {
 			previousConfigFile_ = g_configManager().getConfigFileLua();
 			g_configManager().setConfigFileLua(tempConfigFilePath_.string());
 			ASSERT_TRUE(g_configManager().reload());
+			g_configManager().setStartupStringOverrideForTests(CORE_DIRECTORY, tempCoreDir_.generic_string());
 
 			resetSchedulerState();
 			onSetUp();
@@ -44,6 +45,7 @@ namespace test::events_scheduler {
 		void TearDown() override {
 			onTearDown();
 			resetSchedulerState();
+			g_configManager().clearStartupStringOverrideForTests(CORE_DIRECTORY);
 			g_configManager().setConfigFileLua(previousConfigFile_);
 			std::error_code ec;
 			std::filesystem::remove_all(tempCoreDir_, ec);
