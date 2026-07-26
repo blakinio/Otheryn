@@ -1,12 +1,12 @@
 ---
 task_id: OTH-20260726-prs002a-player-persistence-state
-status: implementing
+status: validating
 branch: dudantas/prs-002a-player-persistence-state
 base_branch: main
 created: 2026-07-26
 updated: 2026-07-26
 related_issue: "141"
-related_pr: "none"
+related_pr: "142"
 owned_paths:
   - src/game/scheduling/player_persistence_state.hpp
   - tests/unit/game/player_persistence_state_test.cpp
@@ -39,11 +39,11 @@ This task does not integrate the state into `Player`, `SaveManager`, mutation ca
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-26T20:52:00+02:00
-head: 5901f0038f7f6ebd6eb08aa4522a23281d27d919
+updated_at: 2026-07-26T20:55:00+02:00
+head: 11d0a3b3ae47b3b43cc051f5b772743fdda64f83
 branch: dudantas/prs-002a-player-persistence-state
-pr: none
-status: implementing
+pr: 142
+status: validating
 context_routes:
   - production-resilience
   - player-persistence
@@ -58,12 +58,16 @@ owned_paths:
   - docs/agents/tasks/active/OTH-20260726-prs002a-player-persistence-state.md
 proven:
   - PRS-002 discovery contract PR 139 merged as cb0c51b62abe5e595f744f082ebc4304454922b8 and lifecycle PR 140 merged as 5901f0038f7f6ebd6eb08aa4522a23281d27d919.
-  - Issue 141 owns only the pure PlayerPersistenceState Slice A.
-  - The accepted contract requires monotonic dirty generations, exact in-flight acknowledgement, newer mutations remaining dirty and failures preserving dirty state.
-  - Session fencing, outage handling, scheduler integration and mutation instrumentation remain separate packages or slices.
+  - Issue 141 and draft PR 142 own only the pure PlayerPersistenceState Slice A.
+  - The implementation tracks monotonic dirty and acknowledged generations plus at most one in-flight generation.
+  - Matching success acknowledges only the captured generation and resets consecutive failures.
+  - Matching failure preserves dirty state, clears in-flight ownership and increments a saturating failure counter.
+  - Caller-supplied maximum consecutive failures bounds checkpoint eligibility without embedding retry timing.
+  - Stale and duplicate acknowledgements are rejected without mutating state.
+  - SaveManager integration, mutation instrumentation, outage handling and session fencing remain excluded.
 derived:
-  - A pure state object can prove generation and acknowledgement semantics without database or scheduler dependencies.
-  - A caller-supplied failure budget can bound eligibility without embedding timers or retry policy in the state object.
+  - Mutation during an in-flight save remains dirty when the older generation succeeds.
+  - Failure budget remains explicit across new mutations until a successful acknowledged checkpoint.
 unknown:
   - SaveManager integration shape and ownership of per-player state.
   - Which first mutation call sites should mark the state dirty in Slice C.
@@ -71,7 +75,7 @@ unknown:
 conflicts: []
 first_failure:
   marker: generation-state-not-implemented
-  evidence: The merged discovery contract defines semantics but main has no reusable PlayerPersistenceState implementation.
+  evidence: RESOLVED_IN_BRANCH by PlayerPersistenceState and deterministic unit tests; exact-head CI remains required.
 rejected_hypotheses:
   - Integrate into SaveManager in the same Slice A PR.
   - Add automatic retries, timers or a checkpoint interval to the pure state object.
@@ -87,11 +91,11 @@ validation:
     result: PASS
     evidence: The parent contract and source-characterization tests passed before Slice A started.
   - command: python tools/agents/checkpoint.py docs/agents/tasks/active/OTH-20260726-prs002a-player-persistence-state.md --require-checkpoint
-    result: NOT_RUN
-    evidence: Run after the task is materialized on the branch.
+    result: PASS
+    evidence: Exact checkpoint validator accepted the materialized Slice A task.
   - command: PlayerPersistenceState deterministic unit tests
     result: NOT_RUN
-    evidence: Run through exact-head repository CI after the draft PR is opened.
+    evidence: Run through exact-head repository CI on PR 142.
 blockers: []
-next_action: Commit the pure PlayerPersistenceState and deterministic tests, validate the checkpoint, open a draft PR, and require exact-head CI before any SaveManager integration.
+next_action: Require exact-head CI and Required on PR 142, fix only pure-state failures, then mark ready and merge after a clean four-path discussion and main-drift audit.
 ```
