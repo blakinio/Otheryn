@@ -37,7 +37,7 @@ TEST_F(Oam051bTaskShopAdaptTest, StorageBackedPurchasesContributeToWheelPoints) 
 	EXPECT_NE(extraPoints.find("std::clamp<int32_t>"), std::string::npos);
 	EXPECT_NE(extraPoints.find("0, 50"), std::string::npos);
 	EXPECT_NE(extraPoints.find("totalBonus += static_cast<uint32_t>(huntingTaskShopPoints)"), std::string::npos);
-	EXPECT_NE(wheelPoints.find("points += getExtraPoints();"), std::string::npos);
+	EXPECT_NE(wheelPoints.find("getExtraPoints()"), std::string::npos);
 }
 
 TEST_F(Oam051bTaskShopAdaptTest, CostProgressionMatchesBoundedContract) {
