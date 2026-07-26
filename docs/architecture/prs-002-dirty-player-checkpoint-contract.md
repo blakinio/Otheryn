@@ -1,0 +1,85 @@
+# PRS-002 dirty-player checkpoint contract
+
+## Disposition
+
+`PRS-002 dirty-player checkpoints → DISCOVERY CONTRACT`
+
+This milestone records the live player-save behavior and the minimum generation-safe checkpoint contract before runtime implementation. It does not add a checkpoint scheduler, retry policy, outage state machine, session fencing, schema migration or production deployment.
+
+## Proven current behavior
+
+### Scheduling and object ownership
+
+- `SaveManager::savePlayer()` schedules online players while the game is not shutting down and returns `true` after accepting the scheduling request; the eventual persistence result is not returned to that caller.
+- The scheduled work captures a `weak_ptr<Player>`, locks that exact object, and skips if the object disappeared. It deliberately does not re-resolve a GUID to a later session object.
+- Async scheduling stores one timestamp per player GUID. A newer request makes an older detached task skip, but the timestamp is not a persistence generation and does not prove that every later mutation requested another save.
+- Offline and shutdown saves use `doSavePlayer()` synchronously.
+- `saveAll()` may save different players in parallel.
+
+### Serialization and persistence domains
+
+- `doSavePlayer()` acquires `Player::PlayerLock` for the duration of `IOLoginData::savePlayer()`.
+- Representative gameplay mutation code such as `Player::addSkillAdvance()` mutates persisted fields without acquiring `PlayerLock`. The save-side lock alone therefore does not prove a consistent snapshot while async saving is enabled.
+- `IOLoginData::savePlayer()` commits the SQL-backed player domains inside one `DBTransaction`.
+- Wheel KV data is staged only after the SQL transaction commits. A post-commit KV staging exception returns a failed save after SQL may already be durable, so SQL/KV acknowledgement remains a separate reconciliation problem.
+- Save failure is logged and returned by `doSavePlayer()`, but `SaveManager` has no dirty generation, saved generation, retry ownership or oldest-dirty-age state.
+
+## Current risk statement
+
+The current timestamp coalescing prevents some duplicate queued saves, but it is not a dirty-state protocol. A mutation that occurs during or after a save can be missed when no later save request is guaranteed. A successful save cannot safely clear an unversioned dirty flag because it cannot distinguish the captured state from mutations that happened during serialization. A failed async save has no durable in-memory marker that requires another bounded attempt.
+
+No 60-second RPO, crash-loss bound or cross-domain atomicity claim is accepted from the current implementation.
+
+## Accepted PRS-002 target contract
+
+The first runtime implementation must provide a small, unit-testable player persistence state with these invariants:
+
+1. Every persistence-relevant mutation advances a monotonic dirty generation.
+2. A checkpoint request captures one generation and owns at most one in-flight save for one `Player` object generation.
+3. The save result acknowledges only the captured generation.
+4. Success clears dirty state only when no newer generation exists.
+5. A mutation during save remains dirty and schedules or preserves one later bounded attempt.
+6. SQL failure, exception and post-commit KV failure never acknowledge the captured generation.
+7. Queue coalescing is based on generation, not wall-clock timestamps.
+8. Queue capacity, oldest dirty age, attempts and failures are observable.
+9. One repeatedly failing player cannot block checkpoint progress for all players.
+10. Logout, handoff and graceful shutdown request a bounded final save and expose failure.
+11. Ordinary game crashes do not trigger automatic whole-world rollback.
+12. Session/revision fencing remains PRS-004 and is not implemented here.
+
+## Implementation sequence
+
+### Slice A — pure state machine
+
+Add a database-independent `PlayerPersistenceState` value/state object with deterministic tests for:
+
+- clean → dirty generation;
+- coalesced checkpoint request;
+- mutation during in-flight save;
+- success acknowledgement of an unchanged generation;
+- success with a newer generation remaining dirty;
+- failure preserving dirty state;
+- stale acknowledgement rejection;
+- bounded retry eligibility.
+
+### Slice B — SaveManager integration
+
+Replace timestamp-only ownership with generation-aware request/in-flight state while preserving exact `Player` object ownership. Keep one in-flight save per player object and surface result metrics.
+
+### Slice C — bounded mutation coverage
+
+Instrument a small, explicitly owned set of representative SQL-backed player mutations first. Do not attempt whole-repository mutation instrumentation in one PR.
+
+### Slice D — controlled failure and crash proof
+
+Add deterministic SQL failure, mutation-during-save, commit-before-ack and queue-overload tests. Production RPO remains unknown until a controlled crash drill measures it.
+
+## Explicit non-goals
+
+- PRS-003 database-outage state transitions;
+- PRS-004 durable session/revision fencing;
+- PRS-005 economic idempotency or ledger/outbox;
+- generic SQL/KV reconciliation;
+- unbounded retries or silent query replay;
+- production scheduler, deployment, credentials or database access;
+- a claimed checkpoint interval or RPO before controlled evidence.
