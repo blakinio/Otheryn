@@ -10,6 +10,7 @@
 #pragma once
 
 #include "lib/thread/thread_pool.hpp"
+#include "game/scheduling/player_persistence_state.hpp"
 
 #ifndef USE_PRECOMPILED_HEADERS
 	#include <map>
@@ -22,7 +23,6 @@ class Logger;
 class Game;
 class Player;
 class Guild;
-class PlayerPersistenceState;
 
 class SaveManager {
 public:
@@ -38,6 +38,18 @@ public:
 
 	bool savePlayer(std::shared_ptr<Player> player);
 	bool saveGuild(std::shared_ptr<Guild> guild);
+
+	/**
+	 * Marks a persistence-relevant mutation on the exact live Player object.
+	 *
+	 * This method advances the dirty generation only. It intentionally does not
+	 * schedule a save, create a timer or alter existing checkpoint ownership.
+	 */
+	void markPlayerDirty(const std::shared_ptr<Player> &player) {
+		if (player) {
+			persistenceStateFor(player)->markDirty();
+		}
+	}
 
 private:
 	bool saveMap();
