@@ -11,6 +11,7 @@ on:
       - "deploy/production/backup/**"
       - "tests/integration/production-resilience/prs001-drill.sh"
       - "docs/agents/tasks/active/OTH-20260726-prs001-backup-pitr-foundation.md"
+      - "docs/agents/tasks/archive/OTH-20260726-prs001-backup-pitr-foundation.md"
   workflow_dispatch:
 
 permissions:
@@ -46,9 +47,12 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          python tools/agents/checkpoint.py \
-            docs/agents/tasks/active/OTH-20260726-prs001-backup-pitr-foundation.md \
-            --require-checkpoint
+          active_task="docs/agents/tasks/active/OTH-20260726-prs001-backup-pitr-foundation.md"
+          if [[ -f "${active_task}" ]]; then
+            python tools/agents/checkpoint.py "${active_task}" --require-checkpoint
+          else
+            echo "PRS-001 active checkpoint is archived; lifecycle validation is not applicable."
+          fi
 
       - name: Confirm disposable runner dependencies
         shell: bash
