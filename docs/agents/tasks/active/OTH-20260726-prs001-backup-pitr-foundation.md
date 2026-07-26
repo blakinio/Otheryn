@@ -1,6 +1,6 @@
 ---
 task_id: OTH-20260726-prs001-backup-pitr-foundation
-status: validating
+status: blocked
 branch: dudantas/prs-001-backup-pitr-foundation
 base_branch: main
 created: 2026-07-26
@@ -127,11 +127,11 @@ Every injected failure must return non-zero, identify the first failure and reta
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-26T12:04:00+02:00
-head: e4c09752be6351333eb530bdb3de93675fc61be4
+updated_at: 2026-07-26T12:38:00+02:00
+head: 26bebd72c22086f34a954e2cb732d596de5ca8ce
 branch: dudantas/prs-001-backup-pitr-foundation
 pr: 123
-status: validating
+status: blocked
 context_routes:
   - operations
   - database-persistence
@@ -153,40 +153,42 @@ owned_paths:
   - docs/agents/tasks/active/OTH-20260726-prs001-backup-pitr-foundation.md
 proven:
   - Task-start main is 4eedf835621e2a64d093dd5096b4b28e632e50f3.
-  - Issue 122 and draft PR 123 own only the bounded PRS-001 package.
+  - Issue 122 and PR 123 own only the bounded PRS-001 package.
   - MariaDB is pinned to 11.4.12 and immutable index digest a794d9eb009e20de605858a11f32f63b4075cbd197c650436f0e3b457e4caed7.
   - The package creates a physical full backup with MariaDB backup metadata and archived binary logs.
   - Recovery sets are checksum-protected, symmetrically encrypted, staged and atomically published without replacing an existing identifier.
   - Verification rejects corrupted checksums, missing binlogs, unsafe payload paths, unexpected manifests and mismatched image/version identities.
   - Restore prepares the backup, copies it into an empty package-owned volume, starts isolated MariaDB and replays ordered binlogs to an approved UTC target.
   - The exact-time drill retained the base and expected mutation and excluded the later harmful mutation.
-  - Backup, publication, checksum, missing-binlog, prepare, startup and out-of-range failures returned non-zero and preserved the known-good set.
-  - PRS-001 workflow run 30197369724 passed on e4c09752be6351333eb530bdb3de93675fc61be4.
-  - Repository CI run 30197369813 and Required run 30197369725 passed on the same exact head.
+  - All seven required failure injections returned non-zero and preserved the known-good set.
+  - PRS-001 workflow 30197442306, repository CI 30197442433 and Required 30197442329 passed on exact head 26bebd72c22086f34a954e2cb732d596de5ca8ce before ready transition.
   - The workflow checkpoint validator passed on the same exact head.
+  - Ready-head CI 30197504976 failed twice only after PartyTest.GetPlayersAndDisbandHandleNullEntries reported OK and then segfaulted during teardown.
+  - Each failing attempt passed 482 of 483 Linux debug tests; all other ready-head CI platforms passed.
+  - Issue 125 separately owns the repeated Party test teardown SIGSEGV and explicitly excludes its fix from PRS-001.
   - No production credential, endpoint, key or data is committed or accessed.
   - The local quickstart, application runtime, schema and migrations are unchanged.
 derived:
   - The disposable drill proves the mechanics of the bounded full-backup plus binlog model, not a deployed production backup service.
-  - Incremental backup, real object storage, scheduler, retention, alert delivery and production RPO/RTO remain separate future evidence boundaries.
+  - The repeated Party test teardown SIGSEGV is outside the eleven PRS-001 paths but blocks repository Required from becoming green.
 unknown:
+  - Root cause and bounded fix for issue 125.
   - Production object-store, credential, encryption-key and scheduler implementation.
   - Production database size, write rate, backup duration, storage capacity and measured RPO/RTO.
-  - Production-shaped semantic integrity checks beyond the disposable mutation fixture.
 conflicts: []
 first_failure:
-  marker: no-implemented-backup-pitr-foundation
-  command: PRS-001 workflow run 30197369724
-  result: RESOLVED
-  evidence: The final exact-head drill completed physical backup, encrypted publication, prepare, isolated restore, exact-time PITR and all required failure injections successfully.
+  marker: party-test-post-success-segfault
+  command: ready-head CI 30197504976 jobs 89781674816 and 89782999565
+  result: OPEN
+  evidence: PartyTest.GetPlayersAndDisbandHandleNullEntries reports OK, then both attempts terminate with SIGSEGV during teardown; the remaining 482 tests pass.
 rejected_hypotheses:
+  - Modify Party runtime or tests inside PRS-001.
+  - Hide the failure by skipping the test or weakening Required.
+  - Continue retrying the same deterministic failure without a fix.
   - Modify the local Docker quickstart to become the production backup stack.
   - Treat a Docker volume copy or VPS snapshot as the sole accepted database backup.
-  - Treat a MariaDB replica as a backup.
   - Use real production credentials or data for validation.
   - Begin replication, failover, checkpointing, fencing or Compose hardening in PRS-001.
-  - Add incremental backup before the full-backup and binlog proof is stable.
-  - Claim production readiness or measured RPO/RTO from disposable CI timing.
 changed_paths:
   - .github/workflows/prs001-backup-pitr.yml
   - deploy/production/README.md
@@ -200,23 +202,22 @@ changed_paths:
   - tests/integration/production-resilience/prs001-drill.sh
   - docs/agents/tasks/active/OTH-20260726-prs001-backup-pitr-foundation.md
 validation:
-  - command: PRS-001 Backup PITR run 30197369724
+  - command: PRS-001 Backup PITR run 30197442306
     result: PASS
     evidence: Exact-head syntax, checkpoint, dependency, backup, encrypted publication, prepare, isolated restore, PITR and seven failure-injection gates passed.
-  - command: repository CI run 30197369813
+  - command: repository CI run 30197442433
     result: PASS
-    evidence: Applicable repository CI completed successfully on e4c09752be6351333eb530bdb3de93675fc61be4.
-  - command: exact-head Required run 30197369725
+    evidence: Full repository CI completed successfully on exact head 26bebd72c22086f34a954e2cb732d596de5ca8ce before ready transition.
+  - command: exact-head Required run 30197442329
     result: PASS
-    evidence: Required completed successfully on e4c09752be6351333eb530bdb3de93675fc61be4.
-  - command: python tools/agents/checkpoint.py docs/agents/tasks/active/OTH-20260726-prs001-backup-pitr-foundation.md --require-checkpoint
-    result: PASS
-    evidence: The package workflow validated the checkpoint on the exact audited head.
+    evidence: Required completed successfully on the same exact head before ready transition.
+  - command: ready-head CI run 30197504976
+    result: FAIL
+    evidence: Two attempts reproduced the unrelated Party test post-success SIGSEGV; all other jobs and 482 of 483 Linux debug tests passed.
   - command: production-safety and scope audit
     result: PASS
     evidence: Eleven declared paths only; no quickstart, runtime, schema, migration, production Compose, production data or credentials.
 blockers:
-  - refreshed exact-head package workflow and Required after this checkpoint update
-  - final changed-path, discussion and target-main drift audit before ready/merge
-next_action: Confirm all applicable workflows on the refreshed PR head, then perform the final path, discussion, mergeability and target-main drift audit before expected-head squash merge.
+  - issue 125 must fix the repeated Party test teardown SIGSEGV before PR 123 can obtain final ready-head Required
+next_action: Resolve issue 125 in a separate bounded PR, then rerun PR 123 exact-head CI and Required and repeat the final path, discussion and target-main drift audit before merge.
 ```
