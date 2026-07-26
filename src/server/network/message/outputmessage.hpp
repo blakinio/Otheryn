@@ -33,8 +33,13 @@ public:
 		add_header(paddingAmount);
 	}
 
-	void writeMessageLength() {
-		add_header(static_cast<uint16_t>((info.length - 4) / 8));
+	// extraBytes must equal the number of header/checksum bytes already
+	// written into info.length ahead of the encrypted XTEA blocks (e.g. 0 for
+	// checksum-free transports, CHECKSUM_LENGTH when a checksum was written
+	// via writeChecksum() first). It must mirror TransportProfile's
+	// modernLengthExtraBytes so encode and decode agree on the block count.
+	void writeMessageLength(uint16_t extraBytes) {
+		add_header(static_cast<uint16_t>((info.length - extraBytes) / 8));
 	}
 
 	void writeRawMessageLength() {
@@ -54,7 +59,7 @@ public:
 			add_header(checksum);
 		}
 
-		writeMessageLength();
+		writeMessageLength(addChecksum ? sizeof(checksum) : 0);
 	}
 
 	void append(const NetworkMessage &msg) {
@@ -91,7 +96,6 @@ private:
 		outputBufferStart -= sizeof(T);
 
 		static_assert(std::is_trivially_copyable_v<T>, "Type T must be trivially copyable");
-
 		// Convert the header to an array of unsigned char using std::bit_cast
 		auto byteArray = std::bit_cast<std::array<unsigned char, sizeof(T)>>(addHeader);
 
@@ -116,12 +120,9 @@ public:
 	OutputMessagePool &operator=(const OutputMessagePool &) = delete;
 
 	static OutputMessagePool &getInstance();
-
 	void sendAll();
 	void scheduleSendAll();
-
 	static OutputMessage_ptr getOutputMessage();
-
 	void addProtocolToAutosend(const Protocol_ptr &protocol);
 	void removeProtocolFromAutosend(const Protocol_ptr &protocol);
 
