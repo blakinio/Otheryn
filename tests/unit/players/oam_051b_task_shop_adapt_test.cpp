@@ -156,3 +156,48 @@ TEST_F(Oam051bTaskShopAdaptTest, WheelAccountingUsesSqlStorageAndNoKvMirror) {
 	EXPECT_NE(function.find("std::clamp<int32_t>"), std::string::npos);
 	EXPECT_EQ(function.find("kv()"), std::string::npos);
 }
+
+TEST_F(Oam051bTaskShopAdaptTest, OfficialWheelPayloadReportsPurchasedTaskShopPoints) {
+	const auto source = readSource("src/creatures/players/components/wheel/player_wheel.cpp");
+	ASSERT_FALSE(source.empty());
+
+	const auto functionStart = source.find("void PlayerWheel::sendOpenWheelWindow(NetworkMessage &msg, uint32_t ownerId)");
+	ASSERT_NE(functionStart, std::string::npos);
+	const auto functionEnd = source.find("void PlayerWheel::sendOpenWheelWindow(uint32_t ownerId)", functionStart);
+	ASSERT_NE(functionEnd, std::string::npos);
+	const auto function = source.substr(functionStart, functionEnd - functionStart);
+
+	EXPECT_NE(function.find("The Way of the Monk quest bonus flag"), std::string::npos);
+	EXPECT_NE(function.find("m_player.getStorageValue(1000006)"), std::string::npos);
+	EXPECT_NE(function.find("std::clamp<int32_t>"), std::string::npos);
+}
+
+TEST_F(Oam051bTaskShopAdaptTest, SqlTransactionCommitsBalanceAndStorageBeforeSeparateKvStaging) {
+	const auto source = readSource("src/io/iologindata.cpp");
+	ASSERT_FALSE(source.empty());
+
+	const auto databaseHelperStart = source.find("void saveOnlinePlayerDatabaseData");
+	const auto databaseHelperEnd = source.find("void stageOnlinePlayerWheelKV", databaseHelperStart);
+	ASSERT_NE(databaseHelperStart, std::string::npos);
+	ASSERT_NE(databaseHelperEnd, std::string::npos);
+	const auto databaseHelper = source.substr(databaseHelperStart, databaseHelperEnd - databaseHelperStart);
+	EXPECT_NE(databaseHelper.find("IOLoginDataSave::savePlayerStorage(player)"), std::string::npos);
+
+	const auto savePlayerStart = source.find("bool IOLoginData::savePlayer(const std::shared_ptr<Player> &player)");
+	const auto savePlayerEnd = source.find("bool IOLoginData::savePlayerGuard", savePlayerStart);
+	ASSERT_NE(savePlayerStart, std::string::npos);
+	ASSERT_NE(savePlayerEnd, std::string::npos);
+	const auto savePlayer = source.substr(savePlayerStart, savePlayerEnd - savePlayerStart);
+	const auto transaction = savePlayer.find("DBTransaction::executeWithinTransaction");
+	const auto kvStaging = savePlayer.find("stageOnlinePlayerWheelKV(player)");
+	ASSERT_NE(transaction, std::string::npos);
+	ASSERT_NE(kvStaging, std::string::npos);
+	EXPECT_LT(transaction, kvStaging);
+
+	const auto guardStart = savePlayerEnd;
+	const auto guardEnd = source.find("void IOLoginData::saveOnlyDataForOnlinePlayer", guardStart);
+	ASSERT_NE(guardEnd, std::string::npos);
+	const auto guard = source.substr(guardStart, guardEnd - guardStart);
+	EXPECT_NE(guard.find("IOLoginDataSave::savePlayerTaskHuntingClass(player)"), std::string::npos);
+	EXPECT_NE(guard.find("saveOnlinePlayerDatabaseData(player)"), std::string::npos);
+}
