@@ -11,11 +11,18 @@
 
 #include "lib/thread/thread_pool.hpp"
 
+#ifndef USE_PRECOMPILED_HEADERS
+	#include <map>
+	#include <memory>
+	#include <mutex>
+#endif
+
 class KVStore;
 class Logger;
 class Game;
 class Player;
 class Guild;
+class PlayerPersistenceState;
 
 class SaveManager {
 public:
@@ -44,6 +51,9 @@ private:
 	 * target the object that requested it or skip if that object is gone.
 	 */
 	void schedulePlayer(std::weak_ptr<Player> player);
+	void scheduleDirtyPlayer(std::weak_ptr<Player> player, std::shared_ptr<PlayerPersistenceState> state);
+	std::shared_ptr<PlayerPersistenceState> persistenceStateFor(const std::shared_ptr<Player> &player);
+
 	/**
 	 * Saves a pinned player object.
 	 *
@@ -53,7 +63,8 @@ private:
 	bool doSavePlayer(std::shared_ptr<Player> player);
 
 	std::atomic<std::chrono::steady_clock::time_point> m_scheduledAt;
-	phmap::parallel_flat_hash_map<uint32_t, std::chrono::steady_clock::time_point> m_playerMap;
+	std::mutex m_playerPersistenceMutex;
+	std::map<std::weak_ptr<Player>, std::shared_ptr<PlayerPersistenceState>, std::owner_less<std::weak_ptr<Player>>> m_playerPersistenceStates;
 
 	ThreadPool &threadPool;
 	KVStore &kv;

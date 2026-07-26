@@ -12,6 +12,7 @@
 #include "config/configmanager.hpp"
 #include "creatures/players/grouping/guild.hpp"
 #include "game/game.hpp"
+#include "game/scheduling/player_persistence_state.hpp"
 #include "io/ioguild.hpp"
 #include "io/iologindata.hpp"
 #include "kv/kv.hpp"
@@ -134,6 +135,26 @@ void SaveManager::scheduleAll() {
 	});
 }
 
+std::shared_ptr<PlayerPersistenceState> SaveManager::persistenceStateFor(const std::shared_ptr<Player> &player) {
+	std::lock_guard lock(m_playerPersistenceMutex);
+	for (auto it = m_playerPersistenceStates.begin(); it != m_playerPersistenceStates.end();) {
+		if (it->first.expired()) {
+			it = m_playerPersistenceStates.erase(it);
+		} else {
+			++it;
+		}
+	}
+
+	const std::weak_ptr<Player> owner = player;
+	if (const auto it = m_playerPersistenceStates.find(owner); it != m_playerPersistenceStates.end()) {
+		return it->second;
+	}
+
+	auto state = std::make_shared<PlayerPersistenceState>();
+	m_playerPersistenceStates.emplace(owner, state);
+	return state;
+}
+
 void SaveManager::schedulePlayer(std::weak_ptr<Player> playerPtr) {
 	auto playerToSave = playerPtr.lock();
 	if (!playerToSave) {
@@ -150,20 +171,62 @@ void SaveManager::schedulePlayer(std::weak_ptr<Player> playerPtr) {
 		return;
 	}
 
-	logger.debug("Scheduling player {} for saving.", playerToSave->getName());
-	auto scheduledAt = std::chrono::steady_clock::now();
-	m_playerMap[playerToSave->getGUID()] = scheduledAt;
-	threadPool.detach_task([this, playerPtr, scheduledAt]() {
+	auto state = persistenceStateFor(playerToSave);
+	state->markDirty();
+	scheduleDirtyPlayer(playerPtr, std::move(state));
+}
+
+void SaveManager::scheduleDirtyPlayer(std::weak_ptr<Player> playerPtr, std::shared_ptr<PlayerPersistenceState> state) {
+	const auto generation = state->beginCheckpoint();
+	if (!generation.has_value()) {
+		logger.debug("Coalescing player save because a checkpoint is already in flight or no dirty generation exists.");
+		return;
+	}
+
+	auto playerToSave = playerPtr.lock();
+	if (!playerToSave) {
+		state->acknowledgeFailure(*generation);
+		logger.debug("Skipping save for player because player is no longer online.");
+		return;
+	}
+
+	logger.debug("Scheduling player {} generation {} for saving.", playerToSave->getName(), *generation);
+	threadPool.detach_task([this, playerPtr, state = std::move(state), generation = *generation]() {
 		auto player = playerPtr.lock();
 		if (!player) {
+			state->acknowledgeFailure(generation);
 			logger.debug("Skipping save for player because player is no longer online.");
 			return;
 		}
-		if (m_playerMap[player->getGUID()] != scheduledAt) {
-			logger.warn("Skipping save for player because another save has been scheduled.");
+
+		bool saveSuccess = false;
+		try {
+			saveSuccess = doSavePlayer(player);
+		} catch (const std::exception &e) {
+			state->acknowledgeFailure(generation);
+			logger.error("Failed to save player {} generation {}: {}", player->getName(), generation, e.what());
+			return;
+		} catch (...) {
+			state->acknowledgeFailure(generation);
+			logger.error("Failed to save player {} generation {} because of an unknown exception.", player->getName(), generation);
 			return;
 		}
-		doSavePlayer(player);
+
+		if (!saveSuccess) {
+			if (!state->acknowledgeFailure(generation)) {
+				logger.error("Failed to acknowledge player {} generation {} save failure.", player->getName(), generation);
+			}
+			return;
+		}
+
+		if (!state->acknowledgeSuccess(generation)) {
+			logger.error("Failed to acknowledge player {} generation {} save success.", player->getName(), generation);
+			return;
+		}
+
+		if (state->isDirty() && player->isOnline() && game.getGameState() != GAME_STATE_SHUTDOWN) {
+			scheduleDirtyPlayer(player, state);
+		}
 	});
 }
 
@@ -175,7 +238,6 @@ bool SaveManager::doSavePlayer(std::shared_ptr<Player> player) {
 
 	Benchmark bm_savePlayer;
 	Player::PlayerLock lock(player);
-	m_playerMap.erase(player->getGUID());
 	if (g_game().getGameState() == GAME_STATE_NORMAL) {
 		logger.debug("Saving player {}.", player->getName());
 	}
@@ -191,6 +253,10 @@ bool SaveManager::doSavePlayer(std::shared_ptr<Player> player) {
 }
 
 bool SaveManager::savePlayer(std::shared_ptr<Player> player) {
+	if (!player) {
+		logger.debug("Failed to save player because player is null.");
+		return false;
+	}
 	if (player->isOnline() && g_game().getGameState() != GAME_STATE_SHUTDOWN) {
 		schedulePlayer(player);
 		return true;

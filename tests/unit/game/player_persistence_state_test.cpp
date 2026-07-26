@@ -2,6 +2,12 @@
 
 #include "game/scheduling/player_persistence_state.hpp"
 
+#ifndef USE_PRECOMPILED_HEADERS
+	#include <atomic>
+	#include <thread>
+	#include <vector>
+#endif
+
 TEST(PlayerPersistenceStateTest, StartsCleanAndCannotBeginCheckpoint) {
 	PlayerPersistenceState state;
 
@@ -27,7 +33,7 @@ TEST(PlayerPersistenceStateTest, CapturesOneDirtyGenerationAndCoalescesRequests)
 TEST(PlayerPersistenceStateTest, MutationDuringSaveRemainsDirtyAfterOlderGenerationSucceeds) {
 	PlayerPersistenceState state;
 
-	state.markDirty();
+	(void)state.markDirty();
 	const auto first = state.beginCheckpoint();
 	ASSERT_EQ(first, 1U);
 
@@ -48,7 +54,7 @@ TEST(PlayerPersistenceStateTest, MutationDuringSaveRemainsDirtyAfterOlderGenerat
 TEST(PlayerPersistenceStateTest, FailedSavePreservesDirtyGenerationAndConsumesRetryBudget) {
 	PlayerPersistenceState state;
 
-	state.markDirty();
+	(void)state.markDirty();
 	const auto first = state.beginCheckpoint(2);
 	ASSERT_EQ(first, 1U);
 	EXPECT_TRUE(state.acknowledgeFailure(*first));
@@ -67,7 +73,7 @@ TEST(PlayerPersistenceStateTest, FailedSavePreservesDirtyGenerationAndConsumesRe
 TEST(PlayerPersistenceStateTest, SuccessfulExplicitAttemptResetsFailureBudget) {
 	PlayerPersistenceState state;
 
-	state.markDirty();
+	(void)state.markDirty();
 	const auto failed = state.beginCheckpoint(1);
 	ASSERT_EQ(failed, 1U);
 	ASSERT_TRUE(state.acknowledgeFailure(*failed));
@@ -83,10 +89,10 @@ TEST(PlayerPersistenceStateTest, SuccessfulExplicitAttemptResetsFailureBudget) {
 TEST(PlayerPersistenceStateTest, RejectsStaleAndDuplicateAcknowledgements) {
 	PlayerPersistenceState state;
 
-	state.markDirty();
+	(void)state.markDirty();
 	const auto first = state.beginCheckpoint();
 	ASSERT_EQ(first, 1U);
-	state.markDirty();
+	(void)state.markDirty();
 
 	EXPECT_FALSE(state.acknowledgeSuccess(2));
 	EXPECT_FALSE(state.acknowledgeFailure(2));
@@ -101,7 +107,7 @@ TEST(PlayerPersistenceStateTest, RejectsStaleAndDuplicateAcknowledgements) {
 TEST(PlayerPersistenceStateTest, NewMutationDoesNotSilentlyResetFailureBudget) {
 	PlayerPersistenceState state;
 
-	state.markDirty();
+	(void)state.markDirty();
 	const auto first = state.beginCheckpoint(1);
 	ASSERT_EQ(first, 1U);
 	ASSERT_TRUE(state.acknowledgeFailure(*first));
@@ -110,4 +116,49 @@ TEST(PlayerPersistenceStateTest, NewMutationDoesNotSilentlyResetFailureBudget) {
 	EXPECT_EQ(state.consecutiveFailures(), 1U);
 	EXPECT_FALSE(state.canBeginCheckpoint(1));
 	EXPECT_TRUE(state.canBeginCheckpoint(2));
+}
+
+TEST(PlayerPersistenceStateTest, ConcurrentDirtyMarksDoNotLoseGenerations) {
+	PlayerPersistenceState state;
+	constexpr uint32_t threadCount = 8;
+	constexpr uint32_t marksPerThread = 250;
+	std::vector<std::thread> workers;
+	workers.reserve(threadCount);
+
+	for (uint32_t threadIndex = 0; threadIndex < threadCount; ++threadIndex) {
+		workers.emplace_back([&state] {
+			for (uint32_t mark = 0; mark < marksPerThread; ++mark) {
+				(void)state.markDirty();
+			}
+		});
+	}
+	for (auto &worker : workers) {
+		worker.join();
+	}
+
+	EXPECT_EQ(state.dirtyGeneration(), threadCount * marksPerThread);
+	EXPECT_TRUE(state.isDirty());
+}
+
+TEST(PlayerPersistenceStateTest, ConcurrentCheckpointBeginsProduceOneOwner) {
+	PlayerPersistenceState state;
+	(void)state.markDirty();
+	constexpr uint32_t threadCount = 16;
+	std::atomic<uint32_t> owners = 0;
+	std::vector<std::thread> workers;
+	workers.reserve(threadCount);
+
+	for (uint32_t threadIndex = 0; threadIndex < threadCount; ++threadIndex) {
+		workers.emplace_back([&state, &owners] {
+			if (state.beginCheckpoint().has_value()) {
+				owners.fetch_add(1, std::memory_order_relaxed);
+			}
+		});
+	}
+	for (auto &worker : workers) {
+		worker.join();
+	}
+
+	EXPECT_EQ(owners.load(std::memory_order_relaxed), 1U);
+	EXPECT_TRUE(state.hasCheckpointInFlight());
 }

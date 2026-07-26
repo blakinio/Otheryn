@@ -38,15 +38,29 @@ namespace {
 TEST(Prs002DirtyPlayerCheckpointContractTest, PinsScheduledSaveToRequestedPlayerObject) {
 	const auto header = readSource("src/game/scheduling/save_manager.hpp");
 	expectContains(header, "void schedulePlayer(std::weak_ptr<Player> player);");
-	expectContains(header, "bool doSavePlayer(std::shared_ptr<Player> player);");
+	expectContains(header, "void scheduleDirtyPlayer(std::weak_ptr<Player> player, std::shared_ptr<PlayerPersistenceState> state);");
+	expectContains(header, "std::owner_less<std::weak_ptr<Player>>");
 	expectContains(header, "GUID or player runtime ID re-resolution");
 	expectContains(header, "target the object that requested it");
 
 	const auto source = readSource("src/game/scheduling/save_manager.cpp");
 	expectContains(source, "auto playerToSave = playerPtr.lock();");
-	expectContains(source, "m_playerMap[playerToSave->getGUID()] = scheduledAt;");
-	expectContains(source, "if (m_playerMap[player->getGUID()] != scheduledAt)");
-	expectContains(source, "doSavePlayer(player);");
+	expectContains(source, "auto state = persistenceStateFor(playerToSave);");
+	expectContains(source, "state->markDirty();");
+	expectContains(source, "const auto generation = state->beginCheckpoint();");
+	EXPECT_EQ(source.find("m_playerMap"), std::string::npos);
+}
+
+TEST(Prs002DirtyPlayerCheckpointContractTest, AcknowledgesExactGenerationAndCoalescesNewerRequests) {
+	const auto source = readSource("src/game/scheduling/save_manager.cpp");
+	expectContains(source, "state->acknowledgeFailure(generation)");
+	expectContains(source, "state->acknowledgeSuccess(generation)");
+	expectContains(source, "if (state->isDirty() && player->isOnline()");
+	expectContains(source, "scheduleDirtyPlayer(player, state);");
+	expectContains(source, "Coalescing player save because a checkpoint is already in flight");
+
+	const auto scheduleDirty = functionBody(source, "void SaveManager::scheduleDirtyPlayer", "bool SaveManager::doSavePlayer");
+	EXPECT_EQ(scheduleDirty.find("markDirty"), std::string_view::npos);
 }
 
 TEST(Prs002DirtyPlayerCheckpointContractTest, PreservesSaveOutcomeAndDomainBoundaries) {
@@ -71,12 +85,12 @@ TEST(Prs002DirtyPlayerCheckpointContractTest, DoesNotMistakeSaveSideLockForMutat
 	EXPECT_EQ(addSkillAdvance.find("mutex"), std::string_view::npos);
 }
 
-TEST(Prs002DirtyPlayerCheckpointContractTest, RecordsGenerationSafeTargetBeforeRuntimeImplementation) {
+TEST(Prs002DirtyPlayerCheckpointContractTest, RecordsGenerationSafeTargetBeforeBroadMutationInstrumentation) {
 	const auto contract = readSource("docs/architecture/prs-002-dirty-player-checkpoint-contract.md");
 	expectContains(contract, "Every persistence-relevant mutation advances a monotonic dirty generation.");
 	expectContains(contract, "The save result acknowledges only the captured generation.");
 	expectContains(contract, "A mutation during save remains dirty");
 	expectContains(contract, "Queue coalescing is based on generation, not wall-clock timestamps.");
 	expectContains(contract, "Session/revision fencing remains PRS-004");
-	expectContains(contract, "Slice A — pure state machine");
+	expectContains(contract, "Slice B — SaveManager integration");
 }
