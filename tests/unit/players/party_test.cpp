@@ -9,6 +9,8 @@
 
 #include <gtest/gtest.h>
 
+#include <memory>
+
 #define private public
 #include "creatures/players/grouping/party.hpp"
 #undef private
@@ -20,18 +22,24 @@
 class PartyTest : public ::testing::Test {
 protected:
 	static void SetUpTestSuite() {
-		InMemoryLogger::install(injector_);
-		DI::setTestContainer(&injector_);
+		injector_ = std::make_unique<di::extension::injector<>>();
+		InMemoryLogger::install(*injector_);
+		DI::setTestContainer(injector_.get());
 	}
 
 	static void TearDownTestSuite() {
-		if (DI::getTestContainer() == &injector_) {
+		if (DI::getTestContainer() == injector_.get()) {
 			DI::setTestContainer(nullptr);
 		}
+
+		// Party::disband() materializes Game and Lua-backed services in this
+		// test injector. Destroy them while the Lua interface registry is still
+		// alive instead of relying on cross-translation-unit exit ordering.
+		injector_.reset();
 	}
 
 private:
-	inline static di::extension::injector<> injector_ {};
+	inline static std::unique_ptr<di::extension::injector<>> injector_;
 };
 
 TEST_F(PartyTest, GetPlayersAndDisbandHandleNullEntries) {
