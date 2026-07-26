@@ -30,6 +30,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+          show-progress: false
 
       - name: Validate script syntax
         shell: bash
@@ -53,16 +54,26 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          docker version
-          gpg --version
+          docker version --format '{{.Server.Version}}'
+          gpg --version | head -n 1
           python3 --version
-          sha256sum --version
-          tar --version
+          sha256sum --version | head -n 1
+          tar --version | head -n 1
 
       - name: Run disposable recovery drill
         shell: bash
         env:
           PRS001_KEEP_WORKDIR: "0"
         run: |
-          set -Eeuo pipefail
-          bash tests/integration/production-resilience/prs001-drill.sh
+          set -uo pipefail
+          drill_log="$(mktemp)"
+          set +e
+          bash tests/integration/production-resilience/prs001-drill.sh >"${drill_log}" 2>&1
+          drill_status=$?
+          set -e
+          tail -n 30 "${drill_log}"
+          if [[ ${drill_status} -ne 0 ]]; then
+            first_error="$(grep -m 1 -E 'ERROR:|error:|Error:' "${drill_log}" || true)"
+            echo "::error title=PRS-001 drill failed::${first_error:-See the final drill log lines}"
+            exit "${drill_status}"
+          fi
