@@ -1,12 +1,15 @@
 # OTH-20260726 — MGE-002 typed profile snapshot
 
-Status: **validating fixture compatibility fix**
+Status: **implementation validated; final documentation head pending Required**
 
 Issue: `#132`
 Branch: `dudantas/mge-002-typed-profile-snapshot`
 Pull request: `#133`
 Target repository: `blakinio/Otheryn`
 Synchronized main: `d585c1b8120973d50a3e846fb9e3b063ef3019ff`
+Validated code head: `953a0af93e7df64309dd524ada31ebdedefdac06`
+CI run: `30213109871` — success
+Required run: `30213109809` — success
 
 ## Objective
 
@@ -42,11 +45,11 @@ Add a bounded typed immutable startup `GameProfile` snapshot with fail-closed va
 
 ```yaml
 checkpoint_version: 1
-updated_at: "2026-07-26T19:05:00+02:00"
-head: "b581add19bbb584509b8fad0b52b2f3ec9812d8f"
+updated_at: "2026-07-26T19:56:00+02:00"
+head: "953a0af93e7df64309dd524ada31ebdedefdac06"
 branch: "dudantas/mge-002-typed-profile-snapshot"
 pr: 133
-status: "validating"
+status: "implementation_validated_final_docs_required_pending"
 context_routes:
   - "docs/architecture/modular-game-engine-and-profiles.md"
   - "docs/architecture/current-engine-ownership-and-dependencies.md"
@@ -72,8 +75,10 @@ proven:
   - "The branch is synchronized through main d585c1b8120973d50a3e846fb9e3b063ef3019ff."
   - "The implementation publishes shared_ptr<const GameProfile> only after successful validation."
   - "ConfigManager reload preserves the startup-only snapshot and selected compatibility values."
-  - "The PR diff contains only declared MGE-002 implementation, fixture, test and documentation paths and no transport workflow or payload."
   - "Explicit test fixture overrides do not mutate or republish the immutable startup GameProfile."
+  - "CI run 30213109871 succeeded on code head 953a0af93e7df64309dd524ada31ebdedefdac06."
+  - "Required run 30213109809 succeeded on the same code head."
+  - "PR 133 contains exactly fifteen declared implementation, fixture, test and documentation paths."
 derived:
   - "Snapshot-backed compatibility getters keep selected legacy consumers on the startup contract without a broad caller migration."
 unknown:
@@ -81,7 +86,7 @@ unknown:
 conflicts: []
 first_failure:
   marker: "linux-debug-fixture-reload"
-  evidence: "CI run 30211805149 compiled and smoke-tested all platforms, but five integration tests failed because fixture reloads could no longer replace snapshot-owned coreDirectory; the explicit test override fixes that boundary without weakening production reload semantics."
+  evidence: "CI run 30211805149 exposed five fixture reload failures; scoped test-only startup string overrides fixed the boundary, and CI run 30213109871 then passed the full Linux debug test suite."
 rejected_hypotheses:
   - "A typed profile snapshot is equivalent to a ModuleRegistry."
   - "Selecting an existing legacy protocol as the primary profile is authorized by MGE-002."
@@ -104,19 +109,28 @@ changed_paths:
 validation:
   - command: "revision-bounded payload materialization"
     result: "PASS"
-    evidence: "Run 30211701188 verified all payload hashes, synchronized current main, checked exact paths and committed the implementation."
+    evidence: "Run 30211701188 verified payload hashes, synchronized current main, checked exact paths and committed the implementation."
+  - command: "full repository CI"
+    result: "PASS"
+    evidence: "Run 30213109871 passed fast checks, Lua tests, Linux debug/release, macOS, Windows, Docker, runtime smoke tests and the full Linux debug test suite."
+  - command: "Required exact code head"
+    result: "PASS"
+    evidence: "Run 30213109809 succeeded on 953a0af93e7df64309dd524ada31ebdedefdac06."
   - command: "exact changed-path audit"
     result: "PASS"
-    evidence: "PR 133 lists exactly the thirteen declared implementation, test and documentation paths."
-  - command: "CI run 30211805149"
-    result: "FAIL"
-    evidence: "All compilers and smoke tests passed; Linux debug integration tests exposed fixture reload incompatibility now addressed by explicit scoped test overrides."
-  - command: "fixture compatibility regression"
+    evidence: "PR 133 lists exactly fifteen declared paths and no temporary payload, workflow or script."
+  - command: "discussion and review audit"
+    result: "PASS"
+    evidence: "Comments, submitted reviews and inline review threads are empty."
+  - command: "secret-pattern scan"
+    result: "PASS"
+    evidence: "Final unified diff contains no credential, token, private-key or secret assignment material."
+  - command: "main drift audit"
+    result: "PASS"
+    evidence: "Main remains d585c1b8120973d50a3e846fb9e3b063ef3019ff, matching the PR base."
+  - command: "final documentation head Required"
     result: "NOT_RUN"
-    evidence: "Pending exact-head CI after this bounded fix."
-  - command: "Required exact head"
-    result: "NOT_RUN"
-    evidence: "Pending the final trusted head produced by this checkpoint update."
+    evidence: "This documentation-only checkpoint commit triggers the last exact-head Required run."
 blockers: []
-next_action: "Run exact-head CI after the fixture compatibility fix, require Required success, audit discussions, reviews, secrets, paths and main drift, then squash merge PR 133 and archive the task."
+next_action: "Require success on the final documentation head, re-audit live PR state, then squash merge PR 133 with expected_head_sha and archive the lifecycle task."
 ```
