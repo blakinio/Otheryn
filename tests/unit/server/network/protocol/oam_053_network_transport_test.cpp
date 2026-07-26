@@ -4,8 +4,6 @@
 #include "server/network/protocol/protocol.hpp"
 #include "server/network/protocol/transport_codec.hpp"
 
-#include "game/scheduling/dispatcher.hpp"
-
 #include <gtest/gtest.h>
 
 namespace {
@@ -46,8 +44,9 @@ namespace {
 	}
 
 	void closeConnection(const Connection_ptr &connection) {
+		// These focused tests never accept a Protocol into Connection, so forced close
+		// releases the manager entry and socket synchronously without queuing release().
 		connection->close(true);
-		g_dispatcher().executeSerialEventsForTest();
 	}
 }
 
