@@ -6,6 +6,17 @@ on:
       - dudantas/oam-051a-wheel-safety-adapt
     paths:
       - tools/ai-agent/oam_051a_materialize.py
+      - .github/workflows/oam-051a-materialize.yml
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+    paths:
+      - tools/ai-agent/oam_051a_materialize.py
+      - .github/workflows/oam-051a-materialize.yml
 
 permissions:
   contents: write
