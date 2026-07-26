@@ -6,7 +6,7 @@ base_branch: main
 created: 2026-07-26
 updated: 2026-07-26
 related_issue: "145"
-related_pr: null
+related_pr: "146"
 owned_paths:
   - docs/agents/tasks/active/OTH-20260726-prs002-slice-a-player-persistence-state.md
   - src/creatures/players/player_persistence_state.hpp
@@ -50,10 +50,10 @@ Implement the accepted pure, database-independent generation and acknowledgement
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-26T21:10:00+02:00
-head: 5901f0038f7f6ebd6eb08aa4522a23281d27d919
+updated_at: 2026-07-26T21:12:00+02:00
+head: c47451bd869ea9df31050df3f7a2643d520650ac
 branch: dudantas/prs-002-slice-a-player-persistence-state
-pr: none
+pr: 146
 status: implementing
 context_routes:
   - database-persistence
@@ -71,6 +71,7 @@ proven:
   - The accepted next package is Slice A only, a pure PlayerPersistenceState with deterministic tests.
   - SaveManager integration, mutation instrumentation, outage handling and session fencing are excluded from this slice.
   - The target state must use monotonic generations rather than scheduling timestamps.
+  - Issue 145 and draft PR 146 own the four declared Slice A paths.
 derived:
   - A header-only value object can keep Slice A database-independent and avoid build-system changes outside the focused test registration.
 unknown:
@@ -92,8 +93,8 @@ validation:
     result: PASS
     evidence: Duplicate issue 143 and PR 144 were closed after main showed completed PRS-002 discovery issue 137 and PR 139.
   - command: python tools/agents/checkpoint.py docs/agents/tasks/active/OTH-20260726-prs002-slice-a-player-persistence-state.md --require-checkpoint
-    result: NOT_RUN
-    evidence: Run after publishing the task record and recording the draft PR head.
+    result: PASS
+    evidence: Compact checkpoint schema and evidence-state constraints validated before handoff.
 blockers: []
 next_action: Implement the pure PlayerPersistenceState header and deterministic Slice A transition tests, then run the focused unit target.
 ```
