@@ -41,8 +41,8 @@ Define a durable, evidence-bounded architecture for game-process crash recovery,
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-26T10:07:00+02:00
-head: 67a8fc5a0dd24da252a80301364dc5ad3eebf9d1
+updated_at: 2026-07-26T10:51:00+02:00
+head: 4c8034c1caa8b8454b9338277bbae415026219db
 branch: dudantas/production-resilience-contract
 pr: 117
 status: ready
@@ -62,41 +62,39 @@ owned_paths:
   - deploy/production/mariadb/99-resilience.cnf.example
   - docs/agents/tasks/active/OTH-20260726-production-resilience-contract.md
 proven:
-  - Task-start Otheryn main is ff90e93d872b6b47720f711483a9832203d5258d.
-  - Issue 116 owns the documentation-only architecture scope and explicitly authorizes no runtime, schema, deployment or production database mutation.
-  - OAM-004 already disables silent DB reconnect/replay, rolls back failed callbacks, stops failed migrations and propagates world-save failures.
-  - OAM-004 leaves player SQL versus durable KV atomicity and complete crash/restart semantics explicitly unresolved.
-  - The existing docker/docker-compose.yml is a local quickstart with MariaDB health dependency and restart policies, not a production backup/PITR deployment.
-  - The new architecture forbids automatic whole-world rollback after an ordinary game-process crash and separates restart, InnoDB crash recovery, PITR and host-loss recovery.
-  - The backup policy requires prepared, checksummed, encrypted off-host backups and isolated exact-time restore drills before production readiness is claimed.
-  - The agent guide defines bounded PRS-001 through PRS-008 implementation packages and failure-injection gates.
-  - deploy/production is established only as a non-runnable future ownership boundary; the MariaDB option file is explicitly design-only and not mounted anywhere.
-  - PR 117 contains exactly the seven owned paths, is mergeable and has no comments, reviews or review threads.
-  - Draft Required 30193557983 and ready-head Required runs 30193655938 and 30193658250 passed.
-  - Active Wheel PR 115 still targets the same task-start main and remains open, so merge order must avoid unnecessary target-main drift during its final validation.
+  - Current main is bd0b58a362d89e449a6863ba299d1c50ad4e6685.
+  - PR 115 merged as 47863ce250bce73c1b9af3077f82e9bf6e99e3d1 and its lifecycle task was archived by bd0b58a362d89e449a6863ba299d1c50ad4e6685.
+  - PR 117 audited head is 4c8034c1caa8b8454b9338277bbae415026219db on dudantas/production-resilience-contract.
+  - PR 117 contains exactly the seven owned paths and no other open PR exists in the repository.
+  - PR 117 has no conversation comments, submitted reviews or review threads.
+  - Main drift from ff90e93d872b6b47720f711483a9832203d5258d is exactly the merged Wheel package and its lifecycle archive, with no overlap with the seven owned paths.
+  - Exact-head Required run 30193714520 passed on 4c8034c1caa8b8454b9338277bbae415026219db.
+  - Scope review found documentation, one non-runnable deployment boundary and one design-only MariaDB option example only.
+  - No production credentials, endpoints, backup data, runnable production Compose, quickstart modification, runtime code, schema, migration or workflow change is present.
+  - The architecture forbids ordinary-crash whole-world rollback, arbitrary SQL replay and automatic failover before durable fencing and split-brain prevention are proven.
+  - OAM-004 fail-closed transaction, migration and save-failure contracts remain preserved; SQL versus durable KV crash atomicity remains unresolved.
+  - PRS-001 through PRS-008 remain independent future packages and no PRS implementation begins in PR 117.
 derived:
-  - Canary/Otheryn can use container restarts for process availability while keeping database state authoritative after an ordinary channel crash.
-  - Safe future multichannel persistence requires database-enforced revision/session fencing rather than Redis-only leases.
-  - Critical retryable economy operations require idempotency identities and transactionally coupled audit/outbox state.
+  - The two-commit target-main drift is semantically disjoint from the production-resilience documentation contract.
+  - PR 117 may be squash-merged after its refreshed exact head passes Required and the final race-safe drift/discussion audit remains clean.
 unknown:
   - Exact production VPS, storage, object-store, MariaDB image and monitoring stack.
-  - Real database size, write rate, backup duration and acceptable measured checkpoint interval.
-  - Exact source paths and schema design for PRS-002 through PRS-006.
-  - Final target-main SHA and merge order after OAM-051A PR 115 completes.
+  - Real database size, write rate, backup duration and measured RPO/RTO.
+  - Exact implementation paths and schema design for PRS-002 through PRS-006.
 conflicts: []
 first_failure:
   marker: no-production-recovery-contract
   command: task-start repository and OAM-004 evidence review
   result: RESOLVED_BY_DESIGN
-  evidence: Existing persistence hardening did not define an end-to-end production backup, PITR, crash, outage, stale-writer or operator recovery contract; this bounded package adds that contract without claiming implementation.
+  evidence: The repository lacked an end-to-end production backup, PITR, crash, outage, stale-writer and operator recovery contract; this bounded package adds only that contract.
 rejected_hypotheses:
   - Roll back the complete database after every game-process crash.
   - Treat Docker restart or healthcheck as data recovery proof.
-  - Enable automatic query replay after connection loss.
+  - Enable automatic replay of arbitrary SQL after connection loss.
   - Treat a MariaDB replica as a backup.
-  - Implement automatic failover before fencing and split-brain prevention.
+  - Implement automatic failover before authoritative fencing and split-brain prevention.
   - Add production behavior to the local docker quickstart.
-  - Combine all resilience implementation packages into one broad PR.
+  - Combine the eight resilience implementation packages.
 changed_paths:
   - deploy/production/README.md
   - deploy/production/mariadb/99-resilience.cnf.example
@@ -106,29 +104,28 @@ changed_paths:
   - docs/operations/backup-and-pitr-policy.md
   - docs/operations/production-recovery-runbook.md
 validation:
-  - command: task-start OAM-004 and Docker quickstart contract review
+  - command: required first-read and OAM-004 persistence-contract review
     result: PASS
-    evidence: Current proven and unresolved persistence/deployment boundaries are separated in the new documents.
-  - command: official MariaDB and Docker operating-reference review
+    evidence: All mandated documents were read from the PR branch and accepted invariants remain explicit.
+  - command: exact seven-path and open-PR ownership audit
     result: PASS
-    evidence: Design aligns with current MariaDB redo/PITR/binlog guidance and Docker restart/health dependency semantics; final implementation must revalidate pinned versions.
-  - command: scope and safety audit
+    evidence: PR 117 has exactly seven intended paths and no competing open PR owns repository paths.
+  - command: scope, secrets and unsupported-readiness audit
     result: PASS
-    evidence: Only documentation, a non-runnable deployment boundary and a design-only option example are changed; no runtime, schema, workflow, quickstart or production data path changes.
+    evidence: No secrets, endpoints, real backup data, runnable Compose, quickstart, runtime, schema, migration or workflow changes were found.
+  - command: comments, reviews and unresolved-thread audit
+    result: PASS
+    evidence: All three discussion surfaces are empty.
+  - command: target-main drift review
+    result: PASS
+    evidence: Main advanced by the disjoint Wheel merge and lifecycle archive only.
+  - command: exact-head Required
+    result: PASS
+    evidence: Required run 30193714520 completed successfully on audited head 4c8034c1caa8b8454b9338277bbae415026219db.
   - command: checkpoint contract validation
     result: PASS
-    evidence: Required fields, statuses, validation-result enums and compactness limits match docs/agents/GOVERNANCE_CONTRACT.json.
-  - command: exact changed-path and discussion audit
-    result: PASS
-    evidence: PR 117 has exactly seven owned paths and no comments, reviews or review threads.
-  - command: draft and ready-head Required
-    result: PASS
-    evidence: Required runs 30193557983, 30193655938 and 30193658250 completed successfully on their exact heads.
-  - command: merge-order conflict audit
-    result: PASS
-    evidence: PR 115 is open on the same main base; PR 117 remains unmerged to avoid introducing avoidable drift into the active Wheel validation.
+    evidence: The checkpoint uses the required schema, evidence states, compactness limits and one concrete next action.
 blockers:
-  - active PR 115 merge-order coordination
-  - final target-main drift audit immediately before merge
-next_action: Before merging PR 117, re-fetch main and PR 115; merge the active Wheel package first or explicitly rebase the chosen later PR, then repeat exact-head Required and drift checks without starting PRS-001.
+  - refreshed exact-head Required and final race-safe audit before merge
+next_action: Confirm Required on the refreshed PR 117 head, repeat the seven-path, discussion, mergeability and target-main drift audit, then expected-head squash-merge PR 117 and open the lifecycle-only archive PR.
 ```
