@@ -9,7 +9,7 @@ related_issue: "137"
 related_pr: "139"
 owned_paths:
   - docs/architecture/prs-002-dirty-player-checkpoint-contract.md
-  - tests/unit/game/prs_002_dirty-player-checkpoint-contract_test.cpp
+  - tests/unit/game/prs_002_dirty_player_checkpoint_contract_test.cpp
   - tests/unit/game/CMakeLists.txt
   - docs/agents/tasks/active/OTH-20260726-prs002-dirty-player-checkpoint-contract.md
 required_reads:
@@ -58,7 +58,7 @@ context_routes:
   - agent-governance
 owned_paths:
   - docs/architecture/prs-002-dirty-player-checkpoint-contract.md
-  - tests/unit/game/prs_002_dirty-player-checkpoint-contract_test.cpp
+  - tests/unit/game/prs_002_dirty_player_checkpoint_contract_test.cpp
   - tests/unit/game/CMakeLists.txt
   - docs/agents/tasks/active/OTH-20260726-prs002-dirty-player-checkpoint-contract.md
 proven:
@@ -90,7 +90,7 @@ rejected_hypotheses:
   - Add a production timer or claim a 60-second RPO before controlled crash evidence.
 changed_paths:
   - docs/architecture/prs-002-dirty-player-checkpoint-contract.md
-  - tests/unit/game/prs_002_dirty-player-checkpoint-contract_test.cpp
+  - tests/unit/game/prs_002_dirty_player_checkpoint_contract_test.cpp
   - tests/unit/game/CMakeLists.txt
   - docs/agents/tasks/active/OTH-20260726-prs002-dirty-player-checkpoint-contract.md
 validation:
