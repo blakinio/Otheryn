@@ -9,7 +9,7 @@ require_env() {
 	fi
 }
 
-for command_name in docker gpg python3 sha256sum tar; do
+for command_name in docker gpg id python3 sha256sum tar; do
 	if ! command -v "${command_name}" >/dev/null 2>&1; then
 		echo "ERROR: required command is unavailable: ${command_name}" >&2
 		exit 69
@@ -98,8 +98,9 @@ docker exec \
 		printf "%s\n" "${archive_completed_at}" > "${backup_root}/archive-completed-at"
 	' sh "${PRS001_BACKUP_ID}"
 
-# Extract only package-owned backup material from the Docker volume. No database
-# or production path is accepted from the caller.
+# Extract only package-owned backup material from the Docker volume. The helper
+# runs as root to read the physical backup, then returns every temporary output
+# file to the invoking host identity with mode 0600.
 docker run --rm \
 	--entrypoint sh \
 	--volume "${PRS001_BACKUP_VOLUME}:/backup:ro" \
@@ -107,6 +108,8 @@ docker run --rm \
 	"${PRS001_MARIADB_IMAGE}" \
 	-ceu '
 		backup_id="$1"
+		host_uid="$2"
+		host_gid="$3"
 		backup_root="/backup/${backup_id}"
 		cd "${backup_root}"
 		test -s full/mariadb_backup_binlog_info
@@ -120,7 +123,9 @@ docker run --rm \
 		done | sort > /out/binlog-files.txt
 		find full binlogs -type f -print0 | sort -z | xargs -0 sha256sum > /out/FILES.sha256
 		tar -cf /out/payload.tar full binlogs
-	' sh "${PRS001_BACKUP_ID}"
+		chown "${host_uid}:${host_gid}" /out/*
+		chmod 0600 /out/*
+	' sh "${PRS001_BACKUP_ID}" "$(id -u)" "$(id -g)"
 
 read -r backup_binlog_file backup_binlog_position _ < "${work_dir}/mariadb_backup_binlog_info"
 if [[ ! "${backup_binlog_file}" =~ ^mariadb-bin\.[0-9]+$ ]] || [[ ! "${backup_binlog_position}" =~ ^[0-9]+$ ]]; then
