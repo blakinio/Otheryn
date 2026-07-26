@@ -8,7 +8,7 @@ updated: 2026-07-26
 related_issue: "120"
 related_pr: "121"
 feature_merge: "e641bc9d4be6275d75d4f4af0d38a2179429a193"
-lifecycle_pr: ""
+lifecycle_pr: "124"
 owned_paths:
   - docs/architecture/modular-game-engine-and-profiles.md
   - docs/agents/tasks/archive/OTH-20260726-modular-game-engine-contract.md
@@ -66,6 +66,7 @@ proven:
   - Final discussion audit found no comments, submitted reviews or review threads.
   - Required run 30195926663 passed on exact final head 1ad569b1c29bd786efd928d887d195484bebe6da.
   - PR 121 was expected-head squash-merged as e641bc9d4be6275d75d4f4af0d38a2179429a193.
+  - Lifecycle PR 124 owns only the active-to-archive task move and final evidence record.
   - The merged contract defines one modular-monolith process per channel, not one service per gameplay feature.
   - It separates core-engine modules, gameplay-feature modules and content packages.
   - C++ owns legal module identity, dependencies, lifecycle, threading, persistence, safety validation and typed configuration schemas.
@@ -110,5 +111,5 @@ validation:
     result: PASS
     evidence: PR 121 merged as e641bc9d4be6275d75d4f4af0d38a2179429a193.
 blockers: []
-next_action: Merge the lifecycle-only archive PR, close issue 120 as completed, then create a separate issue and active task for MGE-001 ownership and dependency inventory before any modular runtime refactor.
+next_action: Merge lifecycle PR 124, close issue 120 as completed, then create a separate issue and active task for MGE-001 ownership and dependency inventory before any modular runtime refactor.
 ```
