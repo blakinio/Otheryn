@@ -57,7 +57,7 @@ void PlayerStorage::ingest(const std::vector<PlayerStorageRow> &rows) {
 void PlayerStorage::add(const uint32_t key, const int32_t value, const bool shouldStorageUpdate /* = false*/, const bool shouldTrackModification /*= true*/) {
 	const auto markTrackedMutation = [this, shouldTrackModification] {
 		if (shouldTrackModification) {
-			g_saveManager().markPlayerDirty(m_player.getPlayer());
+			SaveManager::markPlayerDirty(m_player.getPlayer());
 		}
 	};
 
@@ -126,7 +126,7 @@ bool PlayerStorage::remove(const uint32_t key) {
 	m_storageMap.erase(key);
 	m_modifiedKeys.erase(key);
 	m_removedKeys.insert(key);
-	g_saveManager().markPlayerDirty(m_player.getPlayer());
+	SaveManager::markPlayerDirty(m_player.getPlayer());
 	return true;
 }
 
