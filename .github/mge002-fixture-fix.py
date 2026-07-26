@@ -1,0 +1,89 @@
+from pathlib import Path
+
+
+def replace_once(path: str, old: str, new: str) -> None:
+    file = Path(path)
+    text = file.read_text()
+    count = text.count(old)
+    if count != 1:
+        raise SystemExit(f"{path}: expected one match, found {count}")
+    file.write_text(text.replace(old, new, 1))
+
+
+replace_once(
+    "src/config/configmanager.cpp",
+    "GameProfileSnapshot ConfigManager::getGameProfile() const {\n\treturn std::atomic_load_explicit(&gameProfileSnapshot, std::memory_order_acquire);\n}\n\nbool ConfigManager::reload() {",
+    "GameProfileSnapshot ConfigManager::getGameProfile() const {\n\treturn std::atomic_load_explicit(&gameProfileSnapshot, std::memory_order_acquire);\n}\n\nvoid ConfigManager::setStartupStringOverrideForTests(ConfigKey_t key, std::string value) {\n\tstartupStringOverridesForTests.insert_or_assign(key, std::move(value));\n}\n\nvoid ConfigManager::clearStartupStringOverrideForTests(ConfigKey_t key) {\n\tstartupStringOverridesForTests.erase(key);\n}\n\nbool ConfigManager::reload() {",
+)
+replace_once(
+    "src/config/configmanager.cpp",
+    "const std::string &ConfigManager::getString(const ConfigKey_t &key, const std::source_location &location /*= std::source_location::current()*/) const {\n\tif (const auto profile = getGameProfile()) {",
+    "const std::string &ConfigManager::getString(const ConfigKey_t &key, const std::source_location &location /*= std::source_location::current()*/) const {\n\tif (const auto testOverride = startupStringOverridesForTests.find(key); testOverride != startupStringOverridesForTests.end()) {\n\t\treturn testOverride->second;\n\t}\n\n\tif (const auto profile = getGameProfile()) {",
+)
+
+replace_once(
+    "tests/shared/game/events_scheduler_test_fixture.hpp",
+    "\t\t\tg_configManager().setConfigFileLua(tempConfigFilePath_.string());\n\t\t\tASSERT_TRUE(g_configManager().reload());\n\n\t\t\tresetSchedulerState();",
+    "\t\t\tg_configManager().setConfigFileLua(tempConfigFilePath_.string());\n\t\t\tASSERT_TRUE(g_configManager().reload());\n\t\t\tg_configManager().setStartupStringOverrideForTests(CORE_DIRECTORY, tempCoreDir_.generic_string());\n\n\t\t\tresetSchedulerState();",
+)
+replace_once(
+    "tests/shared/game/events_scheduler_test_fixture.hpp",
+    "\t\tvoid TearDown() override {\n\t\t\tonTearDown();\n\t\t\tresetSchedulerState();",
+    "\t\tvoid TearDown() override {\n\t\t\tonTearDown();\n\t\t\tresetSchedulerState();\n\t\t\tg_configManager().clearStartupStringOverrideForTests(CORE_DIRECTORY);",
+)
+
+replace_once(
+    "tests/shared/imbuements/imbuements_test_fixture.hpp",
+    "\t\t\t(void)g_configManager().setConfigFileLua(\"tests/fixture/config/imbuements_test.lua\");\n\t\t\tASSERT_TRUE(g_configManager().reload());\n\t\t\tASSERT_TRUE(g_vocations().reload());",
+    "\t\t\t(void)g_configManager().setConfigFileLua(\"tests/fixture/config/imbuements_test.lua\");\n\t\t\tASSERT_TRUE(g_configManager().reload());\n\t\t\tg_configManager().setStartupStringOverrideForTests(CORE_DIRECTORY, \"tests/fixture/core\");\n\t\t\tASSERT_TRUE(g_vocations().reload());",
+)
+replace_once(
+    "tests/shared/imbuements/imbuements_test_fixture.hpp",
+    "\t\tvoid TearDown() override {\n\t\t\t(void)g_configManager().setConfigFileLua(previousConfigFile_);",
+    "\t\tvoid TearDown() override {\n\t\t\tg_configManager().clearStartupStringOverrideForTests(CORE_DIRECTORY);\n\t\t\t(void)g_configManager().setConfigFileLua(previousConfigFile_);",
+)
+
+unit_test = Path("tests/unit/config/mge_002_game_profile_test.cpp")
+unit_text = unit_test.read_text()
+addition = r'''
+
+TEST(Mge002GameProfileTest, ExplicitTestOverrideDoesNotMutateStartupSnapshot) {
+	TemporaryProfileConfig configFile;
+	configFile.write("coreDirectory = 'startup-core'\n");
+
+	ConfigManager manager;
+	manager.setConfigFileLua(configFile.getPath().string());
+	ASSERT_TRUE(manager.load());
+	const auto profile = manager.getGameProfile();
+	ASSERT_NE(profile, nullptr);
+	ASSERT_EQ(profile->content.coreDirectory, "startup-core");
+
+	manager.setStartupStringOverrideForTests(CORE_DIRECTORY, "fixture-core");
+	EXPECT_EQ(manager.getString(CORE_DIRECTORY), "fixture-core");
+	EXPECT_EQ(manager.getGameProfile(), profile);
+	EXPECT_EQ(profile->content.coreDirectory, "startup-core");
+
+	manager.clearStartupStringOverrideForTests(CORE_DIRECTORY);
+	EXPECT_EQ(manager.getString(CORE_DIRECTORY), "startup-core");
+}
+'''
+if "ExplicitTestOverrideDoesNotMutateStartupSnapshot" in unit_text:
+    raise SystemExit("unit test already present")
+unit_test.write_text(unit_text + addition)
+
+replace_once(
+    "docs/architecture/typed-game-profile-snapshot.md",
+    "This is intentionally not a migration of every `ConfigManager` caller.\n\n## Non-goals",
+    "This is intentionally not a migration of every `ConfigManager` caller.\n\n## Test-fixture compatibility\n\nNormal reload remains unable to replace snapshot-owned startup values. Integration fixtures that intentionally load alternate core content must use the explicit `setStartupStringOverrideForTests`/`clearStartupStringOverrideForTests` scope around fixture loading. The override changes compatibility getter resolution only, does not mutate or republish `GameProfile`, and has no production caller.\n\n## Non-goals",
+)
+
+task = Path("docs/agents/tasks/active/OTH-20260726-mge002-typed-profile-snapshot.md")
+text = task.read_text()
+text = text.replace("Status: **validating exact final head**", "Status: **validating fixture compatibility fix**")
+text = text.replace("- `tests/unit/config/mge_002_game_profile_test.cpp`\n- `vcproj/canary.vcxproj`", "- `tests/unit/config/mge_002_game_profile_test.cpp`\n- `tests/shared/game/events_scheduler_test_fixture.hpp`\n- `tests/shared/imbuements/imbuements_test_fixture.hpp`\n- `vcproj/canary.vcxproj`")
+text = text.replace('  - "tests/unit/config/mge_002_game_profile_test.cpp"\n  - "vcproj/canary.vcxproj"', '  - "tests/unit/config/mge_002_game_profile_test.cpp"\n  - "tests/shared/game/events_scheduler_test_fixture.hpp"\n  - "tests/shared/imbuements/imbuements_test_fixture.hpp"\n  - "vcproj/canary.vcxproj"')
+text = text.replace('  - "The PR diff contains exactly the thirteen declared MGE-002 paths and no transport workflow or payload."', '  - "The PR diff contains only declared MGE-002 implementation, fixture, test and documentation paths and no transport workflow or payload."\n  - "Explicit test fixture overrides do not mutate or republish the immutable startup GameProfile."')
+text = text.replace('  marker: "resolved-checkpoint-contract"\n  evidence: "The staged task used an obsolete checkpoint shape; this commit converts it to the current portable checkpoint contract before final validation."', '  marker: "linux-debug-fixture-reload"\n  evidence: "CI run 30211805149 compiled and smoke-tested all platforms, but five integration tests failed because fixture reloads could no longer replace snapshot-owned coreDirectory; the explicit test override fixes that boundary without weakening production reload semantics."')
+text = text.replace('  - command: "focused and repository CI"\n    result: "NOT_RUN"\n    evidence: "A trusted checkpoint commit is triggering final exact-head workflows."', '  - command: "CI run 30211805149"\n    result: "FAIL"\n    evidence: "All compilers and smoke tests passed; Linux debug integration tests exposed fixture reload incompatibility now addressed by explicit scoped test overrides."\n  - command: "fixture compatibility regression"\n    result: "NOT_RUN"\n    evidence: "Pending exact-head CI after this bounded fix."')
+text = text.replace('next_action: "Require exact-head CI and Required success, audit discussions, reviews, secrets, paths and main drift, then squash merge PR 133 and archive the task."', 'next_action: "Run exact-head CI after the fixture compatibility fix, require Required success, audit discussions, reviews, secrets, paths and main drift, then squash merge PR 133 and archive the task."')
+task.write_text(text)
