@@ -9,7 +9,7 @@ updated: 2026-07-26
 related_pr: "128"
 feature_head: "a507abc5d6b9aa3158f9b009a715d5aee0b4c43c"
 feature_merge: "546eac0a00ec620e7293d0548e30662024464084"
-lifecycle_pr: "pending"
+lifecycle_pr: "134"
 owned_paths:
   - data/XML/storages.xml
   - data/modules/scripts/taskboard/taskboard.lua
@@ -109,5 +109,5 @@ validation:
     result: PASS
     evidence: seven approved feature paths, no discussion or review blockers, behind_by 0 before expected-head squash merge
 blockers: []
-next_action: Merge the lifecycle archive PR, reconcile the completed OAM-051A and OAM-051B results into Canary governance, then select the next bounded OAM package without reopening deferred parity work.
+next_action: Merge lifecycle PR 134, reconcile the completed OAM-051A and OAM-051B results into Canary governance, then select the next bounded OAM package without reopening deferred parity work.
 ```
