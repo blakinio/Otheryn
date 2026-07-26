@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include "modules/module_lifecycle.hpp"
 #include "security/rsa.hpp"
 #include "server/server.hpp"
 
@@ -50,6 +51,7 @@ private:
 	Logger &logger;
 	RSAManager &rsa;
 	ServiceManager &serviceManager;
+	std::unique_ptr<ModuleCompositionRoot> moduleCompositionRoot;
 
 	LoaderStatus loaderStatus = LoaderStatus::LOADING;
 	std::mutex loaderMutex;
@@ -72,4 +74,6 @@ private:
 	void loadMaps() const;
 	void setupHousesRent();
 	void modulesLoadHelper(bool loaded, std::string_view identifier);
+	void startSelectedInfrastructure(const GameProfile &profile);
+	void stopSelectedInfrastructure() noexcept;
 };
