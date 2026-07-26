@@ -205,7 +205,6 @@ gameProtocolPort = 7300
 	EXPECT_EQ(manager.getNumber(GAME_PORT), 7200);
 }
 
-
 TEST(Mge002GameProfileTest, ExplicitTestOverrideDoesNotMutateStartupSnapshot) {
 	TemporaryProfileConfig configFile;
 	configFile.write("coreDirectory = 'startup-core'\n");
