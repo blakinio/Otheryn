@@ -104,7 +104,7 @@ This is a fixture-owned cross-translation-unit static destruction-order defect. 
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-26T13:22:00+02:00
+updated_at: 2026-07-26T13:24:00+02:00
 head: cac32dcc5819076562ee5099806a0a9a92515e42
 branch: dudantas/fix-party-test-teardown
 pr: 126
@@ -155,10 +155,10 @@ changed_paths:
   - docs/agents/tasks/active/OTH-20260726-party-test-teardown-segfault.md
 validation:
   - command: standard Linux debug CI run 30197504976
-    result: FAIL_EXPECTED
+    result: FAIL
     evidence: Two attempts reproduce the same post-success SEGFAULT and isolate the original blocker.
   - command: Party Test Sanitizer run 30198967320 job 89785504123
-    result: FAIL_EXPECTED
+    result: FAIL
     evidence: Baseline ASAN run identifies the exact exit-order heap-use-after-free after 25 successful repetitions.
   - command: fixed focused ASAN repetition
     result: NOT_RUN
