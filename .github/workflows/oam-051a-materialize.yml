@@ -1,0 +1,73 @@
+name: OAM-051A Materialize
+
+on:
+  push:
+    branches:
+      - dudantas/oam-051a-wheel-safety-adapt
+    paths:
+      - tools/ai-agent/oam_051a_materialize.py
+
+permissions:
+  contents: write
+
+concurrency:
+  group: oam-051a-materialize-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@v4
+        with:
+          ref: dudantas/oam-051a-wheel-safety-adapt
+          fetch-depth: 0
+
+      - name: Verify branch and clean tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = "dudantas/oam-051a-wheel-safety-adapt"
+          test -z "$(git status --porcelain)"
+
+      - name: Materialize bounded adaptation
+        run: python tools/ai-agent/oam_051a_materialize.py
+
+      - name: Verify exact scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          changed="$(git diff --name-only | sort)"
+          printf '%s\n' "$changed"
+          expected="$(printf '%s\n' \
+            src/creatures/players/components/wheel/player_wheel.cpp \
+            src/creatures/players/components/wheel/player_wheel.hpp \
+            src/creatures/players/components/wheel/wheel_gems.cpp \
+            src/creatures/players/components/wheel/wheel_gems.hpp \
+            src/io/functions/iologindata_load_player.cpp \
+            src/server/network/protocol/protocolgame.cpp \
+            tests/unit/players/CMakeLists.txt \
+            tests/unit/players/oam_051_wheel_safety_adapt_test.cpp | sort)"
+          test "$changed" = "$expected"
+
+      - name: Commit bounded adaptation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/creatures/players/components/wheel/player_wheel.cpp \
+            src/creatures/players/components/wheel/player_wheel.hpp \
+            src/creatures/players/components/wheel/wheel_gems.cpp \
+            src/creatures/players/components/wheel/wheel_gems.hpp \
+            src/io/functions/iologindata_load_player.cpp \
+            src/server/network/protocol/protocolgame.cpp \
+            tests/unit/players/CMakeLists.txt \
+            tests/unit/players/oam_051_wheel_safety_adapt_test.cpp
+          git diff --cached --check
+          git commit -m "fix(wheel): adapt OAM-051A safety invariants"
+          git push origin HEAD:dudantas/oam-051a-wheel-safety-adapt
