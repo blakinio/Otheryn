@@ -66,7 +66,7 @@ jobs:
           PRS001_KEEP_WORKDIR: "0"
         run: |
           set -uo pipefail
-          drill_log="$(mktemp)"
+          drill_log="${RUNNER_TEMP}/prs001-drill.log"
           set +e
           bash tests/integration/production-resilience/prs001-drill.sh >"${drill_log}" 2>&1
           drill_status=$?
@@ -74,6 +74,15 @@ jobs:
           tail -n 30 "${drill_log}"
           if [[ ${drill_status} -ne 0 ]]; then
             first_error="$(grep -m 1 -E 'ERROR:|error:|Error:' "${drill_log}" || true)"
-            echo "::error title=PRS-001 drill failed::${first_error:-See the final drill log lines}"
+            echo "::error title=PRS-001 drill failed::${first_error:-See the retained drill log artifact}"
             exit "${drill_status}"
           fi
+
+      - name: Retain disposable drill log
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: prs001-drill-log
+          path: ${{ runner.temp }}/prs001-drill.log
+          if-no-files-found: error
+          retention-days: 1
