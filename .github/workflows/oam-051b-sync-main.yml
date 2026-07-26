@@ -1,0 +1,34 @@
+name: OAM-051B Sync Main
+
+on:
+  push:
+    branches:
+      - dudantas/oam-051b-task-shop-adapt
+    paths:
+      - ".github/workflows/oam-051b-sync-main.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout task branch
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: dudantas/oam-051b-task-shop-adapt
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Merge current main and remove helper
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git merge --no-edit origin/main
+          git rm .github/workflows/oam-051b-sync-main.yml
+          git commit -m "chore(oam): remove branch sync helper"
+          git push origin HEAD:dudantas/oam-051b-task-shop-adapt
