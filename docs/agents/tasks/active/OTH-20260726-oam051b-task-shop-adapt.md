@@ -7,10 +7,10 @@ branch: dudantas/oam-051b-task-shop-adapt
 base_branch: main
 created: 2026-07-26
 updated: 2026-07-26
-last_verified_commit: "38bb62192d25984d63f96c2637348b4adc82f6cd"
+last_verified_commit: "a63fa3235530acf54dfc343cbc0a772101bc6071"
 risk: high
 related_issue: ""
-related_pr: ""
+related_pr: "128"
 depends_on:
   - Canary OAM-051B preflight PR 959 merged as 9e865b68b9197b28450002412ca1720683cf1f64
   - OAM-051A lifecycle completed as bd0b58a362d89e449a6863ba299d1c50ad4e6685
@@ -22,18 +22,17 @@ owned_paths:
     - data/XML/storages.xml
     - data/modules/scripts/taskboard/taskboard.lua
     - src/creatures/players/components/wheel/player_wheel.cpp
-    - src/creatures/players/components/wheel/player_wheel.hpp
-    - src/io/functions/iologindata_load_player.cpp
-    - src/lua/functions/creatures/player/player_functions.cpp
     - tests/unit/players/oam_051b_task_shop_adapt_test.cpp
     - tests/unit/players/CMakeLists.txt
     - docs/oam-051b-task-shop-adapt.md
     - docs/agents/tasks/active/OTH-20260726-oam051b-task-shop-adapt.md
+    - .github/workflows/oam-051b-materialize.yml
   shared: []
   read_only:
     - src/creatures/players/player.*
     - src/creatures/players/components/player_storage.*
     - src/io/iologindata.cpp
+    - src/io/functions/iologindata_load_player.cpp
     - src/io/functions/iologindata_save_player.cpp
     - docs/oam-051-wheel-safety-adapt.md
     - blakinio/canary
@@ -69,7 +68,7 @@ Implement the single bounded Hunting Task Shop Bonus Promotion offer authorized 
 ## Exclusions
 
 - No maintained-client Taskboard UI or assets.
-- No Bounty, Weekly or other shop offers.
+- No Bounty, Weekly or other Task Shop offers.
 - No Wheel balance, combat effect, spell, stance, area or geometry changes.
 - No legacy parser transfer, schema migration, map, deployment or production action.
 
@@ -77,10 +76,10 @@ Implement the single bounded Hunting Task Shop Bonus Promotion offer authorized 
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-26T14:55:00+02:00
-head: 38bb62192d25984d63f96c2637348b4adc82f6cd
+updated_at: 2026-07-26T15:05:00+02:00
+head: a63fa3235530acf54dfc343cbc0a772101bc6071
 branch: dudantas/oam-051b-task-shop-adapt
-pr: null
+pr: 128
 status: implementing
 context_routes:
   - agent-governance
@@ -90,35 +89,46 @@ context_routes:
   - lua
   - testing
 owned_paths:
-  - bounded Taskboard, Wheel load/accounting, storage reservation, Lua binding, tests and lifecycle paths listed in frontmatter
+  - bounded Taskboard, Wheel accounting, storage reservation, tests and lifecycle paths listed in frontmatter
 proven:
-  - Otheryn current main is 38bb62192d25984d63f96c2637348b4adc82f6cd.
-  - No open Otheryn PR or branch owns OAM-051B or the bounded Taskboard/Wheel paths.
+  - Otheryn task base is 38bb62192d25984d63f96c2637348b4adc82f6cd.
+  - No open Otheryn PR or branch owned OAM-051B or the bounded Taskboard/Wheel paths at task start.
   - Canary preflight PR 959 merged as 9e865b68b9197b28450002412ca1720683cf1f64 after exact-head ownership and Required success.
   - Otheryn PlayerStorage and Task Hunting state persist inside one player SQL transaction.
   - Wheel KV is a separate post-commit persistence domain and is excluded.
   - Maintained OTClient already parses the exact Bonus Promotion payload but has no complete shipped Taskboard UI.
+  - Focused failing tests were committed before runtime implementation.
+  - Storage key 1000006 and bounded Taskboard purchase/response logic are now present on the branch.
 derived:
   - SQL-backed key 1000006 is the smallest schema-free durable counter.
-  - The target can ship server-first packet compatibility without a client UI claim.
+  - Existing generic Lua storage and Task Hunting APIs avoid a new Lua binding and generated API drift.
+  - Only PlayerWheel extra-point accounting still requires materialization in the large C++ source.
 unknown:
-  - Exact implementation shape after focused failing tests.
+  - Exact focused and final validation results after C++ materialization.
   - Physical official-client acceptance result.
 conflicts: []
 first_failure:
   marker: none
-  evidence: Preflight and ownership gates authorize the bounded target package.
+  evidence: The implementation is in progress; no owned failure has been observed yet.
 rejected_hypotheses:
   - Copy Canary PR 230 wholesale.
   - Persist purchased points in Wheel KV.
+  - Add a new Player Lua binding when existing bounded APIs suffice.
   - Add maintained-client UI in this package.
   - Expand into other Taskboard or Wheel parity work.
 changed_paths:
   - docs/agents/tasks/active/OTH-20260726-oam051b-task-shop-adapt.md
+  - tests/unit/players/oam_051b_task_shop_adapt_test.cpp
+  - tests/unit/players/CMakeLists.txt
+  - data/XML/storages.xml
+  - data/modules/scripts/taskboard/taskboard.lua
 validation:
   - command: current main and open ownership audit
     result: PASS
-    evidence: main 38bb62192d25984d63f96c2637348b4adc82f6cd; open PRs 123 and 126 do not overlap.
+    evidence: task base 38bb62192d25984d63f96c2637348b4adc82f6cd; task-start open PRs 123 and 126 did not overlap.
+  - command: test-first commit ordering
+    result: PASS
+    evidence: failing contract tests were committed before storage and Taskboard runtime changes.
 blockers: []
-next_action: Open a draft PR, add focused failing tests first, implement the bounded server contract, then run focused and exact-head final validation.
+next_action: Materialize the single bounded PlayerWheel getExtraPoints change, remove the temporary workflow, then run focused and exact-head final validation.
 ```
