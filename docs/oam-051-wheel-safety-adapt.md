@@ -24,7 +24,7 @@ The donor was pinned to Canary PR #220 squash `35ff51ac022e36d215db9d0fa86053b32
 
 The initial three-way application failed only on `player_wheel.cpp`. Selective application accepted 23 of 25 hunks. The remaining lifecycle hunk was adapted against current Otheryn to remove destroyed gems from KV, clear stale active copies by UUID, persist rotated affinity and reload bonuses. The other rejected donor hunk required no target change because current Otheryn already returned on an invalid active-gem index without clearing existing state.
 
-Temporary materialization workflow and helper files were removed before review. The final PR contains only eight implementation/test paths plus this report and the task checkpoint.
+Temporary materialization workflow and helper files were removed before review. The final feature PR contained only eight implementation/test paths plus this report and the task checkpoint.
 
 ## Preserved exclusions
 
@@ -40,17 +40,28 @@ The existing Supreme Grade II value of `12000000` remains unchanged. No `WheelBa
 
 ## Immutable baselines
 
-- Otheryn target: `ff90e93d872b6b47720f711483a9832203d5258d`;
+- Otheryn task-start target: `ff90e93d872b6b47720f711483a9832203d5258d`;
 - Canary governance: `a4a35495d4a8dc047bd3315b95c9fb577ac597af`;
 - selected donor: `35ff51ac022e36d215db9d0fa86053b326a0bdf0`;
-- target PR: `#115`.
+- exact final feature head: `1f4ce3c11f6acf292775daac886e9dace7e8280f`;
+- target PR: `#115`;
+- target squash merge: `47863ce250bce73c1b9af3077f82e9bf6e99e3d1`.
 
-## Validation evidence
+## Final validation evidence
 
 - exact source-path and exclusion audit: pass;
 - materializer exact-scope audit: pass for the eight approved implementation/test paths;
 - temporary-helper removal audit: pass;
-- draft-head lightweight CI and Required on `6fe767137b22e055df17c9024881b84577bd9f17`: pass, but build/test jobs were skipped because the PR remained draft;
-- full exact-final-head affected CI: pending.
+- `autofix.ci` run `30193154587`: pass; formatting-only changes;
+- full CI run `30193154684`: pass on exact head `1f4ce3c11f6acf292775daac886e9dace7e8280f`;
+- Fast Checks and Lua Tests: pass;
+- Linux debug: compile, Canary runtime smoke, schema import and all C++ tests pass;
+- Linux release: compile plus Canary and Global runtime smoke pass;
+- macOS compile and runtime smoke: pass;
+- Windows CMake compile/runtime smoke and Windows Solution build: pass;
+- Docker image build/export/validation: pass;
+- Required run `30193154608`: pass on the same exact head;
+- final comments, reviews and review-thread audit: clean;
+- target-main drift audit: clean before expected-head squash merge.
 
-Static/source assertions prove the selected integration and exclusions. They do not claim physical-client gameplay, DB failure injection, Task Shop transaction durability or full Wheel parity.
+Static/source assertions and the full repository gates prove the selected integration and exclusions. They do not claim physical-client gameplay, DB failure injection, Task Shop transaction durability or full Wheel parity.
