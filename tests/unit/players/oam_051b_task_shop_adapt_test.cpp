@@ -18,7 +18,7 @@ namespace {
 	}
 } // namespace
 
-class Oam051bTaskShopAdaptTest : public ::testing::Test {};
+class Oam051bTaskShopAdaptTest : public ::testing::Test { };
 
 TEST_F(Oam051bTaskShopAdaptTest, StorageBackedPurchasesContributeToWheelPoints) {
 	const auto source = readSource("src/creatures/players/components/wheel/player_wheel.cpp");
