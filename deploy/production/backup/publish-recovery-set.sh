@@ -69,7 +69,7 @@ docker exec \
 		backup_id="$1"
 		backup_root="/backup/${backup_id}"
 		credentials_file="${backup_root}/.publish-client.cnf"
-		test -s "${backup_root}/full/xtrabackup_binlog_info"
+		test -s "${backup_root}/full/mariadb_backup_binlog_info"
 		test -s "${backup_root}/backup-started-at"
 		test -s "${backup_root}/backup-completed-at"
 
@@ -109,11 +109,11 @@ docker run --rm \
 		backup_id="$1"
 		backup_root="/backup/${backup_id}"
 		cd "${backup_root}"
-		test -s full/xtrabackup_binlog_info
+		test -s full/mariadb_backup_binlog_info
 		test -s backup-started-at
 		test -s backup-completed-at
 		test -s archive-completed-at
-		cp full/xtrabackup_binlog_info backup-started-at backup-completed-at archive-completed-at /out/
+		cp full/mariadb_backup_binlog_info backup-started-at backup-completed-at archive-completed-at /out/
 		for file in binlogs/mariadb-bin.[0-9]*; do
 			test -e "${file}" || exit 72
 			basename "${file}"
@@ -122,7 +122,7 @@ docker run --rm \
 		tar -cf /out/payload.tar full binlogs
 	' sh "${PRS001_BACKUP_ID}"
 
-read -r backup_binlog_file backup_binlog_position _ < "${work_dir}/xtrabackup_binlog_info"
+read -r backup_binlog_file backup_binlog_position _ < "${work_dir}/mariadb_backup_binlog_info"
 if [[ ! "${backup_binlog_file}" =~ ^mariadb-bin\.[0-9]+$ ]] || [[ ! "${backup_binlog_position}" =~ ^[0-9]+$ ]]; then
 	echo "ERROR: invalid backup binlog coordinate" >&2
 	exit 72
