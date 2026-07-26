@@ -55,13 +55,6 @@ jobs:
           echo "status=$status" >> "$GITHUB_OUTPUT"
           exit 0
 
-      - name: Preserve materializer diagnostics
-        uses: actions/upload-artifact@v4
-        with:
-          name: oam-051a-materializer-diagnostics
-          path: /tmp/oam-051a-materialize.log
-          if-no-files-found: error
-
       - name: Fail on materializer error
         if: steps.materialize.outputs.status != '0'
         shell: bash
@@ -70,13 +63,11 @@ jobs:
           exit 1
 
       - name: Verify exact scope
+        id: scope
+        if: steps.materialize.outputs.status == '0'
         shell: bash
         run: |
-          set -euo pipefail
-          git diff --check
-          git diff --cached --check
-          changed="$({ git diff --name-only; git diff --cached --name-only; } | sort -u)"
-          printf '%s\n' "$changed"
+          set +e
           expected="$(printf '%s\n' \
             src/creatures/players/components/wheel/player_wheel.cpp \
             src/creatures/players/components/wheel/player_wheel.hpp \
@@ -86,9 +77,47 @@ jobs:
             src/server/network/protocol/protocolgame.cpp \
             tests/unit/players/CMakeLists.txt \
             tests/unit/players/oam_051_wheel_safety_adapt_test.cpp | sort)"
-          test "$changed" = "$expected"
+          changed="$({ git diff --name-only; git diff --cached --name-only; } | sort -u)"
+          status=0
+          {
+            echo '--- git status --short ---'
+            git status --short
+            echo '--- unstaged paths ---'
+            git diff --name-only
+            echo '--- staged paths ---'
+            git diff --cached --name-only
+            echo '--- combined paths ---'
+            printf '%s\n' "$changed"
+            echo '--- expected paths ---'
+            printf '%s\n' "$expected"
+            echo '--- unstaged diff check ---'
+            git diff --check || status=1
+            echo '--- staged diff check ---'
+            git diff --cached --check || status=1
+          } > /tmp/oam-051a-scope.log 2>&1
+          if [ "$changed" != "$expected" ]; then
+            status=1
+          fi
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Preserve materializer diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oam-051a-materializer-diagnostics
+          path: /tmp/oam-051a-*.log
+          if-no-files-found: error
+
+      - name: Fail on scope error
+        if: steps.materialize.outputs.status == '0' && steps.scope.outputs.status != '0'
+        shell: bash
+        run: |
+          cat /tmp/oam-051a-scope.log
+          exit 1
 
       - name: Commit bounded adaptation
+        if: steps.materialize.outputs.status == '0' && steps.scope.outputs.status == '0'
         shell: bash
         run: |
           set -euo pipefail
