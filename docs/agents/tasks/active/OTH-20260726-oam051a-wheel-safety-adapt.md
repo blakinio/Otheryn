@@ -41,8 +41,8 @@ Adapt only the evidence-backed Wheel safety and state-integrity corrections sele
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-26T09:35:00+02:00
-head: 0f51308c5d2233e5d1f8699eef31ca6289453ae8
+updated_at: 2026-07-26T09:36:00+02:00
+head: 261397df8390122a555cd083889c99c879ca66dd
 branch: dudantas/oam-051a-wheel-safety-adapt
 pr: 115
 status: validating
@@ -75,10 +75,11 @@ proven:
   - Existing Supreme Grade II cost 12000000 and all excluded balance/effect behavior remain unchanged; no WheelBalance or full-resonance helper was imported.
   - The generated test initially contained literal backslash-t sequences; commit 6fe767137b22e055df17c9024881b84577bd9f17 replaced them with valid C++ formatting.
   - Draft-head CI 30192888815 and Required 30192888751 succeeded on 6fe767137b22e055df17c9024881b84577bd9f17, but all affected build/test jobs were skipped because PR 115 remained draft.
+  - PR 115 was marked ready for review on head 261397df8390122a555cd083889c99c879ca66dd with ten final changed paths and no temporary helper paths.
 derived:
   - wheel-of-destiny ADAPT is bounded to safety and state integrity in OAM-051A.
   - Current protocol compatibility is preserved because existing action shapes are validated without adding an opcode or payload field.
-  - Lightweight draft success is not final proof; the PR must run full affected gates after becoming ready.
+  - This checkpoint commit must be treated as the first eligible exact-ready-head full validation, not as a scope change.
 unknown:
   - Exact compile and focused-test outcome on the final ready head.
   - Whether repository formatters or platform builds isolate any target-specific integration defect.
@@ -124,9 +125,9 @@ validation:
     evidence: CI 30192888815 and Required 30192888751 succeeded, but build, test and formatter jobs were skipped while the PR was draft.
   - command: exact-ready-head full affected gates
     result: NOT_RUN
-    evidence: PR 115 must be marked ready and receive a final checkpoint commit.
+    evidence: PR 115 is ready; this checkpoint commit must trigger full affected CI and Required on its resulting exact head.
 blockers:
   - exact-ready-head full CI and Required
   - clean discussion, review-thread and target-main drift audit
-next_action: Mark PR 115 ready, create one final checkpoint commit to trigger full affected exact-head gates, repair only isolated OAM-051A failures, then audit and expected-head squash merge.
+next_action: Inspect the exact-ready-head full CI and Required triggered by this checkpoint, repair only isolated OAM-051A failures, then audit and expected-head squash merge.
 ```
