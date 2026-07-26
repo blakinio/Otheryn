@@ -1,0 +1,61 @@
+name: OAM-051B Materialize
+
+on:
+  push:
+    branches:
+      - dudantas/oam-051b-task-shop-adapt
+    paths:
+      - .github/workflows/oam-051b-materialize.yml
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: dudantas/oam-051b-task-shop-adapt
+          fetch-depth: 0
+
+      - name: Apply bounded PlayerWheel accounting patch
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("src/creatures/players/components/wheel/player_wheel.cpp")
+          source = path.read_text(encoding="utf-8")
+          old = """\tif (hasCompletedMonkQuest()) {
+          \t\tconst auto monkQuestBonus = std::max<int32_t>(0, g_configManager().getNumber(WHEEL_MONK_QUEST_BONUS));
+          \t\ttotalBonus += static_cast<uint32_t>(monkQuestBonus);
+          \t}
+
+          \treturn static_cast<uint16_t>(std::min<uint32_t>(totalBonus, std::numeric_limits<uint16_t>::max()));
+          """
+          new = """\tif (hasCompletedMonkQuest()) {
+          \t\tconst auto monkQuestBonus = std::max<int32_t>(0, g_configManager().getNumber(WHEEL_MONK_QUEST_BONUS));
+          \t\ttotalBonus += static_cast<uint32_t>(monkQuestBonus);
+          \t}
+
+          \tconst auto huntingTaskShopPoints = std::clamp<int32_t>(m_player.getStorageValue(1000006), 0, 50);
+          \ttotalBonus += static_cast<uint32_t>(huntingTaskShopPoints);
+
+          \treturn static_cast<uint16_t>(std::min<uint32_t>(totalBonus, std::numeric_limits<uint16_t>::max()));
+          """
+          if source.count(old) != 1:
+              raise SystemExit(f"expected one exact getExtraPoints anchor, found {source.count(old)}")
+          path.write_text(source.replace(old, new, 1), encoding="utf-8")
+
+      - name: Commit materialized source
+        run: |
+          if git diff --quiet -- src/creatures/players/components/wheel/player_wheel.cpp; then
+            echo "No materialization change required"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/creatures/players/components/wheel/player_wheel.cpp
+          git commit -m "feat(oam): account for Task Shop Wheel points"
+          git push origin HEAD:dudantas/oam-051b-task-shop-adapt
