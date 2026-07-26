@@ -53,8 +53,8 @@ Expose dirty marking without implicit scheduling, select a deliberately small re
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-27T00:05:00+02:00
-head: 13329031712325045302c51ddf5c74a6962fb770
+updated_at: 2026-07-27T00:12:00+02:00
+head: b6cb04896385c859275df4b5a46b024b5df487ee
 branch: dudantas/prs-002c-representative-mutation-coverage
 pr: none
 status: ready
@@ -103,10 +103,10 @@ changed_paths:
 validation:
   - command: live main and ownership audit
     result: PASS
-    evidence: Main is 7ba0ac1ae6450378ad2fb4f85ccc9026309f902e; no open PR or issue owned PRS-002C before issue 159 and this branch were created.
+    evidence: Main is 7ba0ac1ae6450378ad2fb4f85ccc9026309f902e; issue 159 and this branch now own PRS-002C.
   - command: python tools/agents/checkpoint.py docs/agents/tasks/active/OTH-20260726-prs002c-representative-mutation-coverage.md --require-checkpoint
-    result: NOT_RUN
-    evidence: Run after the active task file is materialized locally from this branch.
+    result: PASS
+    evidence: Official repository checkpoint validator passed on the materialized active task before handoff.
 blockers: []
 next_action: Read the required files, inventory candidate Player mutation call sites, choose the smallest representative set, implement markPlayerDirty without implicit scheduling, add focused tests, and open a draft PR before full exact-head validation.
 ```
