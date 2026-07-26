@@ -7,6 +7,7 @@ created: 2026-07-26
 updated: 2026-07-26
 related_pr: "115"
 feature_merge: "47863ce250bce73c1b9af3077f82e9bf6e99e3d1"
+lifecycle_pr: "118"
 owned_paths:
   - src/creatures/players/components/wheel/player_wheel.cpp
   - src/creatures/players/components/wheel/player_wheel.hpp
