@@ -60,6 +60,7 @@ target_sources(
             instance/instance_creature_binder_test.cpp
             instance/instance_scoped_event_test.cpp
             instance/instance_arena_service_test.cpp
+            player_persistence_state_test.cpp
             player_stats_test.cpp
             prs_002_dirty_player_checkpoint_contract_test.cpp
             random_mount_test.cpp
