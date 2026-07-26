@@ -15,10 +15,101 @@
 #include "server/network/webhook/webhook.hpp"
 #include "utils/tools.hpp"
 
+#ifndef USE_PRECOMPILED_HEADERS
+	#include <cmath>
+	#include <optional>
+#endif
+
 #if LUA_VERSION_NUM >= 502
 	#undef lua_strlen
 	#define lua_strlen lua_rawlen
 #endif
+
+namespace {
+	[[nodiscard]] bool readProfileString(lua_State* L, const char* name, std::string_view defaultValue, std::string &value, std::string &error) {
+		lua_getglobal(L, name);
+		const auto type = lua_type(L, -1);
+		if (type == LUA_TNIL) {
+			value = defaultValue;
+			lua_pop(L, 1);
+			return true;
+		}
+		if (type != LUA_TSTRING) {
+			error = fmt::format("{} must be a string", name);
+			lua_pop(L, 1);
+			return false;
+		}
+		value = lua_tostring(L, -1);
+		lua_pop(L, 1);
+		return true;
+	}
+
+	[[nodiscard]] bool readProfileBoolean(lua_State* L, const char* name, bool defaultValue, bool &value, std::string &error) {
+		lua_getglobal(L, name);
+		const auto type = lua_type(L, -1);
+		if (type == LUA_TNIL) {
+			value = defaultValue;
+			lua_pop(L, 1);
+			return true;
+		}
+		if (type != LUA_TBOOLEAN) {
+			error = fmt::format("{} must be a boolean", name);
+			lua_pop(L, 1);
+			return false;
+		}
+		value = lua_toboolean(L, -1) != 0;
+		lua_pop(L, 1);
+		return true;
+	}
+
+	[[nodiscard]] bool readProfileInteger(lua_State* L, const char* name, int32_t defaultValue, int32_t minValue, int32_t maxValue, int32_t &value, std::string &error) {
+		lua_getglobal(L, name);
+		const auto type = lua_type(L, -1);
+		if (type == LUA_TNIL) {
+			value = defaultValue;
+			lua_pop(L, 1);
+			return true;
+		}
+		if (type != LUA_TNUMBER) {
+			error = fmt::format("{} must be an integer", name);
+			lua_pop(L, 1);
+			return false;
+		}
+		const auto number = lua_tonumber(L, -1);
+		const auto integer = lua_tointeger(L, -1);
+		lua_pop(L, 1);
+		if (!std::isfinite(number) || static_cast<lua_Number>(integer) != number || integer < minValue || integer > maxValue) {
+			error = fmt::format("{} must be an integer in range {}..{}", name, minValue, maxValue);
+			return false;
+		}
+		value = static_cast<int32_t>(integer);
+		return true;
+	}
+
+	[[nodiscard]] bool isValidProfileIdentifier(std::string_view identifier) {
+		if (identifier.empty() || identifier.size() > 64) {
+			return false;
+		}
+		for (size_t index = 0; index < identifier.size(); ++index) {
+			const auto character = identifier[index];
+			const bool alphaNumeric = (character >= 'a' && character <= 'z') || (character >= '0' && character <= '9');
+			if (!alphaNumeric && (index == 0 || (character != '-' && character != '_' && character != '.'))) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	[[nodiscard]] std::optional<uint16_t> findAvailableLegacyPort(uint32_t preferredPort, const GameProfileNetwork &network, uint16_t reservedLegacyPort) {
+		for (uint32_t port = preferredPort; port <= 65535; ++port) {
+			const auto candidate = static_cast<uint16_t>(port);
+			if (candidate != network.modernGamePort && candidate != network.loginPort && candidate != network.statusPort && candidate != reservedLegacyPort) {
+				return candidate;
+			}
+		}
+		return std::nullopt;
+	}
+} // namespace
 
 ConfigManager &ConfigManager::getInstance() {
 	return inject<ConfigManager>();
@@ -418,6 +509,18 @@ bool ConfigManager::load() {
 
 	loadLuaOTCFeatures(L);
 
+	if (!loaded.load(std::memory_order_relaxed)) {
+		std::string profileError;
+		auto profile = loadGameProfile(L, profileError);
+		if (!profile) {
+			g_logger().error("[ConfigManager::load] - Game profile validation failed: {}", profileError);
+			lua_close(L);
+			return false;
+		}
+		auto snapshot = std::make_shared<const GameProfile>(std::move(*profile));
+		std::atomic_store_explicit(&gameProfileSnapshot, std::move(snapshot), std::memory_order_release);
+	}
+
 	std::vector<std::function<void()>> callbacks;
 	{
 		std::scoped_lock lock(deferredCallbacksMutex);
@@ -429,6 +532,127 @@ bool ConfigManager::load() {
 	}
 	lua_close(L);
 	return true;
+}
+
+std::optional<GameProfile> ConfigManager::loadGameProfile(lua_State* L, std::string &error) const {
+	GameProfile profile;
+	std::string protocolProfileName;
+	std::string worldType;
+	int32_t loginPort = 7171;
+	int32_t statusPort = 7171;
+	int32_t modernGamePort = 7172;
+	int32_t configuredLegacy1100Port = 0;
+	int32_t configuredLegacy860Port = 0;
+
+	if (!readProfileString(L, "gameProfileId", "current", profile.id, error)
+	    || !readProfileString(L, "gameProtocolProfile", "current", protocolProfileName, error)
+	    || !readProfileBoolean(L, "allowOldProtocol", true, profile.allowOldProtocolProfiles, error)
+	    || !readProfileString(L, "worldType", "pvp", worldType, error)
+	    || !readProfileString(L, "coreDirectory", "data", profile.content.coreDirectory, error)
+	    || !readProfileString(L, "dataPackDirectory", "data-otservbr-global", profile.content.dataPackDirectory, error)
+	    || !readProfileString(L, "mapName", "canary", profile.content.mapName, error)
+	    || !readProfileBoolean(L, "useAnyDatapackFolder", false, profile.content.allowAnyDatapackFolder, error)
+	    || !readProfileBoolean(L, "toggleMapCustom", true, profile.content.loadCustomMaps, error)
+	    || !readProfileInteger(L, "loginProtocolPort", 7171, 1, 65535, loginPort, error)
+	    || !readProfileInteger(L, "statusProtocolPort", 7171, 1, 65535, statusPort, error)
+	    || !readProfileInteger(L, "gameProtocolPort", 7172, 1, 65535, modernGamePort, error)
+	    || !readProfileInteger(L, "legacy1100GameProtocolPort", 0, 0, 65535, configuredLegacy1100Port, error)
+	    || !readProfileInteger(L, "legacy860GameProtocolPort", 0, 0, 65535, configuredLegacy860Port, error)) {
+		return std::nullopt;
+	}
+
+	if (!isValidProfileIdentifier(profile.id)) {
+		error = "gameProfileId must use 1..64 lowercase letters, digits, '.', '_' or '-' and start with a letter or digit";
+		return std::nullopt;
+	}
+
+	const auto* protocolProfile = ProtocolProfileRegistry::resolveByName(protocolProfileName);
+	if (!protocolProfile || !ProtocolProfileRegistry::isProfileAllowed(protocolProfile->id)) {
+		error = fmt::format("gameProtocolProfile '{}' is not a registered enabled protocol profile", protocolProfileName);
+		return std::nullopt;
+	}
+	if (protocolProfile->id != ProtocolProfileId::Current) {
+		error = fmt::format("gameProtocolProfile '{}' cannot be selected as the primary profile in MGE-002", protocolProfileName);
+		return std::nullopt;
+	}
+	profile.protocolProfile = protocolProfile->id;
+
+	worldType = asLowerCaseString(std::move(worldType));
+	if (worldType == "pvp") {
+		profile.rules.worldType = GameProfileWorldType::Pvp;
+	} else if (worldType == "no-pvp") {
+		profile.rules.worldType = GameProfileWorldType::NoPvp;
+	} else if (worldType == "pvp-enforced") {
+		profile.rules.worldType = GameProfileWorldType::PvpEnforced;
+	} else {
+		error = fmt::format("worldType '{}' is invalid; expected pvp, no-pvp or pvp-enforced", worldType);
+		return std::nullopt;
+	}
+
+	if (profile.content.coreDirectory.empty()) {
+		error = "coreDirectory must not be empty";
+		return std::nullopt;
+	}
+	if (profile.content.mapName.empty()) {
+		error = "mapName must not be empty";
+		return std::nullopt;
+	}
+	if (!profile.content.allowAnyDatapackFolder && profile.content.dataPackDirectory != "data-canary" && profile.content.dataPackDirectory != "data-otservbr-global") {
+		error = fmt::format("dataPackDirectory '{}' is not registered; expected data-canary or data-otservbr-global unless useAnyDatapackFolder is true", profile.content.dataPackDirectory);
+		return std::nullopt;
+	}
+
+	profile.network.loginPort = static_cast<uint16_t>(loginPort);
+	profile.network.statusPort = static_cast<uint16_t>(statusPort);
+	profile.network.modernGamePort = static_cast<uint16_t>(modernGamePort);
+	if (profile.network.modernGamePort == profile.network.loginPort || profile.network.modernGamePort == profile.network.statusPort) {
+		error = "gameProtocolPort must not conflict with loginProtocolPort or statusProtocolPort";
+		return std::nullopt;
+	}
+
+	if (!profile.allowOldProtocolProfiles) {
+		profile.network.legacy1100GamePort = 0;
+		profile.network.legacy860GamePort = 0;
+		return profile;
+	}
+
+	if (configuredLegacy1100Port > 0) {
+		profile.network.legacy1100GamePort = static_cast<uint16_t>(configuredLegacy1100Port);
+	} else {
+		const auto resolvedPort = findAvailableLegacyPort(static_cast<uint32_t>(profile.network.modernGamePort) + 1, profile.network, 0);
+		if (!resolvedPort) {
+			error = "legacy1100GameProtocolPort cannot be auto-selected because no port remains after gameProtocolPort";
+			return std::nullopt;
+		}
+		profile.network.legacy1100GamePort = *resolvedPort;
+	}
+
+	if (profile.network.legacy1100GamePort == profile.network.modernGamePort || profile.network.legacy1100GamePort == profile.network.loginPort || profile.network.legacy1100GamePort == profile.network.statusPort) {
+		error = "legacy1100GameProtocolPort conflicts with another active listener";
+		return std::nullopt;
+	}
+
+	if (configuredLegacy860Port > 0) {
+		profile.network.legacy860GamePort = static_cast<uint16_t>(configuredLegacy860Port);
+	} else {
+		const auto resolvedPort = findAvailableLegacyPort(static_cast<uint32_t>(profile.network.modernGamePort) + 2, profile.network, profile.network.legacy1100GamePort);
+		if (!resolvedPort) {
+			error = "legacy860GameProtocolPort cannot be auto-selected because no port remains after gameProtocolPort";
+			return std::nullopt;
+		}
+		profile.network.legacy860GamePort = *resolvedPort;
+	}
+
+	if (profile.network.legacy860GamePort == profile.network.modernGamePort || profile.network.legacy860GamePort == profile.network.loginPort || profile.network.legacy860GamePort == profile.network.statusPort || profile.network.legacy860GamePort == profile.network.legacy1100GamePort) {
+		error = "legacy860GameProtocolPort conflicts with another active listener";
+		return std::nullopt;
+	}
+
+	return profile;
+}
+
+GameProfileSnapshot ConfigManager::getGameProfile() const {
+	return std::atomic_load_explicit(&gameProfileSnapshot, std::memory_order_acquire);
 }
 
 bool ConfigManager::reload() {
@@ -516,6 +740,32 @@ float ConfigManager::loadFloatConfig(lua_State* L, const ConfigKey_t &key, const
 }
 
 const std::string &ConfigManager::getString(const ConfigKey_t &key, const std::source_location &location /*= std::source_location::current()*/) const {
+	if (const auto profile = getGameProfile()) {
+		switch (key) {
+			case CORE_DIRECTORY:
+				return profile->content.coreDirectory;
+			case DATA_DIRECTORY:
+				return profile->content.dataPackDirectory;
+			case MAP_NAME:
+				return profile->content.mapName;
+			case WORLD_TYPE: {
+				static const std::string pvp = "pvp";
+				static const std::string noPvp = "no-pvp";
+				static const std::string pvpEnforced = "pvp-enforced";
+				switch (profile->rules.worldType) {
+					case GameProfileWorldType::NoPvp:
+						return noPvp;
+					case GameProfileWorldType::PvpEnforced:
+						return pvpEnforced;
+					case GameProfileWorldType::Pvp:
+					default:
+						return pvp;
+				}
+			}
+			default:
+				break;
+		}
+	}
 	auto itCache = m_configString.find(key);
 	if (itCache != m_configString.end()) {
 		return itCache->second;
@@ -535,6 +785,22 @@ const std::string &ConfigManager::getString(const ConfigKey_t &key, const std::s
 }
 
 int32_t ConfigManager::getNumber(const ConfigKey_t &key, const std::source_location &location /*= std::source_location::current()*/) const {
+	if (const auto profile = getGameProfile()) {
+		switch (key) {
+			case LOGIN_PORT:
+				return profile->network.loginPort;
+			case STATUS_PORT:
+				return profile->network.statusPort;
+			case GAME_PORT:
+				return profile->network.modernGamePort;
+			case LEGACY_1100_GAME_PORT:
+				return profile->network.legacy1100GamePort;
+			case LEGACY_860_GAME_PORT:
+				return profile->network.legacy860GamePort;
+			default:
+				break;
+		}
+	}
 	auto itCache = m_configInteger.find(key);
 	if (itCache != m_configInteger.end()) {
 		return itCache->second;
@@ -554,6 +820,18 @@ int32_t ConfigManager::getNumber(const ConfigKey_t &key, const std::source_locat
 }
 
 bool ConfigManager::getBoolean(const ConfigKey_t &key, const std::source_location &location /*= std::source_location::current()*/) const {
+	if (const auto profile = getGameProfile()) {
+		switch (key) {
+			case OLD_PROTOCOL:
+				return profile->allowOldProtocolProfiles;
+			case USE_ANY_DATAPACK_FOLDER:
+				return profile->content.allowAnyDatapackFolder;
+			case TOGGLE_MAP_CUSTOM:
+				return profile->content.loadCustomMaps;
+			default:
+				break;
+		}
+	}
 	auto itCache = m_configBoolean.find(key);
 	if (itCache != m_configBoolean.end()) {
 		return itCache->second;

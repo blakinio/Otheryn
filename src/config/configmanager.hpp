@@ -10,6 +10,11 @@
 #pragma once
 
 #include "config_enums.hpp"
+#include "game_profile.hpp"
+
+#ifndef USE_PRECOMPILED_HEADERS
+	#include <optional>
+#endif
 
 using ConfigValue = std::variant<std::string, int32_t, bool, float>;
 using OTCFeatures = std::vector<uint8_t>;
@@ -41,6 +46,7 @@ public:
 	[[nodiscard]] bool isLoaded() const {
 		return loaded.load(std::memory_order_acquire);
 	}
+	[[nodiscard]] GameProfileSnapshot getGameProfile() const;
 
 	[[nodiscard]] const std::string &getString(const ConfigKey_t &key, const std::source_location &location = std::source_location::current()) const;
 	[[nodiscard]] int32_t getNumber(const ConfigKey_t &key, const std::source_location &location = std::source_location::current()) const;
@@ -61,7 +67,10 @@ private:
 	bool loadBoolConfig(lua_State* L, const ConfigKey_t &key, const char* identifier, const bool &defaultValue);
 	float loadFloatConfig(lua_State* L, const ConfigKey_t &key, const char* identifier, const float &defaultValue);
 
+	[[nodiscard]] std::optional<GameProfile> loadGameProfile(lua_State* L, std::string &error) const;
+
 	std::string configFileLua = { "config.lua" };
+	GameProfileSnapshot gameProfileSnapshot;
 	std::atomic_bool loaded = false;
 	std::mutex deferredCallbacksMutex;
 	std::vector<std::function<void()>> deferredCallbacks;

@@ -43,6 +43,9 @@ namespace protocol_port_utils {
 	}
 
 	[[nodiscard]] inline uint16_t getModernGamePort() {
+		if (const auto profile = g_configManager().getGameProfile()) {
+			return profile->network.modernGamePort;
+		}
 		return static_cast<uint16_t>(g_configManager().getNumber(GAME_PORT));
 	}
 
@@ -66,6 +69,9 @@ namespace protocol_port_utils {
 	}
 
 	[[nodiscard]] inline uint16_t getLegacy1100GamePort() {
+		if (const auto profile = g_configManager().getGameProfile()) {
+			return profile->network.legacy1100GamePort;
+		}
 		const auto configuredPort = g_configManager().getNumber(LEGACY_1100_GAME_PORT);
 		if (configuredPort > 0) {
 			return static_cast<uint16_t>(configuredPort);
@@ -75,6 +81,9 @@ namespace protocol_port_utils {
 	}
 
 	[[nodiscard]] inline uint16_t getLegacy860GamePort() {
+		if (const auto profile = g_configManager().getGameProfile()) {
+			return profile->network.legacy860GamePort;
+		}
 		const auto configuredPort = g_configManager().getNumber(LEGACY_860_GAME_PORT);
 		if (configuredPort > 0) {
 			return static_cast<uint16_t>(configuredPort);

@@ -223,6 +223,7 @@ public:
 	[[nodiscard]] static const TransportProfile &getTransportProfile(TransportProfileId id);
 	[[nodiscard]] static const ProtocolProfile &getCurrentProfile();
 	[[nodiscard]] static const ProtocolProfile* getProfile(ProtocolProfileId id);
+	[[nodiscard]] static const ProtocolProfile* resolveByName(std::string_view name);
 	[[nodiscard]] static const ProtocolProfile* resolveByClientVersion(uint16_t version, ClientWireFamily family = ClientWireFamily::CipsoftVanilla);
 	[[nodiscard]] static const ProtocolProfile* resolveByClientVersionAndAssets(uint16_t version, const ClientAssetSignatures &signatures, ClientWireFamily family = ClientWireFamily::CipsoftVanilla);
 	[[nodiscard]] static const AccountLoginLayout* resolveAccountLoginLayout(uint16_t version);

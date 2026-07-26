@@ -16,6 +16,7 @@
     <ClInclude Include="..\src\account\account_repository.hpp" />
     <ClInclude Include="..\src\account\account_repository_db.hpp" />
     <ClInclude Include="..\src\config\configmanager.hpp" />
+    <ClInclude Include="..\src\config\game_profile.hpp" />
     <ClInclude Include="..\src\config\forge_config_defaults.hpp" />
     <ClInclude Include="..\src\config\config_definitions.hpp" />
     <ClInclude Include="..\src\core.hpp" />
