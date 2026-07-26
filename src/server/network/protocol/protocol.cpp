@@ -20,8 +20,36 @@
 Protocol::Protocol(const Connection_ptr &initConnection) :
 	connectionPtr(initConnection) {
 	if (initConnection) {
-		initConnection->setTransportCodec(TransportCodecs::currentModern());
+		initConnection->setTransportCodec(TransportCodecs::currentGamePlain());
 	}
+}
+
+void Protocol::setChecksumMethod(ChecksumMethods_t method) {
+	const auto connection = getConnection();
+	if (!connection) {
+		return;
+	}
+
+	const auto &activeProfile = connection->getTransportCodec().getProfile();
+	TransportProfileId targetProfile = activeProfile.id;
+	if (activeProfile.outerLength == OuterLengthEncoding::ModernBlockCount) {
+		switch (method) {
+			case CHECKSUM_METHOD_ADLER32:
+				targetProfile = TransportProfileId::CurrentLogin;
+				break;
+			case CHECKSUM_METHOD_SEQUENCE:
+				targetProfile = TransportProfileId::CurrentGameSequence;
+				break;
+			case CHECKSUM_METHOD_NONE:
+				targetProfile = TransportProfileId::CurrentGamePlain;
+				break;
+		}
+	} else if (method != activeProfile.inboundChecksum || method != activeProfile.outboundChecksum) {
+		g_logger().error("[Protocol::setChecksumMethod] checksum contract is not available for transport profile {}", static_cast<uint8_t>(activeProfile.id));
+		return;
+	}
+
+	connection->setTransportCodec(TransportCodecs::get(targetProfile), connection->getInitialTransportState());
 }
 
 void Protocol::onSendMessage(const OutputMessage_ptr &msg) {
@@ -48,7 +76,22 @@ bool Protocol::sendRecvMessageCallback(NetworkMessage &msg) {
 
 bool Protocol::onRecvMessage(NetworkMessage &msg) {
 	const auto &connection = getConnection();
-	if (!connection || !connection->getTransportCodec().prepareInbound(*this, msg)) {
+	if (!connection) {
+		return false;
+	}
+
+	const auto &transportCodec = connection->getTransportCodec();
+	const auto transportResult = transportCodec.prepareInbound(*this, msg);
+	if (!transportResult.accepted()) {
+		g_logger().warn(
+			"[InboundTransport] frame rejected reason={} profile={} received_present={} received={} expected_present={} expected={}",
+			getInboundTransportStatusName(transportResult.status),
+			static_cast<uint8_t>(transportCodec.getProfile().id),
+			transportResult.receivedSequence.has_value(),
+			transportResult.receivedSequence.value_or(0),
+			transportResult.expectedSequence.has_value(),
+			transportResult.expectedSequence.value_or(0)
+		);
 		return false;
 	}
 
@@ -132,7 +175,6 @@ void Protocol::XTEA_transform(uint8_t* buffer, size_t messageLength, bool encryp
 			return;
 		}
 
-		// Convert bytes to uint32_t considering little-endian order
 		std::array<uint8_t, 4> bytes0;
 		std::array<uint8_t, 4> bytes1;
 		std::copy_n(tempBuffer.begin(), 4, bytes0.begin());
@@ -153,56 +195,13 @@ void Protocol::XTEA_transform(uint8_t* buffer, size_t messageLength, bool encryp
 			}
 		}
 
-		// Convert vData back to bytes
 		bytes0 = std::bit_cast<std::array<uint8_t, 4>>(vData0);
 		bytes1 = std::bit_cast<std::array<uint8_t, 4>>(vData1);
-
-		// Copy transformed bytes back to buffer
 		std::copy_n(bytes0.begin(), 4, buffer + readPos);
 		std::copy_n(bytes1.begin(), 4, buffer + readPos + 4);
 
 		readPos += 8;
 	}
-}
-
-void Protocol::XTEA_encrypt(OutputMessage &outputMessage) const {
-	// Ensure the message length is a multiple of 8
-	size_t paddingBytes = outputMessage.getLength() % 8;
-	if (paddingBytes != 0) {
-		outputMessage.addPaddingBytes(8 - paddingBytes);
-	}
-
-	uint8_t* buffer = outputMessage.getOutputBuffer();
-	size_t messageLength = outputMessage.getLength();
-
-	XTEA_transform(buffer, messageLength, true);
-}
-
-bool Protocol::XTEA_decrypt(NetworkMessage &msg) const {
-	uint16_t msgLength = msg.getLength() - (checksumMethod == CHECKSUM_METHOD_NONE ? 2 : 6);
-	uint8_t* buffer = msg.getBuffer() + msg.getBufferPosition();
-	if ((msgLength % 8) != 0) {
-		g_logger().error("XTEA_decrypt Failed - invalid block size: {}", msgLength);
-		for (int i = 0; i < msgLength; ++i) {
-			fmt::print("{:02X} ", buffer[i]);
-		}
-		fmt::print("\n");
-		return false;
-	}
-
-	size_t messageLength = msgLength;
-
-	XTEA_transform(buffer, messageLength, false);
-
-	uint8_t paddingSize = msg.getByte();
-	uint16_t innerLength = messageLength - paddingSize;
-	if (innerLength + paddingSize > msgLength) {
-		g_logger().error("XTEA_decrypt Failed - invalid inner length: {} + {} > {}", innerLength, paddingSize, msgLength);
-		return false;
-	}
-
-	msg.setLength(messageLength - paddingSize);
-	return true;
 }
 
 bool Protocol::RSA_decrypt(NetworkMessage &msg) {
@@ -211,7 +210,6 @@ bool Protocol::RSA_decrypt(NetworkMessage &msg) {
 	}
 
 	const auto charData = static_cast<char*>(static_cast<void*>(msg.getBuffer()));
-	// Does not break strict aliasing
 	g_RSA().decrypt(charData + msg.getBufferPosition());
 	return (msg.getByte() == 0);
 }
@@ -232,8 +230,8 @@ uint32_t Protocol::getIP() const {
 	return 0;
 }
 
-bool Protocol::compression(OutputMessage &outputMessage) const {
-	if (checksumMethod != CHECKSUM_METHOD_SEQUENCE) {
+bool Protocol::compression(OutputMessage &outputMessage, CompressionLayout layout) const {
+	if (layout == CompressionLayout::None) {
 		return false;
 	}
 
@@ -283,7 +281,6 @@ Protocol::ZStream::ZStream() noexcept {
 	stream->zalloc = nullptr;
 	stream->zfree = nullptr;
 	stream->opaque = nullptr;
-
 	if (deflateInit2(stream.get(), compressionLevel, Z_DEFLATED, -15, 9, Z_DEFAULT_STRATEGY) != Z_OK) {
 		stream.reset();
 		g_logger().error("[Protocol::enableCompression()] - Zlib deflateInit2 error: {}", (stream->msg ? stream->msg : " unknown error"));
