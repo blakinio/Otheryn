@@ -1,6 +1,6 @@
 ---
 task_id: OTH-20260726-production-resilience-contract
-status: validating
+status: ready
 branch: dudantas/production-resilience-contract
 base_branch: main
 created: 2026-07-26
@@ -41,11 +41,11 @@ Define a durable, evidence-bounded architecture for game-process crash recovery,
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-26T10:02:00+02:00
-head: b47ca8b14deffb3573e32fc9c3ced10da70377ec
+updated_at: 2026-07-26T10:07:00+02:00
+head: 67a8fc5a0dd24da252a80301364dc5ad3eebf9d1
 branch: dudantas/production-resilience-contract
 pr: 117
-status: validating
+status: ready
 context_routes:
   - architecture
   - operations
@@ -71,8 +71,9 @@ proven:
   - The backup policy requires prepared, checksummed, encrypted off-host backups and isolated exact-time restore drills before production readiness is claimed.
   - The agent guide defines bounded PRS-001 through PRS-008 implementation packages and failure-injection gates.
   - deploy/production is established only as a non-runnable future ownership boundary; the MariaDB option file is explicitly design-only and not mounted anywhere.
-  - Draft PR 117 starts from exact task base ff90e93d872b6b47720f711483a9832203d5258d and contains exactly the seven owned paths.
-  - Draft exact-head Required run 30193557983 passed on b47ca8b14deffb3573e32fc9c3ced10da70377ec and PR discussions were empty.
+  - PR 117 contains exactly the seven owned paths, is mergeable and has no comments, reviews or review threads.
+  - Draft Required 30193557983 and ready-head Required runs 30193655938 and 30193658250 passed.
+  - Active Wheel PR 115 still targets the same task-start main and remains open, so merge order must avoid unnecessary target-main drift during its final validation.
 derived:
   - Canary/Otheryn can use container restarts for process availability while keeping database state authoritative after an ordinary channel crash.
   - Safe future multichannel persistence requires database-enforced revision/session fencing rather than Redis-only leases.
@@ -81,7 +82,7 @@ unknown:
   - Exact production VPS, storage, object-store, MariaDB image and monitoring stack.
   - Real database size, write rate, backup duration and acceptable measured checkpoint interval.
   - Exact source paths and schema design for PRS-002 through PRS-006.
-  - Exact-ready-head Required and final target-main drift state after the draft-to-ready transition.
+  - Final target-main SHA and merge order after OAM-051A PR 115 completes.
 conflicts: []
 first_failure:
   marker: no-production-recovery-contract
@@ -114,21 +115,20 @@ validation:
   - command: scope and safety audit
     result: PASS
     evidence: Only documentation, a non-runnable deployment boundary and a design-only option example are changed; no runtime, schema, workflow, quickstart or production data path changes.
-  - command: draft PR creation and exact changed-path audit
-    result: PASS
-    evidence: PR 117 is open as draft with exactly seven owned paths and zero target-base drift at creation.
   - command: checkpoint contract validation
     result: PASS
     evidence: Required fields, statuses, validation-result enums and compactness limits match docs/agents/GOVERNANCE_CONTRACT.json.
-  - command: draft exact-head Required
+  - command: exact changed-path and discussion audit
     result: PASS
-    evidence: Required run 30193557983 completed successfully on b47ca8b14deffb3573e32fc9c3ced10da70377ec.
-  - command: PR discussion and changed-path audit
+    evidence: PR 117 has exactly seven owned paths and no comments, reviews or review threads.
+  - command: draft and ready-head Required
     result: PASS
-    evidence: PR 117 has no comments/reviews/threads and exactly the seven owned paths.
+    evidence: Required runs 30193557983, 30193655938 and 30193658250 completed successfully on their exact heads.
+  - command: merge-order conflict audit
+    result: PASS
+    evidence: PR 115 is open on the same main base; PR 117 remains unmerged to avoid introducing avoidable drift into the active Wheel validation.
 blockers:
-  - draft-to-ready transition
-  - exact-ready-head Required
-  - final target-main drift audit
-next_action: Mark PR 117 ready, inspect the exact-ready-head Required result and target-main drift, and repair only documentation/checkpoint defects without starting PRS-001 implementation.
+  - active PR 115 merge-order coordination
+  - final target-main drift audit immediately before merge
+next_action: Before merging PR 117, re-fetch main and PR 115; merge the active Wheel package first or explicitly rebase the chosen later PR, then repeat exact-head Required and drift checks without starting PRS-001.
 ```
