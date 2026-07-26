@@ -1666,9 +1666,9 @@ void PlayerWheel::sendOpenWheelWindow(NetworkMessage &msg, uint32_t ownerId) {
 	const auto monkQuestBonus = std::max<int32_t>(0, g_configManager().getNumber(WHEEL_MONK_QUEST_BONUS));
 	const bool hasMonkQuestBonus = hasCompletedMonkQuest() && monkQuestBonus > 0;
 	if (usesOfficialSkillWheelPayload) {
-		// Current clients read a quest flag plus a u16 bonus before the gem lists.
-		msg.addByte(hasMonkQuestBonus ? 1 : 0); // The Way of the Monk quest bonus
-		msg.add<uint16_t>(hasMonkQuestBonus ? static_cast<uint16_t>(std::min<int32_t>(monkQuestBonus, 0xFFFF)) : 0);
+		// Current clients read the Monk quest flag followed by purchased Hunting Task Shop points.
+		msg.addByte(hasMonkQuestBonus ? 1 : 0); // The Way of the Monk quest bonus flag
+		msg.add<uint16_t>(static_cast<uint16_t>(std::clamp<int32_t>(m_player.getStorageValue(1000006), 0, 50)));
 	} else {
 		msg.addByte(hasMonkQuestBonus ? static_cast<uint8_t>(std::min<int32_t>(monkQuestBonus, 0xFF)) : 0);
 	}
