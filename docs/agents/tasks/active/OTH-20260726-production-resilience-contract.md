@@ -41,8 +41,8 @@ Define a durable, evidence-bounded architecture for game-process crash recovery,
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-26T09:56:00+02:00
-head: edd30610e2e30e2f6c52ed97113178cc9c2d030c
+updated_at: 2026-07-26T10:02:00+02:00
+head: b47ca8b14deffb3573e32fc9c3ced10da70377ec
 branch: dudantas/production-resilience-contract
 pr: 117
 status: validating
@@ -72,6 +72,7 @@ proven:
   - The agent guide defines bounded PRS-001 through PRS-008 implementation packages and failure-injection gates.
   - deploy/production is established only as a non-runnable future ownership boundary; the MariaDB option file is explicitly design-only and not mounted anywhere.
   - Draft PR 117 starts from exact task base ff90e93d872b6b47720f711483a9832203d5258d and contains exactly the seven owned paths.
+  - Draft exact-head Required run 30193557983 passed on b47ca8b14deffb3573e32fc9c3ced10da70377ec and PR discussions were empty.
 derived:
   - Canary/Otheryn can use container restarts for process availability while keeping database state authoritative after an ordinary channel crash.
   - Safe future multichannel persistence requires database-enforced revision/session fencing rather than Redis-only leases.
@@ -80,8 +81,7 @@ unknown:
   - Exact production VPS, storage, object-store, MariaDB image and monitoring stack.
   - Real database size, write rate, backup duration and acceptable measured checkpoint interval.
   - Exact source paths and schema design for PRS-002 through PRS-006.
-  - Whether repository documentation/checkpoint validators accept the final text unchanged.
-  - Exact-head draft PR CI and Required outcome.
+  - Exact-ready-head Required and final target-main drift state after the draft-to-ready transition.
 conflicts: []
 first_failure:
   marker: no-production-recovery-contract
@@ -117,15 +117,18 @@ validation:
   - command: draft PR creation and exact changed-path audit
     result: PASS
     evidence: PR 117 is open as draft with exactly seven owned paths and zero target-base drift at creation.
-  - command: checkpoint validator
-    result: NOT_RUN
-    evidence: Requires repository checkout or CI on the committed task record.
-  - command: exact-head Required
-    result: NOT_RUN
-    evidence: Awaiting PR 117 workflow results.
+  - command: checkpoint contract validation
+    result: PASS
+    evidence: Required fields, statuses, validation-result enums and compactness limits match docs/agents/GOVERNANCE_CONTRACT.json.
+  - command: draft exact-head Required
+    result: PASS
+    evidence: Required run 30193557983 completed successfully on b47ca8b14deffb3573e32fc9c3ced10da70377ec.
+  - command: PR discussion and changed-path audit
+    result: PASS
+    evidence: PR 117 has no comments/reviews/threads and exactly the seven owned paths.
 blockers:
-  - checkpoint/documentation validation
-  - exact-head draft PR CI and Required
-  - clean discussion and target-main drift audit
-next_action: Inspect PR 117 exact-head CI and Required, repair only documentation/checkpoint defects, then mark the PR ready without starting PRS-001 implementation.
+  - draft-to-ready transition
+  - exact-ready-head Required
+  - final target-main drift audit
+next_action: Mark PR 117 ready, inspect the exact-ready-head Required result and target-main drift, and repair only documentation/checkpoint defects without starting PRS-001 implementation.
 ```
