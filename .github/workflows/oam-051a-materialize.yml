@@ -6,6 +6,7 @@ on:
       - dudantas/oam-051a-wheel-safety-adapt
     paths:
       - tools/ai-agent/oam_051a_materialize.py
+      - tools/ai-agent/oam_051a_materialize_bootstrap.py
       - .github/workflows/oam-051a-materialize.yml
   pull_request:
     branches:
@@ -16,6 +17,7 @@ on:
       - reopened
     paths:
       - tools/ai-agent/oam_051a_materialize.py
+      - tools/ai-agent/oam_051a_materialize_bootstrap.py
       - .github/workflows/oam-051a-materialize.yml
 
 permissions:
@@ -48,7 +50,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          python tools/ai-agent/oam_051a_materialize.py > /tmp/oam-051a-materialize.log 2>&1
+          python tools/ai-agent/oam_051a_materialize_bootstrap.py > /tmp/oam-051a-materialize.log 2>&1
           status=$?
           echo "status=$status" >> "$GITHUB_OUTPUT"
           exit 0
