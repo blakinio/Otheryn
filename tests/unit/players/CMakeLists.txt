@@ -20,6 +20,7 @@ target_sources(
             forge_transaction_test.cpp
             oam_020_exaltation_forge_adapt_test.cpp
             oam_051_wheel_safety_adapt_test.cpp
+            oam_051b_task_shop_adapt_test.cpp
             party_test.cpp
             vocation_test.cpp
 )
