@@ -74,7 +74,8 @@ jobs:
         run: |
           set -euo pipefail
           git diff --check
-          changed="$(git diff --name-only | sort)"
+          git diff --cached --check
+          changed="$({ git diff --name-only; git diff --cached --name-only; } | sort -u)"
           printf '%s\n' "$changed"
           expected="$(printf '%s\n' \
             src/creatures/players/components/wheel/player_wheel.cpp \
