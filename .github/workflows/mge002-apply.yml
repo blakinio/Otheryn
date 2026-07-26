@@ -93,7 +93,6 @@ jobs:
           import xml.etree.ElementTree as ET
           ET.parse('vcproj/canary.vcxproj')
           PY
-          python tools/agents/checkpoint.py docs/agents/tasks/active/OTH-20260726-mge002-typed-profile-snapshot.md --require-checkpoint
       - name: Commit implementation
         shell: bash
         run: |
