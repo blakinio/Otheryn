@@ -26,7 +26,7 @@ TEST_F(Oam051bTaskShopAdaptTest, StorageBackedPurchasesContributeToWheelPoints) 
 
 	const auto extraStart = source.find("uint16_t PlayerWheel::getExtraPoints() const");
 	const auto wheelPointsStart = source.find("uint16_t PlayerWheel::getWheelPoints", extraStart);
-	const auto wheelPointsEnd = source.find("uint16_t PlayerWheel::getUnusedPoints", wheelPointsStart);
+	const auto wheelPointsEnd = source.find("uint8_t PlayerWheel::getMaxPointsPerSlot", wheelPointsStart);
 	ASSERT_NE(extraStart, std::string::npos);
 	ASSERT_NE(wheelPointsStart, std::string::npos);
 	ASSERT_NE(wheelPointsEnd, std::string::npos);
