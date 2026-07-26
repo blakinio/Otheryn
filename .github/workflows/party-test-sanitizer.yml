@@ -7,7 +7,6 @@ on:
     paths:
       - ".github/workflows/party-test-sanitizer.yml"
       - "tests/unit/players/party_test.cpp"
-      - "docs/agents/tasks/active/OTH-20260726-party-test-teardown-segfault.md"
   workflow_dispatch:
 
 permissions:
@@ -36,13 +35,16 @@ jobs:
           persist-credentials: false
           show-progress: false
 
-      - name: Validate task checkpoint
+      - name: Validate active task checkpoint when present
         shell: bash
         run: |
           set -Eeuo pipefail
-          python tools/agents/checkpoint.py \
-            docs/agents/tasks/active/OTH-20260726-party-test-teardown-segfault.md \
-            --require-checkpoint
+          task="docs/agents/tasks/active/OTH-20260726-party-test-teardown-segfault.md"
+          if [[ -f "${task}" ]]; then
+            python tools/agents/checkpoint.py "${task}" --require-checkpoint
+          else
+            echo "Active Party teardown task is archived; checkpoint validation is not applicable."
+          fi
 
       - name: Install Linux dependencies
         shell: bash
