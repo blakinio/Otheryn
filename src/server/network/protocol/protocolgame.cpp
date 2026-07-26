@@ -11526,29 +11526,60 @@ void ProtocolGame::parseWheelGemAction(NetworkMessage &msg) {
 			return;
 		}
 
+		if (!msg.canRead(1)) {
+			g_logger().warn("[{}] Player {} sent a truncated Wheel gem action", __FUNCTION__, player->getName());
+			return;
+		}
+
 		const auto action = static_cast<WheelGemAction_t>(msg.getByte());
 		switch (action) {
 			case WheelGemAction_t::Destroy:
-				player->wheel().destroyGem(msg.get<uint16_t>());
-				break;
-			case WheelGemAction_t::Reveal:
-				player->wheel().revealGem(static_cast<WheelGemQuality_t>(msg.getByte(true)));
-				break;
 			case WheelGemAction_t::SwitchDomain:
-				player->wheel().switchGemDomain(msg.get<uint16_t>());
+			case WheelGemAction_t::ToggleLock: {
+				if (!msg.canRead(sizeof(uint16_t))) {
+					g_logger().warn("[{}] Player {} sent a truncated Wheel gem index for action {}", __FUNCTION__, player->getName(), fmt::underlying(action));
+					return;
+				}
+				const auto index = msg.get<uint16_t>();
+				if (action == WheelGemAction_t::Destroy) {
+					player->wheel().destroyGem(index);
+				} else if (action == WheelGemAction_t::SwitchDomain) {
+					player->wheel().switchGemDomain(index);
+				} else {
+					player->wheel().toggleGemLock(index);
+				}
 				break;
-			case WheelGemAction_t::ToggleLock:
-				player->wheel().toggleGemLock(msg.get<uint16_t>());
+			}
+			case WheelGemAction_t::Reveal: {
+				if (!msg.canRead(1)) {
+					g_logger().warn("[{}] Player {} sent a truncated Wheel gem quality", __FUNCTION__, player->getName());
+					return;
+				}
+				const auto quality = msg.getByte(true);
+				if (quality > fmt::underlying(WheelGemQuality_t::Greater)) {
+					g_logger().warn("[{}] Player {} sent invalid Wheel gem quality {}", __FUNCTION__, player->getName(), quality);
+					return;
+				}
+				player->wheel().revealGem(static_cast<WheelGemQuality_t>(quality));
 				break;
+			}
 			case WheelGemAction_t::ImproveGrade: {
-				const auto fragmentType = static_cast<WheelFragmentType_t>(msg.getByte(true) != 0 ? 1 : 0);
+				if (!msg.canRead(2)) {
+					g_logger().warn("[{}] Player {} sent a truncated Wheel grade action", __FUNCTION__, player->getName());
+					return;
+				}
+				const auto fragmentType = msg.getByte(true);
 				const auto position = msg.getByte(true);
-				player->wheel().improveGemGrade(fragmentType, position);
+				if (fragmentType > fmt::underlying(WheelFragmentType_t::Lesser)) {
+					g_logger().warn("[{}] Player {} sent invalid Wheel fragment type {}", __FUNCTION__, player->getName(), fragmentType);
+					return;
+				}
+				player->wheel().improveGemGrade(static_cast<WheelFragmentType_t>(fragmentType), position);
 				break;
 			}
 			default:
 				g_logger().error("[{}] player {} is trying to do invalid action {} on wheel", __FUNCTION__, player->getName(), fmt::underlying(action));
-				break;
+				return;
 		}
 
 		player->updateUIExhausted();

@@ -358,6 +358,22 @@ namespace {
 		{ 43949, "extended", 13 },
 		{ 43950, "advanced", 20 },
 	};
+
+	constexpr size_t MAX_REVEALED_WHEEL_GEMS = 225;
+
+	bool hasEnoughWheelMoney(const Player &player, uint64_t amount) {
+		const auto inventoryMoney = player.getMoney();
+		return inventoryMoney >= amount || player.getBankBalance() >= amount - inventoryMoney;
+	}
+
+	bool restoreWheelItem(Player &player, uint16_t itemId, uint32_t count) {
+		const auto item = Item::CreateItem(itemId, count);
+		if (!item) {
+			return false;
+		}
+
+		return g_game().internalPlayerAddItem(player.getPlayer(), item, false, CONST_SLOT_WHEREEVER) == RETURNVALUE_NOERROR;
+	}
 } // namespace
 
 PlayerWheel::PlayerWheel(Player &initPlayer) :
@@ -423,7 +439,7 @@ bool PlayerWheel::canPlayerSelectPointOnSlot(WheelSlots_t slot, bool recursive) 
 		if (canSelectSlotFullOrPartial(WheelSlots_t::SLOT_GREEN_MIDDLE_100)) {
 			return true;
 		}
-		if (canSelectSlotFullOrPartial(WheelSlots_t::SLOT_GREEN_MIDDLE_100)) {
+		if (canSelectSlotFullOrPartial(WheelSlots_t::SLOT_GREEN_TOP_150)) {
 			return true;
 		}
 	} else if (slot == WheelSlots_t::SLOT_GREEN_MIDDLE_100) {
@@ -889,19 +905,23 @@ bool PlayerWheel::canPlayerSelectPointOnSlot(WheelSlots_t slot, bool recursive) 
 }
 
 uint16_t PlayerWheel::getUnusedPoints() const {
-	auto totalPoints = getWheelPoints();
+	const uint32_t totalPoints = getWheelPoints();
+	uint32_t spentPoints = 0;
+	for (const auto slot : magic_enum::enum_values<WheelSlots_t>()) {
+		spentPoints += getPointsBySlotType(slot);
+	}
 
-	if (totalPoints == 0) {
+	if (spentPoints >= totalPoints) {
+		if (spentPoints > totalPoints) {
+			g_logger().warn(
+				"[{}] Player {} has invalid Wheel allocation: spent {}, available {}",
+				__FUNCTION__, m_player.getName(), spentPoints, totalPoints
+			);
+		}
 		return 0;
 	}
 
-	totalPoints += m_modsMaxGrade;
-
-	for (auto slot : magic_enum::enum_values<WheelSlots_t>()) {
-		totalPoints -= getPointsBySlotType(slot);
-	}
-
-	return totalPoints;
+	return static_cast<uint16_t>(std::min<uint32_t>(totalPoints - spentPoints, std::numeric_limits<uint16_t>::max()));
 }
 
 bool PlayerWheel::getSpellAdditionalArea(const std::string &spellName) const {
@@ -1034,7 +1054,39 @@ std::shared_ptr<KV> PlayerWheel::gemsGradeKV(WheelFragmentType_t type, uint8_t p
 	return gemsKV()->scoped(std::string(magic_enum::enum_name(type)))->scoped(std::to_string(pos));
 }
 
+bool PlayerWheel::isValidModifierPosition(WheelFragmentType_t type, uint8_t pos) const {
+	if (type == WheelFragmentType_t::Lesser) {
+		return pos < m_basicGrades.size() && std::ranges::find(modsBasicPosition, static_cast<WheelGemBasicModifier_t>(pos)) != modsBasicPosition.end();
+	}
+
+	if (type != WheelFragmentType_t::Greater || pos >= m_supremeGrades.size()) {
+		return false;
+	}
+
+	const auto &vocation = m_player.getVocation();
+	if (!vocation) {
+		return false;
+	}
+
+	const auto vocationBaseId = vocation->getBaseId();
+	const auto modifiersIt = modsSupremePositionByVocation.find(vocationBaseId);
+	if (modifiersIt == modsSupremePositionByVocation.end()) {
+		return false;
+	}
+
+	const auto &modifiers = modifiersIt->second.get();
+	return std::ranges::find(modifiers, static_cast<WheelGemSupremeModifier_t>(pos)) != modifiers.end();
+}
+
 uint8_t PlayerWheel::getGemGrade(WheelFragmentType_t type, uint8_t pos) const {
+	if (!isValidModifierPosition(type, pos)) {
+		g_logger().warn(
+			"[{}] Player {} requested invalid modifier position {} for fragment type {}",
+			__FUNCTION__, m_player.getName(), pos, fmt::underlying(type)
+		);
+		return 0;
+	}
+
 	return type == WheelFragmentType_t::Lesser ? m_basicGrades[pos] : m_supremeGrades[pos];
 }
 
@@ -1119,24 +1171,46 @@ uint64_t PlayerWheel::getGemRevealCost(WheelGemQuality_t quality) {
 }
 
 void PlayerWheel::revealGem(WheelGemQuality_t quality) {
-	uint16_t gemId = m_player.getVocation()->getWheelGemId(quality);
-	if (gemId == 0) {
-		g_logger().error("[{}] Failed to get gem id for quality {} and vocation {}", __FUNCTION__, fmt::underlying(quality), m_player.getVocation()->getVocName());
+	if (!canOpenWheel()) {
 		return;
 	}
+
+	if (m_revealedGems.size() >= MAX_REVEALED_WHEEL_GEMS) {
+		m_player.sendCancelMessage("You cannot reveal more gems.");
+		g_logger().warn("[{}] Player {} reached the revealed gem limit of {}", __FUNCTION__, m_player.getName(), MAX_REVEALED_WHEEL_GEMS);
+		return;
+	}
+
+	const uint16_t gemId = m_player.getVocation()->getWheelGemId(quality);
+	const uint64_t goldCost = getGemRevealCost(quality);
+	if (gemId == 0 || goldCost == 0) {
+		g_logger().error("[{}] Invalid gem quality {} for vocation {}", __FUNCTION__, fmt::underlying(quality), m_player.getVocation()->getVocName());
+		return;
+	}
+
 	if (!m_player.hasItemCountById(gemId, 1, false)) {
 		g_logger().error("[{}] Player {} does not have gem with id {}", __FUNCTION__, m_player.getName(), gemId);
 		return;
 	}
-	auto goldCost = getGemRevealCost(quality);
-	if (!g_game().removeMoney(m_player.getPlayer(), goldCost, 0, true)) {
-		g_logger().error("[{}] Failed to remove {} gold from player with name {}", __FUNCTION__, goldCost, m_player.getName());
+
+	if (!hasEnoughWheelMoney(m_player, goldCost)) {
+		g_logger().error("[{}] Player {} does not have {} gold", __FUNCTION__, m_player.getName(), goldCost);
 		return;
 	}
+
 	if (!m_player.removeItemCountById(gemId, 1, false)) {
-		g_logger().error("[{}] Failed to remove gem with id {} from player with name {}", __FUNCTION__, gemId, m_player.getName());
+		g_logger().error("[{}] Failed to remove gem with id {} from player {}", __FUNCTION__, gemId, m_player.getName());
 		return;
 	}
+
+	if (!g_game().removeMoney(m_player.getPlayer(), goldCost, 0, true)) {
+		g_logger().error("[{}] Failed to remove {} gold from player {} after reserving gem {}", __FUNCTION__, goldCost, m_player.getName(), gemId);
+		if (!restoreWheelItem(m_player, gemId, 1)) {
+			g_logger().critical("[{}] Failed to restore gem {} to player {}", __FUNCTION__, gemId, m_player.getName());
+		}
+		return;
+	}
+
 	const auto supremeModifiers = m_player.getVocation()->getSupremeGemModifiers();
 	PlayerWheelGem gem;
 	gem.uuid = KV::generateUUID();
@@ -1153,15 +1227,15 @@ void PlayerWheel::revealGem(WheelGemQuality_t quality) {
 	if (quality >= WheelGemQuality_t::Greater && !supremeModifiers.empty()) {
 		gem.supremeModifier = supremeModifiers[uniform_random(0, supremeModifiers.size() - 1)];
 	}
+	gem.save(gemsKV());
 	g_logger().debug("[{}] {}", __FUNCTION__, gem.toString());
 	m_revealedGems.emplace_back(gem);
 
 	std::ranges::sort(m_revealedGems, [](const auto &gem1, const auto &gem2) {
 		if (std::ranges::all_of(gem1.uuid, ::isdigit) && std::ranges::all_of(gem2.uuid, ::isdigit)) {
 			return std::stoull(gem1.uuid) < std::stoull(gem2.uuid);
-		} else {
-			return gem1.uuid < gem2.uuid;
 		}
+		return gem1.uuid < gem2.uuid;
 	});
 
 	if (m_player.client) {
@@ -1199,6 +1273,10 @@ uint16_t PlayerWheel::getGemIndex(const std::string &uuid) const {
 }
 
 void PlayerWheel::destroyGem(uint16_t index) {
+	if (!canOpenWheel()) {
+		return;
+	}
+
 	const auto &gem = getGem(index);
 	if (!gem) {
 		return;
@@ -1246,40 +1324,87 @@ void PlayerWheel::destroyGem(uint16_t index) {
 		g_logger().debug("[{}] Player {} destroyed a gem and received {} greater fragments", std::source_location::current().function_name(), m_player.getName(), greaterFragments);
 	}
 
+	const auto destroyedGemUuid = gem.uuid;
 	m_destroyedGems.emplace_back(gem);
+	gem.remove(gemsKV());
+
+	bool removedActiveGem = false;
+	for (const auto affinity : magic_enum::enum_values<WheelGemAffinity_t>()) {
+		const auto affinityIndex = static_cast<uint8_t>(affinity);
+		const auto &activeGem = m_activeGems[affinityIndex];
+		if (!activeGem || activeGem.uuid != destroyedGemUuid) {
+			continue;
+		}
+
+		removeActiveGem(affinity);
+		gemsKV()->scoped("active")->remove(std::string(magic_enum::enum_name(affinity)));
+		removedActiveGem = true;
+	}
+
 	m_revealedGems.erase(m_revealedGems.begin() + index);
+	if (removedActiveGem) {
+		loadPlayerBonusData();
+	}
 
 	const auto totalLesserFragment = m_player.getItemTypeCount(ITEM_LESSER_FRAGMENT) + m_player.getStashItemCount(ITEM_LESSER_FRAGMENT);
 	const auto totalGreaterFragment = m_player.getItemTypeCount(ITEM_GREATER_FRAGMENT) + m_player.getStashItemCount(ITEM_GREATER_FRAGMENT);
 
-	m_player.client->sendResourceBalance(RESOURCE_LESSER_FRAGMENT, totalLesserFragment);
-	m_player.client->sendResourceBalance(RESOURCE_GREATER_FRAGMENT, totalGreaterFragment);
+	if (m_player.client) {
+		m_player.client->sendResourceBalance(RESOURCE_LESSER_FRAGMENT, totalLesserFragment);
+		m_player.client->sendResourceBalance(RESOURCE_GREATER_FRAGMENT, totalGreaterFragment);
+	}
 
 	sendOpenWheelWindow(m_player.getID());
 }
 
 void PlayerWheel::switchGemDomain(uint16_t index) {
+	if (!canOpenWheel()) {
+		return;
+	}
+
 	auto &gem = getGem(index);
 	if (!gem) {
 		return;
 	}
 
 	if (gem.locked) {
-		g_logger().error("[{}] Player {} trying to destroy locked gem with index {}", __FUNCTION__, m_player.getName(), index);
-		return;
-	}
-	auto goldCost = getGemRotateCost(gem.quality);
-	if (!g_game().removeMoney(m_player.getPlayer(), goldCost, 0, true)) {
-		g_logger().error("[{}] Failed to remove {} gold from player with name {}", __FUNCTION__, goldCost, m_player.getName());
+		g_logger().error("[{}] Player {} tried to rotate locked gem with index {}", __FUNCTION__, m_player.getName(), index);
 		return;
 	}
 
-	auto gemAffinity = convertWheelGemAffinityToDomain(static_cast<uint8_t>(gem.affinity));
-	gem.affinity = static_cast<WheelGemAffinity_t>(gemAffinity);
+	const uint64_t goldCost = getGemRotateCost(gem.quality);
+	if (goldCost == 0 || !g_game().removeMoney(m_player.getPlayer(), goldCost, 0, true)) {
+		g_logger().error("[{}] Failed to remove {} gold from player {}", __FUNCTION__, goldCost, m_player.getName());
+		return;
+	}
+
+	bool removedActiveGem = false;
+	for (const auto affinity : magic_enum::enum_values<WheelGemAffinity_t>()) {
+		const auto affinityIndex = static_cast<uint8_t>(affinity);
+		const auto &activeGem = m_activeGems[affinityIndex];
+		if (!activeGem || activeGem.uuid != gem.uuid) {
+			continue;
+		}
+
+		removeActiveGem(affinity);
+		gemsKV()->scoped("active")->remove(std::string(magic_enum::enum_name(affinity)));
+		removedActiveGem = true;
+	}
+
+	gem.affinity = static_cast<WheelGemAffinity_t>(convertWheelGemAffinityToDomain(static_cast<uint8_t>(gem.affinity)));
+	gem.save(gemsKV());
+	if (removedActiveGem) {
+		loadPlayerBonusData();
+	}
+
 	sendOpenWheelWindow(m_player.getID());
 }
 
 void PlayerWheel::toggleGemLock(uint16_t index) {
+	if (!canOpenWheel()) {
+		return;
+	}
+
 	auto &gem = getGem(index);
 	if (!gem) {
 		return;
@@ -1420,61 +1545,68 @@ void PlayerWheel::addGradeModifiers(NetworkMessage &msg) const {
 }
 
 void PlayerWheel::improveGemGrade(WheelFragmentType_t fragmentType, uint8_t pos) {
+	if (!canOpenWheel()) {
+		return;
+	}
+
+	if (!isValidModifierPosition(fragmentType, pos)) {
+		g_logger().warn(
+			"[{}] Player {} tried to upgrade invalid modifier position {} for fragment type {}",
+			__FUNCTION__, m_player.getName(), pos, fmt::underlying(fragmentType)
+		);
+		return;
+	}
+
+	const uint8_t currentGrade = getGemGrade(fragmentType, pos);
+	const uint8_t nextGrade = currentGrade + 1;
 	uint16_t fragmentId = 0;
-	uint32_t value = 0;
-	uint8_t quantity = 0;
-	uint8_t grade = 0;
-
+	int goldCost = 0;
+	int fragmentCount = 0;
 	if (fragmentType == WheelFragmentType_t::Lesser) {
-		grade = m_basicGrades[pos];
+		fragmentId = ITEM_LESSER_FRAGMENT;
+		std::tie(goldCost, fragmentCount) = getLesserGradeCost(nextGrade);
 	} else {
-		grade = m_supremeGrades[pos];
+		fragmentId = ITEM_GREATER_FRAGMENT;
+		std::tie(goldCost, fragmentCount) = getGreaterGradeCost(nextGrade);
 	}
 
-	++grade;
-
-	switch (fragmentType) {
-		case WheelFragmentType_t::Lesser:
-			fragmentId = ITEM_LESSER_FRAGMENT;
-			std::tie(value, quantity) = getLesserGradeCost(grade);
-			break;
-		case WheelFragmentType_t::Greater:
-			fragmentId = ITEM_GREATER_FRAGMENT;
-			std::tie(value, quantity) = getGreaterGradeCost(grade);
-			break;
-		default:
-			g_logger().error("[{}] Invalid Fragment Type: {}", std::source_location::current().function_name(), static_cast<uint8_t>(fragmentType));
-			return;
-	}
-
-	if (value == 0 && quantity == 0) {
-		g_logger().error("[{}] Player {} trying to upgrade gem to grade greater than 3", std::source_location::current().function_name(), m_player.getName());
+	if (goldCost <= 0 || fragmentCount <= 0) {
+		g_logger().warn("[{}] Player {} tried to upgrade modifier {} beyond Grade IV", __FUNCTION__, m_player.getName(), pos);
 		return;
 	}
 
-	if (!m_player.hasItemCountById(fragmentId, quantity, true)) {
-		g_logger().error("[{}] Player {} does not have the required {} fragments with id {}", std::source_location::current().function_name(), m_player.getName(), quantity, fragmentId);
+	if (!m_player.hasItemCountById(fragmentId, static_cast<uint32_t>(fragmentCount), true)) {
+		g_logger().error("[{}] Player {} does not have {} fragments with id {}", __FUNCTION__, m_player.getName(), fragmentCount, fragmentId);
+		return;
+	}
+	if (!hasEnoughWheelMoney(m_player, static_cast<uint64_t>(goldCost))) {
+		g_logger().error("[{}] Player {} does not have {} gold", __FUNCTION__, m_player.getName(), goldCost);
 		return;
 	}
 
-	if (!g_game().removeMoney(m_player.getPlayer(), value, 0, true)) {
-		g_logger().error("[{}] Failed to remove {} gold from player {}", std::source_location::current().function_name(), value, m_player.getName());
+	if (!m_player.removeItemCountById(fragmentId, static_cast<uint32_t>(fragmentCount), true)) {
+		g_logger().error("[{}] Failed to remove {} fragments with id {} from player {}", __FUNCTION__, fragmentCount, fragmentId, m_player.getName());
 		return;
 	}
 
-	if (!m_player.removeItemCountById(fragmentId, quantity, true)) {
-		g_logger().error("[{}] Failed to remove {} fragments with id {} from player {}", std::source_location::current().function_name(), quantity, fragmentId, m_player.getName());
+	if (!g_game().removeMoney(m_player.getPlayer(), static_cast<uint64_t>(goldCost), 0, true)) {
+		g_logger().error("[{}] Failed to remove {} gold from player {} after reserving fragments", __FUNCTION__, goldCost, m_player.getName());
+		if (!restoreWheelItem(m_player, fragmentId, static_cast<uint32_t>(fragmentCount))) {
+			g_logger().critical("[{}] Failed to restore {} fragments with id {} to player {}", __FUNCTION__, fragmentCount, fragmentId, m_player.getName());
+		}
 		return;
 	}
 
 	if (fragmentType == WheelFragmentType_t::Lesser) {
-		m_basicGrades[pos] = grade;
+		m_basicGrades[pos] = nextGrade;
 	} else {
-		m_supremeGrades[pos] = grade;
+		m_supremeGrades[pos] = nextGrade;
+	}
+	if (nextGrade == 3) {
+		++m_modsMaxGrade;
 	}
 
-	m_modsMaxGrade += grade == 3 ? 1 : 0;
-
+	gemsGradeKV(fragmentType, pos)->set("grade", nextGrade);
 	loadPlayerBonusData();
 	sendOpenWheelWindow(m_player.getID());
 }
@@ -1599,17 +1731,50 @@ bool PlayerWheel::checkSavePointsBySlotType(WheelSlots_t slotType, uint16_t poin
 	return true;
 }
 
-void PlayerWheel::saveSlotPointsHandleRetryErrors(std::vector<SlotInfo> &retryTable, int &errors) {
-	std::vector<SlotInfo> temporaryTable;
-	for (const auto &data : retryTable) {
-		const auto saved = checkSavePointsBySlotType(static_cast<WheelSlots_t>(data.slot), data.points);
-		if (saved) {
-			errors--;
-		} else {
-			temporaryTable.emplace_back(data);
+bool PlayerWheel::validateSlotAllocation(const std::array<uint16_t, magic_enum::enum_count<WheelSlots_t>() + 1> &proposedSlots) {
+	std::vector<SlotInfo> pendingSlots;
+	pendingSlots.reserve(magic_enum::enum_count<WheelSlots_t>());
+	for (const auto slot : magic_enum::enum_values<WheelSlots_t>()) {
+		const auto slotIndex = static_cast<size_t>(slot);
+		const auto points = proposedSlots[slotIndex];
+		if (points > getMaxPointsPerSlot(slot)) {
+			return false;
+		}
+
+		const auto order = g_game().getIOWheel()->getSlotPrioritaryOrder(slot);
+		if (order < 0) {
+			return false;
+		}
+		pendingSlots.emplace_back(order, enumToValue(slot), points);
+	}
+
+	std::ranges::sort(pendingSlots, [](const SlotInfo &left, const SlotInfo &right) {
+		return left.order < right.order;
+	});
+
+	const auto previousSlots = m_wheelSlots;
+	m_wheelSlots.fill(0);
+	while (!pendingSlots.empty()) {
+		std::vector<SlotInfo> retrySlots;
+		retrySlots.reserve(pendingSlots.size());
+		bool madeProgress = false;
+		for (const auto &slotInfo : pendingSlots) {
+			if (checkSavePointsBySlotType(static_cast<WheelSlots_t>(slotInfo.slot), slotInfo.points)) {
+				madeProgress = true;
+			} else {
+				retrySlots.emplace_back(slotInfo);
+			}
+		}
+
+		pendingSlots = std::move(retrySlots);
+		if (!madeProgress) {
+			break;
 		}
 	}
-	retryTable = temporaryTable;
+
+	const bool valid = pendingSlots.empty();
+	m_wheelSlots = previousSlots;
+	return valid;
 }
 
 void PlayerWheel::saveSlotPointsOnPressSaveButton(NetworkMessage &msg) {
@@ -1617,108 +1782,123 @@ void PlayerWheel::saveSlotPointsOnPressSaveButton(NetworkMessage &msg) {
 		return;
 	}
 
-	Benchmark bm_saveSlot;
-
+	Benchmark benchmark;
 	if (!canOpenWheel()) {
 		return;
 	}
 
-	// Creates a vector to store slot information in order.
-	std::vector<SlotInfo> sortedTable;
-	// Iterates over all slots, getting the points for each slot from the message. If the slot points exceed
-	for (auto slot : magic_enum::enum_values<WheelSlots_t>()) {
-		auto slotPoints = msg.get<uint16_t>(); // Points per Slot
-		auto maxPointsPerSlot = getMaxPointsPerSlot(static_cast<WheelSlots_t>(slot));
-		if (slotPoints > maxPointsPerSlot) {
-			m_player.sendTextMessage(MESSAGE_TRADE, "Something went wrong, try relogging and try again or contact and adminstrator");
-			g_logger().error("[{}] possible manipulation of client package using unauthorized program", __FUNCTION__);
-			g_logger().warn("Player: {}, error on slot: {}, total points: {}, max points: {}", m_player.getName(), slotPoints, slot, maxPointsPerSlot);
+	constexpr auto slotCount = magic_enum::enum_count<WheelSlots_t>();
+	if (!msg.canRead(static_cast<int32_t>(slotCount * sizeof(uint16_t)))) {
+		g_logger().warn("[{}] Player {} sent a truncated Wheel allocation", __FUNCTION__, m_player.getName());
+		return;
+	}
+
+	std::array<uint16_t, slotCount + 1> proposedSlots = {};
+	bool decreasesPoints = false;
+	for (const auto slot : magic_enum::enum_values<WheelSlots_t>()) {
+		const auto slotIndex = static_cast<size_t>(slot);
+		const auto points = msg.get<uint16_t>();
+		if (points > getMaxPointsPerSlot(slot)) {
+			g_logger().warn(
+				"[{}] Player {} sent {} points for slot {} with maximum {}",
+				__FUNCTION__, m_player.getName(), points, fmt::underlying(slot), getMaxPointsPerSlot(slot)
+			);
 			return;
 		}
 
-		const auto order = g_game().getIOWheel()->getSlotPrioritaryOrder(static_cast<WheelSlots_t>(slot));
-		if (order == -1) {
+		proposedSlots[slotIndex] = points;
+		decreasesPoints = decreasesPoints || points < m_wheelSlots[slotIndex];
+	}
+
+	if (decreasesPoints && getOptions(m_player.getID()) != 1) {
+		m_player.sendCancelMessage("You can only remove Wheel points inside a temple.");
+		g_logger().warn("[{}] Player {} tried to remove Wheel points outside a temple", __FUNCTION__, m_player.getName());
+		return;
+	}
+
+	std::array<int32_t, magic_enum::enum_count<WheelGemAffinity_t>()> proposedActiveGems = {};
+	proposedActiveGems.fill(-1);
+	for (const auto affinity : magic_enum::enum_values<WheelGemAffinity_t>()) {
+		if (!msg.canRead(1)) {
+			g_logger().warn("[{}] Player {} sent truncated active gem data", __FUNCTION__, m_player.getName());
+			return;
+		}
+
+		const auto hasGem = msg.getByte();
+		if (hasGem > 1) {
+			g_logger().warn("[{}] Player {} sent invalid active gem flag {}", __FUNCTION__, m_player.getName(), hasGem);
+			return;
+		}
+		if (hasGem == 0) {
 			continue;
 		}
 
-		// The slot information is then added to the vector in order.
-		sortedTable.emplace_back(order, enumToValue(slot), slotPoints);
-	}
-
-	// After iterating over all slots, the vector is sorted according to the slot order.
-	std::ranges::sort(sortedTable, [](const SlotInfo &a, const SlotInfo &b) {
-		return a.order < b.order;
-	});
-
-	int errors = 0;
-	std::vector<SlotInfo> sortedTableRetry;
-
-	// Processes the vector in the correct order. If it is not possible to save points for a slot,
-	for (const auto &data : sortedTable) {
-		const auto canSave = checkSavePointsBySlotType(static_cast<WheelSlots_t>(data.slot), data.points);
-		if (!canSave) {
-			sortedTableRetry.emplace_back(data);
-			errors++;
+		if (!msg.canRead(sizeof(uint16_t))) {
+			g_logger().warn("[{}] Player {} sent truncated active gem index", __FUNCTION__, m_player.getName());
+			return;
 		}
-	}
 
-	// The slot data is added to a retry vector and the error counter is incremented.
-	if (!sortedTableRetry.empty()) {
-		int maxLoop = 0;
-		// The function then enters an error loop to handle possible errors in the slot tree
-		while (maxLoop <= 5) {
-			maxLoop++;
-			saveSlotPointsHandleRetryErrors(sortedTableRetry, errors);
-		}
-	}
-
-	// If there is still data in the retry vector after the error loop, an error message is sent to the player.
-	if (!sortedTableRetry.empty()) {
-		m_player.sendTextMessage(MESSAGE_TRADE, "Something went wrong, try relogging and try again");
-		g_logger().error("[parseSaveWheel] Player '{}' tried to select a slot without the valid requirements", m_player.getName());
-	}
-
-	// Gem Vessels
-	for (const auto &affinity : magic_enum::enum_values<WheelGemAffinity_t>()) {
-		const bool hasGem = msg.getByte();
-		if (!hasGem) {
-			removeActiveGem(affinity);
-			continue;
-		}
 		const auto gemIndex = msg.get<uint16_t>();
-		setActiveGem(affinity, gemIndex);
+		if (gemIndex >= m_revealedGems.size() || m_revealedGems[gemIndex].affinity != affinity) {
+			g_logger().warn(
+				"[{}] Player {} sent invalid gem index {} for affinity {}",
+				__FUNCTION__, m_player.getName(), gemIndex, fmt::underlying(affinity)
+			);
+			return;
+		}
+		proposedActiveGems[static_cast<size_t>(affinity)] = gemIndex;
 	}
 
-	// Player's bonus data is loaded, initialized, registered, and the function logs
+	if (!validateSlotAllocation(proposedSlots)) {
+		m_player.sendCancelMessage("The selected Wheel configuration is invalid.");
+		g_logger().warn("[{}] Player {} sent an invalid or over-budget Wheel configuration", __FUNCTION__, m_player.getName());
+		return;
+	}
+
+	m_wheelSlots = proposedSlots;
+	for (const auto affinity : magic_enum::enum_values<WheelGemAffinity_t>()) {
+		const auto affinityIndex = static_cast<size_t>(affinity);
+		const auto gemIndex = proposedActiveGems[affinityIndex];
+		if (gemIndex < 0) {
+			removeActiveGem(affinity);
+		} else {
+			m_activeGems[affinityIndex] = m_revealedGems[static_cast<size_t>(gemIndex)];
+		}
+	}
+
 	loadPlayerBonusData();
-
 	sendOpenWheelWindow(m_player.getID());
-
-	g_logger().debug("Player: {} is saved the all slots info in: {} milliseconds", m_player.getName(), bm_saveSlot.duration());
+	g_logger().debug("Player {} saved Wheel configuration in {} milliseconds", m_player.getName(), benchmark.duration());
 }
 
 void PlayerWheel::loadActiveGems() {
-	for (const auto &affinity : magic_enum::enum_values<WheelGemAffinity_t>()) {
-		std::string key(magic_enum::enum_name(affinity));
+	m_activeGems.fill(emptyGem);
+	for (const auto affinity : magic_enum::enum_values<WheelGemAffinity_t>()) {
+		const std::string key(magic_enum::enum_name(affinity));
 		auto uuidKV = gemsKV()->scoped("active")->get(key);
 		if (!uuidKV.has_value()) {
 			continue;
 		}
 
-		auto uuid = uuidKV->get<StringType>();
+		const auto uuid = uuidKV->get<StringType>();
 		if (uuid.empty()) {
+			gemsKV()->scoped("active")->remove(key);
 			continue;
 		}
 
-		auto it = std::ranges::find_if(m_revealedGems, [&uuid](const auto &gem) {
+		const auto gemIt = std::ranges::find_if(m_revealedGems, [&uuid](const auto &gem) {
 			return gem.uuid == uuid;
 		});
-
-		if (it == m_revealedGems.end()) {
+		if (gemIt == m_revealedGems.end() || gemIt->affinity != affinity) {
+			g_logger().warn(
+				"[{}] Removing stale active gem {} from affinity {} for player {}",
+				__FUNCTION__, uuid, fmt::underlying(affinity), m_player.getName()
+			);
+			gemsKV()->scoped("active")->remove(key);
 			continue;
 		}
 
-		m_activeGems[static_cast<uint8_t>(affinity)] = *it;
+		m_activeGems[static_cast<size_t>(affinity)] = *gemIt;
 	}
 }
 
@@ -1735,6 +1915,8 @@ void PlayerWheel::saveActiveGems() const {
 }
 
 void PlayerWheel::loadRevealedGems() {
+	m_revealedGems.clear();
+	m_destroyedGems.clear();
 	const auto unlockedGemUUIDs = gemsKV()->scoped("revealed")->keys();
 	if (unlockedGemUUIDs.empty()) {
 		return;
@@ -1823,30 +2005,50 @@ void PlayerWheel::saveKVScrolls() const {
 }
 
 void PlayerWheel::loadKVModGrades() {
-	for (const auto &modPosition : modsBasicPosition) {
-		const auto pos = static_cast<uint8_t>(modPosition);
-		auto gradeKV = gemsGradeKV(WheelFragmentType_t::Lesser, pos)->get("grade");
+	m_basicGrades.fill(0);
+	m_supremeGrades.fill(0);
+	m_modsMaxGrade = 0;
 
-		if (gradeKV.has_value()) {
-			uint8_t grade = gradeKV->get<IntType>();
-			m_basicGrades[pos] = grade;
-			m_modsMaxGrade += grade == 3 ? 1 : 0;
+	for (const auto modifier : modsBasicPosition) {
+		const auto pos = static_cast<uint8_t>(modifier);
+		const auto gradeKV = gemsGradeKV(WheelFragmentType_t::Lesser, pos)->get("grade");
+		if (!gradeKV.has_value()) {
+			continue;
 		}
+
+		const auto storedGrade = gradeKV->get<IntType>();
+		if (storedGrade < 0 || storedGrade > 3) {
+			g_logger().warn("[{}] Ignoring invalid Basic modifier grade {} at position {} for player {}", __FUNCTION__, storedGrade, pos, m_player.getName());
+			continue;
+		}
+
+		const auto grade = static_cast<uint8_t>(storedGrade);
+		m_basicGrades[pos] = grade;
+		m_modsMaxGrade += grade == 3 ? 1 : 0;
 	}
 
 	const auto vocationBaseId = m_player.getVocation()->getBaseId();
-	const auto modsSupremeIt = modsSupremePositionByVocation.find(vocationBaseId);
-	if (modsSupremeIt != modsSupremePositionByVocation.end()) {
-		for (const auto &modPosition : modsSupremeIt->second.get()) {
-			const auto pos = static_cast<uint8_t>(modPosition);
-			auto gradeKV = gemsGradeKV(WheelFragmentType_t::Greater, pos)->get("grade");
+	const auto modifiersIt = modsSupremePositionByVocation.find(vocationBaseId);
+	if (modifiersIt == modsSupremePositionByVocation.end()) {
+		return;
+	}
 
-			if (gradeKV.has_value()) {
-				uint8_t grade = gradeKV->get<IntType>();
-				m_supremeGrades[pos] = grade;
-				m_modsMaxGrade += grade == 3 ? 1 : 0;
-			}
+	for (const auto modifier : modifiersIt->second.get()) {
+		const auto pos = static_cast<uint8_t>(modifier);
+		const auto gradeKV = gemsGradeKV(WheelFragmentType_t::Greater, pos)->get("grade");
+		if (!gradeKV.has_value()) {
+			continue;
 		}
+
+		const auto storedGrade = gradeKV->get<IntType>();
+		if (storedGrade < 0 || storedGrade > 3) {
+			g_logger().warn("[{}] Ignoring invalid Supreme modifier grade {} at position {} for player {}", __FUNCTION__, storedGrade, pos, m_player.getName());
+			continue;
+		}
+
+		const auto grade = static_cast<uint8_t>(storedGrade);
+		m_supremeGrades[pos] = grade;
+		m_modsMaxGrade += grade == 3 ? 1 : 0;
 	}
 }
 
@@ -1876,25 +2078,54 @@ void PlayerWheel::saveKVModGrades() const {
  * Functions for load and save player database informations
  */
 void PlayerWheel::loadDBPlayerSlotPointsOnLogin() {
-	auto resultString = fmt::format("SELECT `slot` FROM `player_wheeldata` WHERE `player_id` = {}", m_player.getGUID());
-	const DBResult_ptr &result = g_database().storeQuery(resultString);
-	// Ignore if player not have nothing inserted in the table
+	const auto query = fmt::format("SELECT `slot` FROM `player_wheeldata` WHERE `player_id` = {}", m_player.getGUID());
+	const DBResult_ptr &result = g_database().storeQuery(query);
 	if (!result) {
 		return;
 	}
 
-	unsigned long size;
+	unsigned long size = 0;
 	const auto attribute = result->getStream("slot", size);
+	constexpr size_t recordSize = sizeof(uint8_t) + sizeof(uint16_t);
+	if (attribute == nullptr || size == 0 || size % recordSize != 0) {
+		g_logger().warn("[{}] Ignoring malformed Wheel blob of {} bytes for player {}", __FUNCTION__, size, m_player.getName());
+		return;
+	}
+
 	PropStream propStream;
 	propStream.init(attribute, size);
-	for (size_t i = 0; i < size; i++) {
-		uint8_t slot;
-		uint16_t points;
-		if (propStream.read<uint8_t>(slot) && propStream.read<uint16_t>(points)) {
-			setPointsBySlotType(slot, points);
-			g_logger().debug("Player: {}, loaded points {} to slot {}", m_player.getName(), points, slot);
+	std::array<uint16_t, magic_enum::enum_count<WheelSlots_t>() + 1> proposedSlots = {};
+	std::array<bool, magic_enum::enum_count<WheelSlots_t>() + 1> seenSlots = {};
+	const size_t recordCount = size / recordSize;
+	for (size_t record = 0; record < recordCount; ++record) {
+		uint8_t slotIndex = 0;
+		uint16_t points = 0;
+		if (!propStream.read<uint8_t>(slotIndex) || !propStream.read<uint16_t>(points)) {
+			g_logger().warn("[{}] Failed to decode Wheel blob for player {}", __FUNCTION__, m_player.getName());
+			return;
 		}
+
+		if (slotIndex == 0 || slotIndex >= proposedSlots.size() || seenSlots[slotIndex]) {
+			g_logger().warn("[{}] Ignoring Wheel blob with invalid or duplicate slot {} for player {}", __FUNCTION__, slotIndex, m_player.getName());
+			return;
+		}
+
+		const auto slot = static_cast<WheelSlots_t>(slotIndex);
+		if (points > getMaxPointsPerSlot(slot)) {
+			g_logger().warn("[{}] Ignoring Wheel blob with {} points in slot {} for player {}", __FUNCTION__, points, slotIndex, m_player.getName());
+			return;
+		}
+
+		seenSlots[slotIndex] = true;
+		proposedSlots[slotIndex] = points;
 	}
+
+	if (!validateSlotAllocation(proposedSlots)) {
+		g_logger().warn("[{}] Ignoring invalid or over-budget Wheel blob for player {}", __FUNCTION__, m_player.getName());
+		return;
+	}
+
+	m_wheelSlots = proposedSlots;
 }
 
 bool PlayerWheel::saveDBPlayerSlotPointsOnLogout() const {
@@ -1929,66 +2160,71 @@ bool PlayerWheel::saveDBPlayerSlotPointsOnLogout() const {
 }
 
 uint16_t PlayerWheel::getExtraPoints() const {
-	if (m_player.getLevel() < 51) {
+	if (m_player.getLevel() <= m_minLevelToStartCountPoints) {
 		return 0;
 	}
 
-	uint16_t totalBonus = 0;
+	uint32_t totalBonus = m_modsMaxGrade;
 	for (const auto &[itemId, name, extraPoints] : m_unlockedScrolls) {
-		if (itemId == 0) {
-			continue;
+		if (itemId != 0) {
+			totalBonus += extraPoints;
 		}
-
-		totalBonus += extraPoints;
 	}
 
 	if (hasCompletedMonkQuest()) {
 		const auto monkQuestBonus = std::max<int32_t>(0, g_configManager().getNumber(WHEEL_MONK_QUEST_BONUS));
-		totalBonus += static_cast<uint16_t>(std::min<int32_t>(monkQuestBonus, 0xFFFF));
+		totalBonus += static_cast<uint32_t>(monkQuestBonus);
 	}
 
-	return totalBonus;
+	return static_cast<uint16_t>(std::min<uint32_t>(totalBonus, std::numeric_limits<uint16_t>::max()));
 }
 
 uint16_t PlayerWheel::getWheelPoints(bool includeExtraPoints /* = true*/) const {
 	const uint32_t level = m_player.getLevel();
-	auto totalPoints = std::max(0u, (level - m_minLevelToStartCountPoints)) * m_pointsPerLevel;
-
-	if (includeExtraPoints) {
-		const auto extraPoints = getExtraPoints();
-		totalPoints += extraPoints;
+	uint32_t totalPoints = 0;
+	if (level > m_minLevelToStartCountPoints) {
+		totalPoints = (level - m_minLevelToStartCountPoints) * static_cast<uint32_t>(m_pointsPerLevel);
 	}
 
-	return totalPoints;
+	if (includeExtraPoints) {
+		totalPoints += getExtraPoints();
+	}
+
+	return static_cast<uint16_t>(std::min<uint32_t>(totalPoints, std::numeric_limits<uint16_t>::max()));
 }
 
 void PlayerWheel::addInitialGems() {
-	auto initialsGems = gemsKV()->get("initialGems");
-
-	if (!initialsGems.has_value()) {
-		for (auto gemAffinity : magic_enum::enum_values<WheelGemAffinity_t>()) {
-			for (auto gemQuality : magic_enum::enum_values<WheelGemQuality_t>()) {
-				if (gemQuality == WheelGemQuality_t::Greater) {
-					continue;
-				}
-
-				PlayerWheelGem gem;
-				gem.uuid = KV::generateUUID();
-				gem.locked = false;
-				gem.affinity = gemAffinity;
-				gem.quality = gemQuality;
-
-				gem.basicModifier1 = wheelGemBasicSlot1Allowed[uniform_random(0, wheelGemBasicSlot1Allowed.size() - 1)];
-				gem.basicModifier2 = {};
-				gem.supremeModifier = {};
-				if (gemQuality >= WheelGemQuality_t::Regular) {
-					gem.basicModifier2 = selectBasicModifier2(gem.basicModifier1);
-				}
-				gem.save(gemsKV());
-			}
-		}
-		gemsKV()->set("initialGems", true);
+	if (gemsKV()->get("initialGems").has_value()) {
+		return;
 	}
+
+	for (const auto affinity : magic_enum::enum_values<WheelGemAffinity_t>()) {
+		for (const auto quality : magic_enum::enum_values<WheelGemQuality_t>()) {
+			if (quality == WheelGemQuality_t::Greater || m_revealedGems.size() >= MAX_REVEALED_WHEEL_GEMS) {
+				continue;
+			}
+
+			PlayerWheelGem gem;
+			gem.uuid = KV::generateUUID();
+			gem.locked = false;
+			gem.affinity = affinity;
+			gem.quality = quality;
+			gem.basicModifier1 = wheelGemBasicSlot1Allowed[uniform_random(0, wheelGemBasicSlot1Allowed.size() - 1)];
+			if (quality >= WheelGemQuality_t::Regular) {
+				gem.basicModifier2 = selectBasicModifier2(gem.basicModifier1);
+			}
+			gem.save(gemsKV());
+			m_revealedGems.emplace_back(gem);
+		}
+	}
+
+	std::ranges::sort(m_revealedGems, [](const auto &left, const auto &right) {
+		if (std::ranges::all_of(left.uuid, ::isdigit) && std::ranges::all_of(right.uuid, ::isdigit)) {
+			return std::stoull(left.uuid) < std::stoull(right.uuid);
+		}
+		return left.uuid < right.uuid;
+	});
+	gemsKV()->set("initialGems", true);
 }
 
 bool PlayerWheel::canOpenWheel() const {
@@ -2656,25 +2892,28 @@ void PlayerWheel::processActiveGems() {
 			continue;
 		}
 
-		auto count = m_playerBonusData.unlockedVesselResonances[static_cast<uint8_t>(affinity)];
-		if (count >= 1) {
-			uint8_t grade = getGemGrade(WheelFragmentType_t::Lesser, static_cast<uint8_t>(basicModifier1));
+		const auto resonanceCount = m_playerBonusData.unlockedVesselResonances[static_cast<uint8_t>(affinity)];
+		const uint8_t basicGrade1 = getGemGrade(WheelFragmentType_t::Lesser, static_cast<uint8_t>(basicModifier1));
+		const uint8_t basicGrade2 = quality >= WheelGemQuality_t::Regular ? getGemGrade(WheelFragmentType_t::Lesser, static_cast<uint8_t>(basicModifier2)) : 0;
+		const uint8_t supremeGrade = quality >= WheelGemQuality_t::Greater ? getGemGrade(WheelFragmentType_t::Greater, static_cast<uint8_t>(supremeModifier)) : 0;
+		const auto effectiveGrades = WheelGemUtils::getEffectiveGrades(quality, basicGrade1, basicGrade2, supremeGrade);
+
+		if (resonanceCount >= 1) {
 			std::string modifierName(magic_enum::enum_name(basicModifier1));
-			g_logger().debug("[{}] Adding basic modifier 1 {} to player {} from {} gem affinity {}", __FUNCTION__, modifierName, playerName, magic_enum::enum_name(quality), magic_enum::enum_name(affinity));
-			m_modifierContext->addStrategies(basicModifier1, grade);
+			g_logger().debug("[{}] Adding basic modifier 1 {} to player {} from {} gem affinity {} at effective grade {}", __FUNCTION__, modifierName, playerName, magic_enum::enum_name(quality), magic_enum::enum_name(affinity), effectiveGrades[0]);
+			m_modifierContext->addStrategies(basicModifier1, effectiveGrades[0]);
 		}
-		if (count >= 2 && quality >= WheelGemQuality_t::Regular) {
-			uint8_t grade = getGemGrade(WheelFragmentType_t::Lesser, static_cast<uint8_t>(basicModifier2));
+		if (resonanceCount >= 2 && quality >= WheelGemQuality_t::Regular) {
 			std::string modifierName(magic_enum::enum_name(basicModifier2));
-			g_logger().debug("[{}] Adding basic modifier 2 {} to player {} from {} gem affinity {}", __FUNCTION__, modifierName, playerName, magic_enum::enum_name(quality), magic_enum::enum_name(affinity));
-			m_modifierContext->addStrategies(basicModifier2, grade);
+			g_logger().debug("[{}] Adding basic modifier 2 {} to player {} from {} gem affinity {} at effective grade {}", __FUNCTION__, modifierName, playerName, magic_enum::enum_name(quality), magic_enum::enum_name(affinity), effectiveGrades[1]);
+			m_modifierContext->addStrategies(basicModifier2, effectiveGrades[1]);
 		}
-		if (count >= 3 && quality >= WheelGemQuality_t::Greater) {
-			uint8_t grade = getGemGrade(WheelFragmentType_t::Greater, static_cast<uint8_t>(supremeModifier));
+		if (resonanceCount >= 3 && quality >= WheelGemQuality_t::Greater) {
 			std::string modifierName(magic_enum::enum_name(supremeModifier));
-			g_logger().debug("[{}] Adding supreme modifier {} to player {} from {} gem affinity {}", __FUNCTION__, modifierName, playerName, magic_enum::enum_name(quality), magic_enum::enum_name(affinity));
-			m_modifierContext->addStrategies(supremeModifier, grade);
+			g_logger().debug("[{}] Adding supreme modifier {} to player {} from {} gem affinity {} at effective grade {}", __FUNCTION__, modifierName, playerName, magic_enum::enum_name(quality), magic_enum::enum_name(affinity), effectiveGrades[2]);
+			m_modifierContext->addStrategies(supremeModifier, effectiveGrades[2]);
 		}
+
 	}
 
 	g_logger().debug("[{}] active gems: {} ", __FUNCTION__, activeGems.size());

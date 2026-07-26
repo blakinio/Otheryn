@@ -31,6 +31,27 @@ void GemModifierSpellBonusStrategy::execute() {
 	m_wheel.addSpellBonus(m_spellName, m_bonus);
 }
 
+std::array<uint8_t, 3> WheelGemUtils::getEffectiveGrades(WheelGemQuality_t quality, uint8_t basicGrade1, uint8_t basicGrade2, uint8_t supremeGrade) {
+	basicGrade1 = std::min<uint8_t>(basicGrade1, 3);
+	basicGrade2 = std::min<uint8_t>(basicGrade2, 3);
+	supremeGrade = std::min<uint8_t>(supremeGrade, 3);
+
+	if (quality == WheelGemQuality_t::Lesser) {
+		return { basicGrade1, 0, 0 };
+	}
+
+	const uint8_t effectiveBasicGrade2 = std::min(basicGrade2, basicGrade1);
+	if (quality == WheelGemQuality_t::Regular) {
+		return { basicGrade1, effectiveBasicGrade2, 0 };
+	}
+
+	if (quality == WheelGemQuality_t::Greater) {
+		return { basicGrade1, effectiveBasicGrade2, std::min(supremeGrade, effectiveBasicGrade2) };
+	}
+
+	return { 0, 0, 0 };
+}
+
 void WheelModifierContext::addStrategies(WheelGemBasicModifier_t modifier, uint8_t grade) {
 	float gradeMultiplier = 1.0;
 	if (grade == 1) {

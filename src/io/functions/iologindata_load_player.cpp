@@ -999,12 +999,12 @@ void IOLoginDataLoad::loadPlayerInitializeSystem(const std::shared_ptr<Player> &
 		return;
 	}
 
-	// Wheel loading
+	// Load permanent point sources before validating the persisted allocation.
+	player->wheel().loadKVModGrades();
+	player->wheel().loadKVScrolls();
 	player->wheel().loadDBPlayerSlotPointsOnLogin();
 	player->wheel().loadRevealedGems();
 	player->wheel().loadActiveGems();
-	player->wheel().loadKVModGrades();
-	player->wheel().loadKVScrolls();
 	player->wheel().initializePlayerData();
 
 	player->achiev().loadUnlockedAchievements();

@@ -7,6 +7,11 @@ add_subdirectory(components)
 add_subdirectory(condition)
 add_subdirectory(imbuements)
 
+target_compile_definitions(
+    canary_ut
+    PRIVATE OAM051_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
+)
+
 target_sources(
     canary_ut
     PRIVATE character_progression_test.cpp
@@ -14,6 +19,7 @@ target_sources(
             forge_test.cpp
             forge_transaction_test.cpp
             oam_020_exaltation_forge_adapt_test.cpp
+            oam_051_wheel_safety_adapt_test.cpp
             party_test.cpp
             vocation_test.cpp
 )
