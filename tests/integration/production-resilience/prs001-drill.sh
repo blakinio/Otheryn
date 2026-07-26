@@ -226,7 +226,7 @@ if [[ "${reported_version}" != "${PRS001_MARIADB_VERSION}"* ]]; then
 	exit 1
 fi
 configuration="$(mariadb_query "SELECT CONCAT(@@global.log_bin, '|', @@global.binlog_format, '|', @@global.binlog_row_image, '|', @@global.sync_binlog, '|', @@global.innodb_flush_log_at_trx_commit)")"
-if [[ "${configuration}" != "1|ROW|FULL|1|1" ]]; then
+if [[ "${configuration}" != "ON|ROW|FULL|1|1" ]]; then
 	echo "ERROR: durability configuration was not applied: ${configuration}" >&2
 	exit 1
 fi
