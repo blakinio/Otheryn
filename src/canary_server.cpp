@@ -225,8 +225,8 @@ int CanaryServer::run() {
 #ifndef _WIN32
 				if (getuid() == 0 || geteuid() == 0) {
 					logger.warn("{} has been executed as root user, "
-					            "please consider running it as a normal user",
-					            ProtocolStatus::SERVER_NAME);
+				                "please consider running it as a normal user",
+				                ProtocolStatus::SERVER_NAME);
 				}
 #endif
 
@@ -360,9 +360,9 @@ void CanaryServer::startSelectedInfrastructure(const GameProfile &profile) {
 
 	std::string error;
 	if (!moduleCompositionRoot->registerParticipant(ModuleLifecycleParticipant {
-		.id = ModuleId::Creatures,
-		.name = "monster-compute-service",
-		.start = [this, monsterComputeConfig] {
+														.id = ModuleId::Creatures,
+														.name = "monster-compute-service",
+														.start = [this, monsterComputeConfig] {
 			g_monsterComputeService().start(monsterComputeConfig);
 			const auto monsterComputeStats = g_monsterComputeService().getStats();
 			logger.info(
@@ -370,12 +370,10 @@ void CanaryServer::startSelectedInfrastructure(const GameProfile &profile) {
 				monsterComputeStats.inlineMode ? "inline" : "workers",
 				monsterComputeStats.workerCount,
 				monsterComputeStats.capacity
-			);
-		},
-		.stop = [] {
-			g_monsterComputeService().shutdown();
-		},
-	}, error)) {
+			); },
+														.stop = [] { g_monsterComputeService().shutdown(); },
+													},
+	                                                error)) {
 		moduleCompositionRoot.reset();
 		throw FailedToInitializeCanary(fmt::format("Selected infrastructure registration failed: {}", error));
 	}

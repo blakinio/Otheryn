@@ -30,14 +30,12 @@ namespace {
 				events.emplace_back("start:" + std::string(moduleIdName(id)));
 				if (failStart) {
 					throw std::runtime_error("start failure");
-				}
-			},
+				} },
 			.stop = [&events, id, failStop] {
 				events.emplace_back("stop:" + std::string(moduleIdName(id)));
 				if (failStop) {
 					throw std::runtime_error("stop failure");
-				}
-			},
+				} },
 		};
 	}
 }
@@ -54,21 +52,21 @@ TEST(Mge004ModuleLifecycleTest, StartsInDependencyOrderAndStopsInReverseOrder) {
 	ASSERT_TRUE(root.start(error)) << error;
 	EXPECT_TRUE(root.isReady());
 	EXPECT_EQ(events, (std::vector<std::string> {
-		"start:engine-runtime",
-		"start:scheduler",
-		"start:network-transport",
-	}));
+						  "start:engine-runtime",
+						  "start:scheduler",
+						  "start:network-transport",
+					  }));
 
 	root.stop();
 	EXPECT_EQ(root.getState(), ModuleLifecycleState::Stopped);
 	EXPECT_EQ(events, (std::vector<std::string> {
-		"start:engine-runtime",
-		"start:scheduler",
-		"start:network-transport",
-		"stop:network-transport",
-		"stop:scheduler",
-		"stop:engine-runtime",
-	}));
+						  "start:engine-runtime",
+						  "start:scheduler",
+						  "start:network-transport",
+						  "stop:network-transport",
+						  "stop:scheduler",
+						  "stop:engine-runtime",
+					  }));
 }
 
 TEST(Mge004ModuleLifecycleTest, StartupFailureRollsBackOnlySuccessfullyStartedParticipants) {
@@ -86,10 +84,10 @@ TEST(Mge004ModuleLifecycleTest, StartupFailureRollsBackOnlySuccessfullyStartedPa
 	EXPECT_TRUE(root.getStartedModules().empty());
 	EXPECT_EQ(error, "module 'scheduler' participant 'scheduler' failed to start: start failure");
 	EXPECT_EQ(events, (std::vector<std::string> {
-		"start:engine-runtime",
-		"start:scheduler",
-		"stop:engine-runtime",
-	}));
+						  "start:engine-runtime",
+						  "start:scheduler",
+						  "stop:engine-runtime",
+					  }));
 }
 
 TEST(Mge004ModuleLifecycleTest, StopIsIdempotentAndContinuesAfterStopFailure) {
@@ -105,11 +103,11 @@ TEST(Mge004ModuleLifecycleTest, StopIsIdempotentAndContinuesAfterStopFailure) {
 	root.stop();
 
 	EXPECT_EQ(events, (std::vector<std::string> {
-		"start:engine-runtime",
-		"start:scheduler",
-		"stop:scheduler",
-		"stop:engine-runtime",
-	}));
+						  "start:engine-runtime",
+						  "start:scheduler",
+						  "stop:scheduler",
+						  "stop:engine-runtime",
+					  }));
 	ASSERT_EQ(root.getShutdownErrors().size(), 1);
 	EXPECT_EQ(root.getShutdownErrors().front(), "module 'engine-runtime' participant 'engine' failed to stop: stop failure");
 }
@@ -138,13 +136,12 @@ TEST(Mge004ModuleLifecycleTest, ReadinessIsPublishedOnlyAfterEveryParticipantSta
 	bool sawStartingState = false;
 
 	ASSERT_TRUE(root.registerParticipant(ModuleLifecycleParticipant {
-		.id = ModuleId::EngineRuntime,
-		.name = "engine",
-		.start = [&root, &sawStartingState] {
-			sawStartingState = root.getState() == ModuleLifecycleState::Starting && !root.isReady();
-		},
-		.stop = [] { },
-	}, error));
+											 .id = ModuleId::EngineRuntime,
+											 .name = "engine",
+											 .start = [&root, &sawStartingState] { sawStartingState = root.getState() == ModuleLifecycleState::Starting && !root.isReady(); },
+											 .stop = [] {},
+										 },
+	                                     error));
 	ASSERT_TRUE(root.start(error));
 	EXPECT_TRUE(sawStartingState);
 	EXPECT_TRUE(root.isReady());
