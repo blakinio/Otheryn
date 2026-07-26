@@ -9,13 +9,16 @@
 
 #pragma once
 
+#include "modules/module_registry.hpp"
 #include "server/network/protocol/protocol_profile.hpp"
 
 #ifndef USE_PRECOMPILED_HEADERS
 	#include <cstdint>
 	#include <memory>
+	#include <stdexcept>
 	#include <string>
 	#include <string_view>
+	#include <vector>
 #endif
 
 enum class GameProfileWorldType : uint8_t {
@@ -50,6 +53,16 @@ struct GameProfileNetwork {
 	[[nodiscard]] friend bool operator==(const GameProfileNetwork &, const GameProfileNetwork &) = default;
 };
 
+[[nodiscard]] inline std::vector<ModuleId> validatedCurrentModuleSelection() {
+	const auto selection = ModuleRegistry::currentSelection();
+	std::vector<ModuleId> enabledModules(selection.begin(), selection.end());
+	const auto validation = ModuleRegistry::current().validate(enabledModules, ProtocolProfileRegistry::getCurrentProfile());
+	if (!validation.ok()) {
+		throw std::logic_error("current module graph is invalid: " + formatModuleValidationIssues(validation));
+	}
+	return enabledModules;
+}
+
 struct GameProfile {
 	std::string id = "current";
 	ProtocolProfileId protocolProfile = ProtocolProfileId::Current;
@@ -57,6 +70,7 @@ struct GameProfile {
 	GameProfileRules rules;
 	GameProfileContent content;
 	GameProfileNetwork network;
+	std::vector<ModuleId> enabledModules = validatedCurrentModuleSelection();
 
 	[[nodiscard]] friend bool operator==(const GameProfile &, const GameProfile &) = default;
 };
