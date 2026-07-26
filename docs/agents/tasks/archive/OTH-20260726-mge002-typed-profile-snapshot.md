@@ -9,7 +9,7 @@ Final implementation head: `8ee421132b46d7d17ade2a91316caf45ebfd16bb`
 Synchronized target main: `7ba0ac1ae6450378ad2fb4f85ccc9026309f902e`
 Implementation merge SHA: `1c38b1245e24549d057cf713a03ea4914d13e987`
 Lifecycle branch: `dudantas/mge-002-lifecycle-archive`
-Lifecycle pull request: pending
+Lifecycle pull request: `#153`
 Target repository: `blakinio/Otheryn`
 
 ## Objective
@@ -69,11 +69,12 @@ The package did not implement `ModuleRegistry`, dependency graphs, module lifecy
 
 ```yaml
 checkpoint_version: 1
-updated_at: "2026-07-26T23:10:00+02:00"
+updated_at: "2026-07-26T23:12:00+02:00"
 head: "1c38b1245e24549d057cf713a03ea4914d13e987"
 branch: "main"
 pr: 133
-status: "completed_merged_lifecycle_archive_pending"
+lifecycle_pr: 153
+status: "completed_merged_lifecycle_validation_pending"
 context_routes:
   - "docs/architecture/modular-game-engine-and-profiles.md"
   - "docs/architecture/current-engine-ownership-and-dependencies.md"
@@ -86,6 +87,7 @@ proven:
   - "The implementation changed exactly fifteen declared paths."
   - "The final implementation audit found no comments, reviews or review threads."
   - "Issue 132 is closed as completed."
+  - "Lifecycle PR 153 changes only the active and archive task paths."
 derived:
   - "MGE-002 establishes typed immutable startup profile state but does not establish module composition or lifecycle."
 unknown:
@@ -113,5 +115,5 @@ validation:
   lifecycle_main_drift: "pending"
   lifecycle_required: "pending"
 blockers: []
-next_action: "Validate and merge the lifecycle-only archive pull request, then start MGE-003 only after a fresh ownership and dependency preflight."
+next_action: "Validate and merge lifecycle PR 153, then start MGE-003 only after a fresh ownership and dependency preflight."
 ```
