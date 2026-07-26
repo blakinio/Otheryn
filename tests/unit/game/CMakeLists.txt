@@ -16,6 +16,7 @@ target_compile_definitions(
             OAM041_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
             OAM042_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
             OAM043_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
+            PRS002_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
 )
 
 target_sources(
@@ -59,7 +60,9 @@ target_sources(
             instance/instance_creature_binder_test.cpp
             instance/instance_scoped_event_test.cpp
             instance/instance_arena_service_test.cpp
+            player_persistence_state_test.cpp
             player_stats_test.cpp
+            prs_002_dirty_player_checkpoint_contract_test.cpp
             random_mount_test.cpp
             spawn_monster_test.cpp
             spell_reuse_test.cpp
