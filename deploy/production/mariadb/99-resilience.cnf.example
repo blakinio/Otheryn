@@ -1,0 +1,27 @@
+# DESIGN EXAMPLE ONLY.
+#
+# This file is not loaded by the current Docker quickstart and must not be
+# mounted into production until PRS-001 pins a MariaDB version, validates every
+# option, benchmarks I/O and completes an isolated backup/PITR drill.
+
+[mariadb]
+# Required for binary logging, PITR and a future replica package. The final
+# value must be unique when more than one MariaDB server exists.
+server_id=1
+
+# Record durable data and schema changes for point-in-time recovery.
+log_bin=mariadb-bin
+binlog_format=ROW
+binlog_row_image=FULL
+
+# Conservative durability intent. Changing either value is an explicit RPO
+# decision and requires failure testing against the pinned storage/VPS.
+sync_binlog=1
+innodb_flush_log_at_trx_commit=1
+
+# Fourteen days. Off-host archive verification must complete before local logs
+# expire, and retention must exceed any accepted replica lag.
+binlog_expire_logs_seconds=1209600
+
+# Do not add replication, GTID, TLS, encryption, audit or performance tuning
+# options here without the bounded package that owns and validates them.
