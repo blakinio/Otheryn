@@ -32,6 +32,26 @@ local ClientAction = {
 	AssignUnwanted = 0x10,
 }
 
+local OfferType = {
+	BonusPromotion = 0x04,
+}
+
+local OfferId = {
+	BonusPromotion = 0,
+}
+
+local OfferStatus = {
+	Available = 0x00,
+	NotEnoughPoints = 0x02,
+	Bought = 0x04,
+}
+
+local Storage = {
+	BonusPromotionPoints = 1000006,
+}
+
+local MaxBonusPromotionPoints = 50
+
 local OneBytePayloadActions = {
 	[ClientAction.BountyDifficulty] = true,
 	[ClientAction.BountySelect] = true,
@@ -41,7 +61,6 @@ local OneBytePayloadActions = {
 }
 
 local OneU16PayloadActions = {
-	[ClientAction.ShopBuy] = true,
 	[ClientAction.UnlockPreferenceSlot] = true,
 	[ClientAction.ClearPreferred] = true,
 	[ClientAction.ClearUnwanted] = true,
@@ -75,13 +94,11 @@ local WeeklyResponseActions = {
 
 local ShopResponseActions = {
 	[ClientAction.Shop] = true,
-	[ClientAction.ShopBuy] = true,
 }
 
 -- Official-client packet shim for 15.25 Taskboard traffic.
--- This intentionally sends empty but structurally valid 0x5B windows. Full
--- task state, rewards, shop contents and Soulpit behavior should be added on
--- top of these byte writers instead of changing the packet contract.
+-- Bounty and Weekly remain empty but structurally valid. The Shop exposes only
+-- the bounded Wheel Bonus Promotion offer authorized by OAM-051B.
 
 local function readU8(msg)
 	if msg:getUnreadBytes() < 1 then
@@ -151,11 +168,76 @@ local function sendWeeklyWindow(player)
 	msg:sendToPlayer(player)
 end
 
+local function getPurchasedBonusPromotionPoints(player)
+	local storedPoints = player:getStorageValue(Storage.BonusPromotionPoints)
+	if storedPoints < 0 then
+		return 0
+	end
+
+	return math.min(storedPoints, MaxBonusPromotionPoints)
+end
+
+local function getBonusPromotionCost(purchasedPoints)
+	if purchasedPoints >= MaxBonusPromotionPoints then
+		return 0
+	end
+
+	local nextPoint = purchasedPoints + 1
+	return 100 * (1 + nextPoint * (nextPoint - 1) / 2)
+end
+
+local function getBonusPromotionStatus(player, purchasedPoints, nextCost)
+	if purchasedPoints >= MaxBonusPromotionPoints then
+		return OfferStatus.Bought
+	end
+
+	if player:getTaskHuntingPoints() < nextCost then
+		return OfferStatus.NotEnoughPoints
+	end
+
+	return OfferStatus.Available
+end
+
+local function purchaseBonusPromotion(player, offerId)
+	if offerId ~= OfferId.BonusPromotion then
+		return false
+	end
+
+	local purchasedPoints = getPurchasedBonusPromotionPoints(player)
+	if purchasedPoints >= MaxBonusPromotionPoints then
+		return false
+	end
+
+	local cost = getBonusPromotionCost(purchasedPoints)
+	if cost == 0 or player:getTaskHuntingPoints() < cost then
+		return false
+	end
+
+	-- PlayerStorage and Task Hunting state are persisted by the same player SQL
+	-- transaction. Mutate storage first and restore it if the debit unexpectedly
+	-- fails, so no in-memory half-purchase can survive to the save boundary.
+	player:setStorageValue(Storage.BonusPromotionPoints, purchasedPoints + 1)
+	if not player:removeTaskHuntingPoints(cost) then
+		player:setStorageValue(Storage.BonusPromotionPoints, purchasedPoints)
+		return false
+	end
+
+	return true
+end
+
 local function sendShopWindow(player)
+	local purchasedPoints = getPurchasedBonusPromotionPoints(player)
+	local nextCost = getBonusPromotionCost(purchasedPoints)
+	local status = getBonusPromotionStatus(player, purchasedPoints, nextCost)
+
 	local msg = NetworkMessage()
 	msg:addByte(ServerPackets.Taskboard)
 	msg:addByte(OutboundWindow.Shop)
-	msg:addByte(0) -- offer count
+	msg:addByte(1) -- offer count
+	msg:addByte(OfferType.BonusPromotion)
+	msg:addU16(purchasedPoints + 1)
+	msg:addU32(nextCost)
+	msg:addByte(status)
 	msg:sendToPlayer(player)
 end
 
@@ -193,6 +275,25 @@ function onRecvbyte(player, msg, byte)
 	local action = readU8(msg)
 	if not action then
 		logger.debug("[Taskboard] ignored malformed 0x5F packet from player='{}': missing action", player:getName())
+		return
+	end
+
+	if action == ClientAction.ShopBuy then
+		local offerId = readU16(msg)
+		if not offerId then
+			logger.debug("[Taskboard] ignored malformed 0x5F packet from player='{}': incomplete ShopBuy", player:getName())
+			return
+		end
+
+		local trailingBytes = msg:getUnreadBytes()
+		if trailingBytes > 0 then
+			logger.debug("[Taskboard] ignored malformed 0x5F packet from player='{}': ShopBuy unexpected trailing bytes={}", player:getName(), trailingBytes)
+			return
+		end
+
+		purchaseBonusPromotion(player, offerId)
+		sendShopWindow(player)
+		logger.debug("[Taskboard] player='{}' ShopBuy offer={} handled by bounded OAM-051B shop.", player:getName(), offerId)
 		return
 	end
 
