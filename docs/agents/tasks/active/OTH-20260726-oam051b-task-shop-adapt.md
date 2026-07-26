@@ -7,7 +7,7 @@ branch: dudantas/oam-051b-task-shop-adapt
 base_branch: main
 created: 2026-07-26
 updated: 2026-07-26
-last_verified_commit: "533e043bb76293b073b9f5ddb52fa2f7ebe1c159"
+last_verified_commit: "ca615b899ff5a299bf435de851d1c83848b03fe6"
 risk: high
 related_issue: ""
 related_pr: "128"
@@ -76,8 +76,8 @@ Implement the single bounded Hunting Task Shop Bonus Promotion offer authorized 
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-26T15:25:00+02:00
-head: 533e043bb76293b073b9f5ddb52fa2f7ebe1c159
+updated_at: 2026-07-26T16:30:00+02:00
+head: ca615b899ff5a299bf435de851d1c83848b03fe6
 branch: dudantas/oam-051b-task-shop-adapt
 pr: 128
 status: validating
@@ -101,26 +101,30 @@ proven:
   - Focused failing tests were committed before runtime implementation.
   - Storage key 1000006, bounded Taskboard purchase/response logic, Wheel accounting and official Wheel payload reporting are implemented.
   - Lightweight draft CI 30201733256 succeeded on implementation/test head 1e5d746e1dc94bda571bacaaa4a09a4ec68fcfdf, with heavy builds intentionally skipped by draft policy.
-  - Ready CI 30202622353 passed Fast Checks, Lua Tests, Repository Audit, autofix, macOS, Linux release, Docker and both Windows builds.
-  - Ready CI 30202622353 isolated two Linux-debug failures: the owned source-slice end marker and PartyTest teardown SIGSEGV from the then-missing main fix.
-  - The owned source-slice marker was corrected in 7f71e2cec9a0121a2f4eaefd059bc56e3a22f678 without changing runtime behavior.
-  - Main PR 126 merged the independent Party test teardown fix as 41c086d3d77b9327aafa6f1375e9531bec3971f2.
-  - The branch merged current main and removed its one-shot sync helper; comparison against 41c086d3d77b9327aafa6f1375e9531bec3971f2 is ahead by 23 and behind by 0.
+  - Ready CI 30202622353 isolated the source-slice boundary error and stale-ancestry Party teardown SIGSEGV.
+  - Source-slice boundaries were corrected in 7f71e2cec9a0121a2f4eaefd059bc56e3a22f678 without changing runtime behavior.
+  - Main PR 126 merged the independent Party fixture fix as 41c086d3d77b9327aafa6f1375e9531bec3971f2.
+  - CI 30205022370 proved the Party fixture green and all 493 unrelated tests green; its only failure was an OAM test coupled to the local expression spelling used by getWheelPoints.
+  - Commit 95b1f258bfb641386486d17ca2499b4a4ac8b368 changed that assertion to require the semantic getExtraPoints call without constraining the local variable or operator spelling.
+  - Before the final synchronization, exact-head builds were green for Docker, macOS, both Windows variants and Linux release, with Fast Checks, Lua, audit and autofix green.
+  - Main advanced only by independent Party task archival commit 8c0ffb213a4f235d6eeee6a26fef919376453c30.
+  - The branch merged that current main and removed its one-shot helper; comparison from 8c0ffb213a4f235d6eeee6a26fef919376453c30 to ca615b899ff5a299bf435de851d1c83848b03fe6 is ahead by 28 and behind by 0.
   - Final changed paths remain exactly the seven declared OAM-051B paths; no temporary workflow remains in the PR diff.
 derived:
   - SQL-backed key 1000006 is the smallest schema-free durable counter.
   - Existing generic Lua storage and Task Hunting APIs avoid a new Lua binding and generated API drift.
-  - The Linux-debug Party failure belonged to stale branch ancestry, not OAM-051B runtime code.
-  - A trusted checkpoint commit is required after bot-authored sync cleanup because bot-triggered pull-request workflows were marked action_required.
+  - The Party failure belonged to stale branch ancestry, not OAM-051B runtime code.
+  - Source-contract tests should assert the required call and data flow, not incidental local spelling.
+  - A trusted checkpoint commit is required after bot-authored sync cleanup because bot-triggered pull-request workflows are not final evidence.
 unknown:
   - Exact final-head affected CI, Repository Audit, autofix and Required results after this trusted checkpoint commit.
   - Physical official-client acceptance result.
 conflicts: []
 first_failure:
-  marker: oam-wheel-source-slice-end
-  command: CI run 30202622353, Linux debug job 89795309819
+  marker: oam-wheel-points-local-syntax
+  command: CI run 30205022370, Linux debug job 89801643830
   result: RESOLVED
-  evidence: The test expected getUnusedPoints after getWheelPoints, while the actual next function is getMaxPointsPerSlot; commit 7f71e2cec9a0121a2f4eaefd059bc56e3a22f678 corrected only that source-slice boundary.
+  evidence: All other tests, including Party teardown, passed; commit 95b1f258bfb641386486d17ca2499b4a4ac8b368 now asserts the semantic getExtraPoints call instead of one local expression spelling.
 rejected_hypotheses:
   - Copy Canary PR 230 wholesale.
   - Persist purchased points in Wheel KV.
@@ -129,6 +133,7 @@ rejected_hypotheses:
   - Add maintained-client UI in this package.
   - Expand into other Taskboard or Wheel parity work.
   - Ignore or suppress the Party teardown failure instead of synchronizing its merged fix from main.
+  - Change Wheel runtime merely to satisfy an incidental source-text assertion.
 changed_paths:
   - data/XML/storages.xml
   - data/modules/scripts/taskboard/taskboard.lua
@@ -140,7 +145,7 @@ changed_paths:
 validation:
   - command: current main and open ownership audit
     result: PASS
-    evidence: Task-start open PRs did not overlap the bounded OAM-051B paths.
+    evidence: Task-start and current open work do not overlap the bounded OAM-051B paths.
   - command: test-first commit ordering
     result: PASS
     evidence: Failing contract tests were committed before storage and Taskboard runtime changes.
@@ -150,12 +155,12 @@ validation:
   - command: temporary helper audit
     result: PASS
     evidence: Materialization and main-sync helper workflows are absent from the final PR diff.
-  - command: ready affected CI before final synchronization
+  - command: latest pre-sync affected CI
     result: PARTIAL
-    evidence: Run 30202622353 passed every platform/build except Linux debug; both Linux-debug failures are now resolved by the owned marker correction and merged main Party fixture fix.
-  - command: main drift comparison
+    evidence: Run 30205022370 passed all platform, smoke, Lua, audit and formatting gates; the sole Linux-debug source assertion is resolved in 95b1f258bfb641386486d17ca2499b4a4ac8b368.
+  - command: current main drift comparison
     result: PASS
-    evidence: Head 533e043bb76293b073b9f5ddb52fa2f7ebe1c159 is behind main by 0 with exactly seven intended changed paths.
+    evidence: Head ca615b899ff5a299bf435de851d1c83848b03fe6 is behind current main by 0 with exactly seven intended changed paths.
 blockers: []
-next_action: Require exact-final-head CI, Repository Audit, autofix and Required success, then perform clean discussions/path/drift audit and merge PR 128 with expected-head protection.
+next_action: Require exact-final-head CI, Repository Audit, autofix and Required success after this trusted checkpoint commit, then repeat clean discussions/path/drift audit and merge PR 128 with expected-head protection.
 ```
