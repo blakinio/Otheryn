@@ -209,18 +209,7 @@ int CanaryServer::run() {
 				loadModules();
 				setWorldType();
 				loadMaps();
-
-				MonsterComputeConfig monsterComputeConfig;
-				monsterComputeConfig.configuredThreads = static_cast<uint32_t>(std::max<int32_t>(0, g_configManager().getNumber(MONSTER_COMPUTE_THREADS)));
-				monsterComputeConfig.capacity = static_cast<size_t>(std::max<int32_t>(1, g_configManager().getNumber(MONSTER_COMPUTE_QUEUE_CAPACITY)));
-				g_monsterComputeService().start(monsterComputeConfig);
-				const auto monsterComputeStats = g_monsterComputeService().getStats();
-				logger.info(
-					"Monster compute service initialized: mode={}, workers={}, capacity={}",
-					monsterComputeStats.inlineMode ? "inline" : "workers",
-					monsterComputeStats.workerCount,
-					monsterComputeStats.capacity
-				);
+				startSelectedInfrastructure(*gameProfile);
 
 				logger.info("Initializing gamestate...");
 				g_game().setGameState(GAME_STATE_INIT);
@@ -236,8 +225,8 @@ int CanaryServer::run() {
 #ifndef _WIN32
 				if (getuid() == 0 || geteuid() == 0) {
 					logger.warn("{} has been executed as root user, "
-				                "please consider running it as a normal user",
-				                ProtocolStatus::SERVER_NAME);
+					            "please consider running it as a normal user",
+					            ProtocolStatus::SERVER_NAME);
 				}
 #endif
 
@@ -257,6 +246,7 @@ int CanaryServer::run() {
 					loaderCV.notify_all();
 				}
 			} catch (FailedToInitializeCanary &err) {
+				stopSelectedInfrastructure();
 				{
 					std::scoped_lock lock(loaderMutex);
 					loaderStatus = LoaderStatus::FAILED;
@@ -303,6 +293,7 @@ int CanaryServer::run() {
 			std::cin.get();
 		}
 
+		stopSelectedInfrastructure();
 		shutdown();
 		return EXIT_FAILURE;
 	}
@@ -313,6 +304,7 @@ int CanaryServer::run() {
 
 	serviceManager.run();
 
+	stopSelectedInfrastructure();
 	shutdown();
 	return EXIT_SUCCESS;
 }
@@ -353,6 +345,57 @@ void CanaryServer::loadMaps() const {
 	} catch (const std::exception &err) {
 		throw FailedToInitializeCanary(err.what());
 	}
+}
+
+void CanaryServer::startSelectedInfrastructure(const GameProfile &profile) {
+	try {
+		moduleCompositionRoot = std::make_unique<ModuleCompositionRoot>(profile);
+	} catch (const std::exception &err) {
+		throw FailedToInitializeCanary(fmt::format("Module composition root creation failed: {}", err.what()));
+	}
+
+	MonsterComputeConfig monsterComputeConfig;
+	monsterComputeConfig.configuredThreads = static_cast<uint32_t>(std::max<int32_t>(0, g_configManager().getNumber(MONSTER_COMPUTE_THREADS)));
+	monsterComputeConfig.capacity = static_cast<size_t>(std::max<int32_t>(1, g_configManager().getNumber(MONSTER_COMPUTE_QUEUE_CAPACITY)));
+
+	std::string error;
+	if (!moduleCompositionRoot->registerParticipant(ModuleLifecycleParticipant {
+		.id = ModuleId::Creatures,
+		.name = "monster-compute-service",
+		.start = [this, monsterComputeConfig] {
+			g_monsterComputeService().start(monsterComputeConfig);
+			const auto monsterComputeStats = g_monsterComputeService().getStats();
+			logger.info(
+				"Monster compute service initialized: mode={}, workers={}, capacity={}",
+				monsterComputeStats.inlineMode ? "inline" : "workers",
+				monsterComputeStats.workerCount,
+				monsterComputeStats.capacity
+			);
+		},
+		.stop = [] {
+			g_monsterComputeService().shutdown();
+		},
+	}, error)) {
+		moduleCompositionRoot.reset();
+		throw FailedToInitializeCanary(fmt::format("Selected infrastructure registration failed: {}", error));
+	}
+
+	if (!moduleCompositionRoot->start(error)) {
+		moduleCompositionRoot.reset();
+		throw FailedToInitializeCanary(fmt::format("Selected infrastructure startup failed: {}", error));
+	}
+}
+
+void CanaryServer::stopSelectedInfrastructure() noexcept {
+	if (!moduleCompositionRoot) {
+		return;
+	}
+
+	moduleCompositionRoot->stop();
+	for (const auto &error : moduleCompositionRoot->getShutdownErrors()) {
+		logger.error("Selected infrastructure shutdown error: {}", error);
+	}
+	moduleCompositionRoot.reset();
 }
 
 void CanaryServer::setupHousesRent() {
