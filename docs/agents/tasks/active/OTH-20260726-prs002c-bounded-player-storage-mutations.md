@@ -1,12 +1,12 @@
 ---
 task_id: OTH-20260726-prs002c-bounded-player-storage-mutations
-status: implementing
+status: validating
 branch: dudantas/prs-002c-bounded-player-storage-mutations
 base_branch: main
 created: 2026-07-26
 updated: 2026-07-26
 related_issue: "151"
-related_pr: "none"
+related_pr: "152"
 owned_paths:
   - src/game/scheduling/save_manager.hpp
   - src/creatures/players/components/player_storage.cpp
@@ -41,11 +41,11 @@ This slice adds a dirty-generation marker without scheduling a save. It covers t
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-26T22:57:00+02:00
-head: 85db59df2551714fb6e7626cfce4aac24e2ccd06
+updated_at: 2026-07-26T23:00:00+02:00
+head: 408ee8de72badd569b9bc735091726195dcfa643
 branch: dudantas/prs-002c-bounded-player-storage-mutations
-pr: none
-status: implementing
+pr: 152
+status: validating
 context_routes:
   - production-resilience
   - player-persistence
@@ -64,6 +64,7 @@ proven:
   - Successful acknowledgement already schedules one follow-up when a newer generation remains dirty.
   - PlayerStorage ingest calls add with shouldTrackModification false and must not create runtime dirty generations.
   - PlayerStorage tracked add/remove operations produce the SQL storage delta persisted with player data.
+  - PR 152 contains exactly the marker, bounded storage instrumentation, source-contract test and active task.
 derived:
   - A marker-only SaveManager API can advance the existing exact-owner state without introducing a timer or second scheduling policy.
   - Instrumenting PlayerStorage first is a bounded representative SQL-backed mutation slice and leaves all other domains explicitly unknown.
@@ -74,7 +75,7 @@ unknown:
 conflicts: []
 first_failure:
   marker: storage-mutations-unversioned
-  evidence: Before this branch, tracked PlayerStorage add/remove operations updated SQL deltas without advancing the PRS-002 dirty generation.
+  evidence: RESOLVED_IN_BRANCH by marker-only SaveManager API and tracked PlayerStorage add/remove calls; exact-head CI remains required.
 rejected_hypotheses:
   - Instrument all Player setters or the monolithic player.cpp in one PR.
   - Make a storage mutation call savePlayer or create a timer.
@@ -90,11 +91,11 @@ validation:
     result: PASS
     evidence: PlayerStorage add/remove own tracked SQL delta changes; ingest explicitly disables modification tracking; SaveManager exact-owner state and follow-up behavior are already merged.
   - command: python tools/agents/checkpoint.py docs/agents/tasks/active/OTH-20260726-prs002c-bounded-player-storage-mutations.md --require-checkpoint
-    result: NOT_RUN
-    evidence: Run after the task file is materialized on the branch.
+    result: PASS
+    evidence: Compact checkpoint schema, evidence states and limits validated locally after task materialization.
   - command: exact-head full repository CI and Required
     result: NOT_RUN
-    evidence: Open a draft PR, validate the checkpoint, then run ready-head CI before merge.
+    evidence: Run after this checkpoint publication and ready-for-review transition.
 blockers: []
-next_action: Validate this checkpoint, open a draft PR, run exact-head full CI, fix only bounded PRS-002C failures, and perform the four-path discussion and main-drift audit before expected-head merge.
+next_action: Mark PR 152 ready, require exact-head full CI and Required, fix only bounded PRS-002C failures, then perform the four-path discussion and main-drift audit before expected-head merge.
 ```
