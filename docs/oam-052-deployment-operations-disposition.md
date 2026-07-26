@@ -54,6 +54,12 @@ This disposition adds no Otheryn runtime, deployment script, workflow, Compose f
 
 Canary's deployment tooling remains available as laboratory and content-validation infrastructure. Any future use against an exact Otheryn revision requires a separately authorized invocation contract and proof; this package does not claim such compatibility.
 
+## Delivery evidence
+
+Target feature PR #136 changed exactly this report and its active task record. Final head `b0e6a965399008a9834f8449c95981d78885ed10` passed exact-head Required run `30214361783`, had no comments, reviews or review threads, was behind target `main` by zero and squash-merged with expected-head protection as `2afcaef4a3d023a7ec987e4380e80905534fdd2b`.
+
+No runtime or deployment path was added by the target delivery.
+
 ## Nonclaims
 
 This result does not claim that Otheryn production deployment is complete, that PRS-008 is implemented, that backup/PITR proves application rollout safety, that Canary's toolchain is permanently sufficient, that rollback targets always exist, that a real supervisor will consume symlinked datapacks, or that production readiness, operator correctness, availability, RPO or RTO has been established.
