@@ -2,6 +2,7 @@
 
 Issue: #127  
 Branch: `dudantas/mge-001-ownership-dependency-inventory`  
+Pull request: #129  
 Target repository: `blakinio/Otheryn`  
 Reference repositories: `blakinio/canary`, `opentibiabr/canary`  
 Package type: analysis and documentation only
@@ -44,15 +45,19 @@ Required before merge:
 
 No analysis tool is added by this package, so tool-test and deterministic-generated-artifact checks are not applicable. The report is validated by exact blob re-read.
 
+## Execution drift note
+
+Draft PR `#128` appeared after the initial baseline. Its exact current changed path is only `docs/agents/tasks/active/OTH-20260726-oam051b-task-shop-adapt.md`; comments, reviews, and review threads are empty. It does not conflict with the two MGE-001 owned paths. Its planned Wheel/Player-storage work is therefore recorded as adjacent future source ownership, not as evidence merged into the MGE-001 baseline.
+
 ## Checkpoint
 
 ```yaml
 checkpoint_version: 1
-updated_at: "2026-07-26T14:00:00+02:00"
-head: "38bb62192d25984d63f96c2637348b4adc82f6cd"
+updated_at: "2026-07-26T14:10:00+02:00"
+head: "045bf4e162ef395dbd2c08160dd923ad5ea68f7b"
 branch: "dudantas/mge-001-ownership-dependency-inventory"
-pr: "pending"
-status: "report_ready_for_repository_validation"
+pr: 129
+status: "validation_passed_waiting_for_exact_head_required"
 context_routes:
   - "AGENTS.md"
   - "docs/agents/CONTEXT_HANDOFF.md"
@@ -88,17 +93,20 @@ changed_paths:
   - "docs/architecture/current-engine-ownership-and-dependencies.md"
   - "docs/agents/tasks/active/OTH-20260726-mge001-ownership-dependency-inventory.md"
 validation:
-  checkpoint: "pending"
-  markdown: "pending"
-  links_and_paths: "pending"
-  changed_paths: "pending"
-  secret_scan: "pending"
-  open_pr_ownership: "baseline_pass"
-  discussions: "baseline_pass"
-  reviews: "baseline_pass"
-  unresolved_threads: "baseline_pass"
-  target_main_drift: "pending"
-  exact_head_required: "pending"
+  checkpoint: "pass"
+  markdown: "pass"
+  links_and_paths: "pass"
+  changed_paths: "pass"
+  secret_scan: "pass"
+  tools_tests: "not_applicable_no_tools_added"
+  deterministic_generation: "not_applicable_no_generated_artifact"
+  exact_blob_reread: "pass"
+  open_pr_ownership: "pass_including_pr_128_drift"
+  discussions: "pass_at_validation_time"
+  reviews: "pass_at_validation_time"
+  unresolved_threads: "pass_at_validation_time"
+  target_main_drift: "pass_main_38bb62192d25984d63f96c2637348b4adc82f6cd"
+  exact_head_required: "queued"
 blockers: []
-next_action: "Create the documentation pull request and validate its exact changed paths."
+next_action: "Confirm Required succeeds on the new checkpoint commit and re-audit PR #129 before merge."
 ```
