@@ -8,6 +8,7 @@ updated: 2026-07-26
 related_issue: "116"
 related_pr: "117"
 feature_merge: "2105e9c9bbed9d73a9bd1074e4c3f3fa77012954"
+lifecycle_pr: "119"
 owned_paths:
   - docs/architecture/production-resilience-and-recovery.md
   - docs/operations/backup-and-pitr-policy.md
