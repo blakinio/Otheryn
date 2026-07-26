@@ -18,6 +18,10 @@ namespace {
 		buffer << input.rdbuf();
 		return buffer.str();
 	}
+
+	constexpr uint32_t bonusPromotionCost(uint32_t nextPoint) {
+		return 100 * (1 + nextPoint * (nextPoint - 1) / 2);
+	}
 } // namespace
 
 class Oam051bTaskShopAdaptTest : public ::testing::Test {
@@ -32,7 +36,7 @@ protected:
 		DI::setTestContainer(previousTestContainer);
 	}
 
-	static std::shared_ptr<Player> makePlayer(uint32_t level = 50) {
+	static std::shared_ptr<Player> makePlayer(uint32_t level = 51) {
 		auto player = std::make_shared<Player>();
 		player->setLevel(level);
 		return player;
@@ -45,13 +49,22 @@ protected:
 TEST_F(Oam051bTaskShopAdaptTest, StorageBackedPurchasesContributeToWheelPoints) {
 	auto player = makePlayer();
 	EXPECT_EQ(0, player->wheel().getExtraPoints());
+	EXPECT_EQ(1, player->wheel().getWheelPoints());
 
 	player->addStorageValue(huntingTaskShopPointsStorage, 7);
 	EXPECT_EQ(7, player->wheel().getExtraPoints());
-	EXPECT_EQ(7, player->wheel().getWheelPoints());
+	EXPECT_EQ(8, player->wheel().getWheelPoints());
 
 	player->addStorageValue(huntingTaskShopPointsStorage, 99);
 	EXPECT_EQ(50, player->wheel().getExtraPoints());
+	EXPECT_EQ(51, player->wheel().getWheelPoints());
+}
+
+TEST_F(Oam051bTaskShopAdaptTest, CostProgressionMatchesBoundedContract) {
+	EXPECT_EQ(100, bonusPromotionCost(1));
+	EXPECT_EQ(200, bonusPromotionCost(2));
+	EXPECT_EQ(117700, bonusPromotionCost(49));
+	EXPECT_EQ(122600, bonusPromotionCost(50));
 }
 
 TEST_F(Oam051bTaskShopAdaptTest, StorageReservationIsNamedAndSchemaFree) {
@@ -127,4 +140,19 @@ TEST_F(Oam051bTaskShopAdaptTest, PlayerStoragesLoadBeforeWheelAllocationValidati
 	ASSERT_NE(storages, std::string::npos);
 	ASSERT_NE(slots, std::string::npos);
 	EXPECT_LT(storages, slots);
+}
+
+TEST_F(Oam051bTaskShopAdaptTest, WheelAccountingUsesSqlStorageAndNoKvMirror) {
+	const auto source = readSource("src/creatures/players/components/wheel/player_wheel.cpp");
+	ASSERT_FALSE(source.empty());
+
+	const auto functionStart = source.find("uint16_t PlayerWheel::getExtraPoints() const");
+	ASSERT_NE(functionStart, std::string::npos);
+	const auto functionEnd = source.find("uint16_t PlayerWheel::getWheelPoints", functionStart);
+	ASSERT_NE(functionEnd, std::string::npos);
+	const auto function = source.substr(functionStart, functionEnd - functionStart);
+
+	EXPECT_NE(function.find("m_player.getStorageValue(1000006)"), std::string::npos);
+	EXPECT_NE(function.find("std::clamp<int32_t>"), std::string::npos);
+	EXPECT_EQ(function.find("kv()"), std::string::npos);
 }
