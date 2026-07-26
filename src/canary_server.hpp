@@ -13,6 +13,10 @@
 #include "security/rsa.hpp"
 #include "server/server.hpp"
 
+#ifndef USE_PRECOMPILED_HEADERS
+	#include <memory>
+#endif
+
 class Logger;
 
 class FailedToInitializeCanary : public std::exception {
