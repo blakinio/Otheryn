@@ -1,6 +1,6 @@
 ---
 task_id: OTH-20260726-party-test-teardown-segfault
-status: validating
+status: ready
 branch: dudantas/fix-party-test-teardown
 base_branch: main
 created: 2026-07-26
@@ -104,11 +104,11 @@ This is a fixture-owned cross-translation-unit static destruction-order defect. 
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-26T13:24:00+02:00
-head: cac32dcc5819076562ee5099806a0a9a92515e42
+updated_at: 2026-07-26T13:52:00+02:00
+head: 239d2c601ffc22019cff6e3927f5224c423d0868
 branch: dudantas/fix-party-test-teardown
 pr: 126
-status: validating
+status: ready
 context_routes:
   - testing
   - player-lifecycle
@@ -122,26 +122,28 @@ owned_paths:
   - docs/agents/tasks/active/OTH-20260726-party-test-teardown-segfault.md
 proven:
   - Task-start main is 38bb62192d25984d63f96c2637348b4adc82f6cd.
-  - Issue 125 and draft PR 126 own only the repeated Party unit-test teardown SIGSEGV.
+  - Issue 125 and PR 126 own only the repeated Party unit-test teardown SIGSEGV.
   - Two standard Linux debug attempts reproduced the same post-success process-exit failure.
-  - Focused ASAN run 30198967320 reproduced a heap-use-after-free after 25 successful test repetitions.
+  - Baseline ASAN run 30198967320 reproduced a heap-use-after-free after 25 successful test repetitions.
   - LuaScriptInterfaceRegistry was destroyed before the static PartyTest injector.
   - Static injector destruction then destroyed Game and Raids; LuaScriptInterface::closeState constructed LuaEnvironment and touched the freed registry.
   - The defect is in fixture destruction ordering, not production Party behavior.
   - The selected change destroys the test injector explicitly during TearDownTestSuite while the Lua registry is alive.
   - Original null-entry coverage, full disband execution and post-disband assertions are unchanged.
+  - Fixed focused ASAN run 30200053915 passed 25 repetitions without ASAN or UBSAN findings.
+  - Ready-head CI run 30200069480 passed, including all 483 Linux debug tests and every platform build.
+  - Ready-head Required run 30200069347 passed on the same source head.
+  - Final audit found exactly three declared paths, no PR discussion and no drift behind main.
 derived:
   - Early deterministic fixture cleanup removes reliance on cross-translation-unit static destruction order.
   - No production Party, Player, Game, Lua or DI runtime change is required.
-unknown:
-  - Exact-head result of the fixed focused ASAN repetition.
-  - Exact-head repository CI and Required results after the fixture fix.
+unknown: []
 conflicts: []
 first_failure:
   marker: party-test-post-success-segfault
   command: Party Test Sanitizer run 30198967320 job 89785504123
-  result: DIAGNOSED
-  evidence: ASAN reports heap-use-after-free in LuaScriptInterface::RegistryEntry during exit, caused by static injector destruction after LuaScriptInterfaceRegistry destruction.
+  result: RESOLVED
+  evidence: Fixed run 30200053915 completed 25 repetitions without sanitizer findings, and ready-head Linux debug completed all tests.
 rejected_hypotheses:
   - Skip or disable the failing test.
   - Weaken Required or ignore Linux debug.
@@ -156,19 +158,22 @@ changed_paths:
 validation:
   - command: standard Linux debug CI run 30197504976
     result: FAIL
-    evidence: Two attempts reproduce the same post-success SEGFAULT and isolate the original blocker.
+    evidence: Two attempts reproduce the original post-success SEGFAULT and isolate the blocker.
   - command: Party Test Sanitizer run 30198967320 job 89785504123
     result: FAIL
-    evidence: Baseline ASAN run identifies the exact exit-order heap-use-after-free after 25 successful repetitions.
-  - command: fixed focused ASAN repetition
-    result: NOT_RUN
-    evidence: Run on the refreshed exact head after this checkpoint update.
-  - command: exact-head repository CI and Required
-    result: NOT_RUN
-    evidence: Run after the fixed focused diagnostic is green.
-blockers:
-  - fixed focused ASAN repetition on the refreshed exact head
-  - exact-head repository CI and Required
-  - final changed-path, discussion and main-drift audit before merge
-next_action: Confirm the refreshed Party Test Sanitizer run passes all 25 repetitions without ASAN or UBSAN findings, then mark PR 126 ready and run exact-head repository gates.
+    evidence: Baseline ASAN identifies the exact exit-order heap-use-after-free after 25 successful repetitions.
+  - command: Party Test Sanitizer run 30200053915 job 89788326340
+    result: PASS
+    evidence: Fixed exact-source-head run passes build, 25 focused repetitions, ASAN, UBSAN and checkpoint validation.
+  - command: repository CI run 30200069480
+    result: PASS
+    evidence: Fast Checks, Lua, Linux release/debug, Windows and macOS completed successfully; Linux debug passed all tests.
+  - command: Required run 30200069347
+    result: PASS
+    evidence: Required accepted every applicable ready-head workflow on source head 239d2c601ffc22019cff6e3927f5224c423d0868.
+  - command: final changed-path, discussion and main-drift audit
+    result: PASS
+    evidence: Three declared paths only, no comments, mergeable branch and zero commits behind main.
+blockers: []
+next_action: Confirm the documentation-only checkpoint head passes Party Test Sanitizer and Required, then squash-merge PR 126 with expected-head protection and close issue 125.
 ```
