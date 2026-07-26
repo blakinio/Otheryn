@@ -98,6 +98,8 @@ public:
 	[[nodiscard]] static const TransportCodec &currentLogin();
 	[[nodiscard]] static const TransportCodec &currentGameSequence();
 	[[nodiscard]] static const TransportCodec &currentGamePlain();
+	// Source-compatible name for pre-OAM callers; resolves to the sequenced game contract.
+	[[nodiscard]] static const TransportCodec &currentModern();
 	[[nodiscard]] static const TransportCodec &legacyRawWithLoginHeader();
 	[[nodiscard]] static const TransportCodec &legacyClassic();
 };
