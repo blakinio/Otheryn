@@ -2176,6 +2176,9 @@ uint16_t PlayerWheel::getExtraPoints() const {
 		totalBonus += static_cast<uint32_t>(monkQuestBonus);
 	}
 
+	const auto huntingTaskShopPoints = std::clamp<int32_t>(m_player.getStorageValue(1000006), 0, 50);
+	totalBonus += static_cast<uint32_t>(huntingTaskShopPoints);
+
 	return static_cast<uint16_t>(std::min<uint32_t>(totalBonus, std::numeric_limits<uint16_t>::max()));
 }
 
