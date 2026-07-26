@@ -41,8 +41,8 @@ This slice adds a dirty-generation marker without scheduling a save. It covers t
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-26T23:00:00+02:00
-head: 408ee8de72badd569b9bc735091726195dcfa643
+updated_at: 2026-07-26T23:23:00+02:00
+head: ced0ac89d4debdbb66557b722e7143a75d2a6d1b
 branch: dudantas/prs-002c-bounded-player-storage-mutations
 pr: 152
 status: validating
@@ -60,13 +60,13 @@ owned_paths:
   - docs/agents/tasks/active/OTH-20260726-prs002c-bounded-player-storage-mutations.md
 proven:
   - PRS-002 discovery, Slice A and Slice B are merged and lifecycle-archived through main commit 7ba0ac1ae6450378ad2fb4f85ccc9026309f902e.
-  - SaveManager already owns one generation-aware PlayerPersistenceState per exact Player shared-ownership control block.
-  - Successful acknowledgement already schedules one follow-up when a newer generation remains dirty.
-  - PlayerStorage ingest calls add with shouldTrackModification false and must not create runtime dirty generations.
+  - SaveManager exact-owner persistence state and successful follow-up scheduling remain unchanged from Slice B.
+  - PlayerStorage ingest calls add with shouldTrackModification false and does not create runtime dirty generations.
   - PlayerStorage tracked add/remove operations produce the SQL storage delta persisted with player data.
+  - Static marker state is keyed by weak shared-ownership identity and does not resolve the SaveManager DI graph.
   - PR 152 contains exactly the marker, bounded storage instrumentation, source-contract test and active task.
 derived:
-  - A marker-only SaveManager API can advance the existing exact-owner state without introducing a timer or second scheduling policy.
+  - A static marker-only registry can serve mutation components and SaveManager workers without introducing a timer, second scheduling policy or KVStore test dependency.
   - Instrumenting PlayerStorage first is a bounded representative SQL-backed mutation slice and leaves all other domains explicitly unknown.
 unknown:
   - Which SQL-backed domain should be instrumented next after storage evidence is accepted.
@@ -74,9 +74,10 @@ unknown:
   - Production checkpoint interval, oldest-dirty metrics and measured RPO.
 conflicts: []
 first_failure:
-  marker: storage-mutations-unversioned
-  evidence: RESOLVED_IN_BRANCH by marker-only SaveManager API and tracked PlayerStorage add/remove calls; exact-head CI remains required.
+  marker: player-storage-unit-tests-resolved-save-manager-di
+  evidence: Ready-head CI 30220210380 compiled and smoked successfully but seven PlayerStorage unit tests aborted because the first marker version resolved unbound KVStore through g_saveManager; resolved by a static exact-owner registry API that preserves production semantics without DI.
 rejected_hypotheses:
+  - Add test-only bypasses or bind the full SaveManager and KVStore graph in PlayerStorage unit tests.
   - Instrument all Player setters or the monolithic player.cpp in one PR.
   - Make a storage mutation call savePlayer or create a timer.
   - Change existing PRS-002B save-request generation and coalescing semantics in Slice C.
@@ -93,9 +94,12 @@ validation:
   - command: python tools/agents/checkpoint.py docs/agents/tasks/active/OTH-20260726-prs002c-bounded-player-storage-mutations.md --require-checkpoint
     result: PASS
     evidence: Compact checkpoint schema, evidence states and limits validated locally after task materialization.
-  - command: exact-head full repository CI and Required
+  - command: ready-head CI 30220210380 on 676f4d3a687fd171543b1db175581299022cebac
+    result: FAIL
+    evidence: All compile and runtime smoke stages passed; seven existing PlayerStorage unit tests aborted on unbound KVStore DI and produced linux-debug-test-logs artifact 8637128401.
+  - command: exact-head full repository CI and Required after DI-free marker fix
     result: NOT_RUN
-    evidence: Run after this checkpoint publication and ready-for-review transition.
+    evidence: Triggered by publishing the static registry and this checkpoint update; require a complete green rerun before merge.
 blockers: []
-next_action: Mark PR 152 ready, require exact-head full CI and Required, fix only bounded PRS-002C failures, then perform the four-path discussion and main-drift audit before expected-head merge.
+next_action: Require the new exact-head full CI and Required for PR 152, fix only bounded PRS-002C failures, then perform the four-path discussion and main-drift audit before expected-head merge.
 ```
