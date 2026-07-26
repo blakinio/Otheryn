@@ -1,12 +1,12 @@
 ---
 task_id: OTH-20260726-modular-game-engine-contract
-status: validating
+status: ready
 branch: dudantas/modular-game-engine-contract
 base_branch: main
 created: 2026-07-26
 updated: 2026-07-26
 related_issue: "120"
-related_pr: ""
+related_pr: "121"
 owned_paths:
   - docs/architecture/modular-game-engine-and-profiles.md
   - docs/agents/tasks/active/OTH-20260726-modular-game-engine-contract.md
@@ -37,11 +37,11 @@ Persist the agreed modular-monolith, gameplay-module, C++/Lua configuration and 
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-26T11:10:00+02:00
-head: ee7b54cdf4304c65f9fc4f26ad5afc010ad8f4d1
+updated_at: 2026-07-26T11:18:00+02:00
+head: 84851148ce82ccd77952bd040599125029668f58
 branch: dudantas/modular-game-engine-contract
-pr: null
-status: validating
+pr: 121
+status: ready
 context_routes:
   - architecture
   - engine-foundation
@@ -67,6 +67,9 @@ proven:
   - It requires Lua profile data to become a typed validated startup snapshot rather than a continuously queried runtime authority.
   - It records that disabling modern modules alone does not prove a Tibia 7.6 profile; protocol, rulesets, content, assets and physical-client evidence are also required.
   - It defines MGE-001 through MGE-008 as separate future packages and authorizes MGE-001 ownership/dependency inventory as the next package.
+  - PR 121 is ready for review and changes exactly the two owned documentation paths.
+  - Required runs 30195823218 and 30195885601 passed on audited head 84851148ce82ccd77952bd040599125029668f58.
+  - PR 121 has no conversation comments, submitted reviews or review threads.
 derived:
   - A shared hardened engine with profile-selected protocol, rules and content avoids long-lived 7.6, 8.6 and current-version engine forks.
   - Static libraries may later enforce proven dependencies, but dynamic plugin ABI is unnecessary for the initial architecture.
@@ -99,15 +102,15 @@ validation:
   - command: architecture scope and safety review
     result: PASS
     evidence: Only documentation is added; no runtime, build, protocol, Lua behavior, schema, datapack or deployment path is changed.
-  - command: checkpoint contract validation
-    result: NOT_RUN
-    evidence: The final branch checkpoint must be validated by repository tooling or exact-head CI after the task record is committed.
+  - command: checkpoint schema and compactness review
+    result: PASS
+    evidence: The task contains one checkpoint, required fields, accepted evidence states, bounded lists and exactly one concrete next action.
+  - command: exact two-path, discussion and ready-head audit
+    result: PASS
+    evidence: PR 121 contains exactly the two owned paths and has no comments, reviews or review threads.
   - command: exact-head Required
-    result: NOT_RUN
-    evidence: Pull request is not yet open.
-blockers:
-  - checkpoint validation
-  - pull request creation and exact-head Required
-  - final two-path and discussion audit
-next_action: Open the documentation PR for the two owned paths, run checkpoint and exact-head Required validation, then repair only documentation or checkpoint defects without starting MGE-001.
+    result: PASS
+    evidence: Required run 30195885601 completed successfully on 84851148ce82ccd77952bd040599125029668f58 after the PR became ready.
+blockers: []
+next_action: Revalidate PR 121 on its final checkpoint head, then expected-head squash-merge it and archive this task before creating a separate MGE-001 ownership-inventory issue.
 ```
