@@ -42,10 +42,11 @@ public:
 	/**
 	 * Marks a persistence-relevant mutation on the exact live Player object.
 	 *
-	 * This method advances the dirty generation only. It intentionally does not
-	 * schedule a save, create a timer or alter existing checkpoint ownership.
+	 * This static marker advances the shared exact-owner dirty generation only.
+	 * It intentionally does not resolve the SaveManager DI graph, schedule a save,
+	 * create a timer or alter existing checkpoint ownership.
 	 */
-	void markPlayerDirty(const std::shared_ptr<Player> &player) {
+	static void markPlayerDirty(const std::shared_ptr<Player> &player) {
 		if (player) {
 			persistenceStateFor(player)->markDirty();
 		}
@@ -64,7 +65,7 @@ private:
 	 */
 	void schedulePlayer(std::weak_ptr<Player> player);
 	void scheduleDirtyPlayer(std::weak_ptr<Player> player, std::shared_ptr<PlayerPersistenceState> state);
-	std::shared_ptr<PlayerPersistenceState> persistenceStateFor(const std::shared_ptr<Player> &player);
+	static std::shared_ptr<PlayerPersistenceState> persistenceStateFor(const std::shared_ptr<Player> &player);
 
 	/**
 	 * Saves a pinned player object.
@@ -75,8 +76,8 @@ private:
 	bool doSavePlayer(std::shared_ptr<Player> player);
 
 	std::atomic<std::chrono::steady_clock::time_point> m_scheduledAt;
-	std::mutex m_playerPersistenceMutex;
-	std::map<std::weak_ptr<Player>, std::shared_ptr<PlayerPersistenceState>, std::owner_less<std::weak_ptr<Player>>> m_playerPersistenceStates;
+	inline static std::mutex m_playerPersistenceMutex;
+	inline static std::map<std::weak_ptr<Player>, std::shared_ptr<PlayerPersistenceState>, std::owner_less<std::weak_ptr<Player>>> m_playerPersistenceStates;
 
 	ThreadPool &threadPool;
 	KVStore &kv;
