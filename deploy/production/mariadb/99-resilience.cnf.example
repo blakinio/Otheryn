@@ -1,12 +1,16 @@
 # DESIGN EXAMPLE ONLY.
 #
-# This file is not loaded by the current Docker quickstart and must not be
-# mounted into production until PRS-001 pins a MariaDB version, validates every
-# option, benchmarks I/O and completes an isolated backup/PITR drill.
+# PRS-001 validates these exact option names and conservative values only in a
+# disposable MariaDB 11.4.12 backup/PITR drill. This file is not loaded by the
+# current Docker quickstart and is not mounted by any production service.
+#
+# Disposable validation does not prove production I/O latency, storage capacity,
+# retention, scheduling, key custody, monitoring or achieved RPO/RTO. A future
+# deployment package must benchmark and approve the final host configuration.
 
 [mariadb]
-# Required for binary logging, PITR and a future replica package. The final
-# value must be unique when more than one MariaDB server exists.
+# Required for binary logging and PITR. The final value must be unique when more
+# than one MariaDB server exists; PRS-007 owns any replica-specific settings.
 server_id=1
 
 # Record durable data and schema changes for point-in-time recovery.
@@ -15,7 +19,7 @@ binlog_format=ROW
 binlog_row_image=FULL
 
 # Conservative durability intent. Changing either value is an explicit RPO
-# decision and requires failure testing against the pinned storage/VPS.
+# decision and requires failure testing against the pinned production storage.
 sync_binlog=1
 innodb_flush_log_at_trx_commit=1
 
