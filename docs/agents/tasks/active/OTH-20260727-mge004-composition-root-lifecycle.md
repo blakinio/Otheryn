@@ -1,10 +1,10 @@
 # OTH-20260727 — MGE-004 composition root lifecycle
 
-Status: **implementing**
+Status: **validating**
 
 Issue: `#161`
 Branch: `dudantas/mge-004-composition-root-lifecycle`
-Pull request: pending
+Pull request: `#162`
 Target repository: `blakinio/Otheryn`
 Start main: `64ad965eee40f62ff996980fd8a0d329245c519f`
 
@@ -35,11 +35,11 @@ Add a bounded module composition root with deterministic dependency-order start,
 
 ```yaml
 checkpoint_version: 1
-updated_at: "2026-07-27T00:40:00+02:00"
-head: "f5756759a4c79d76dd7aab426f0b5c6ac2863fbb"
+updated_at: "2026-07-27T09:37:22+02:00"
+head: "6a355962acf525f9bc02e97014bc73014f4ae21b"
 branch: "dudantas/mge-004-composition-root-lifecycle"
-pr: null
-status: "implementing"
+pr: "https://github.com/blakinio/Otheryn/pull/162"
+status: "validating"
 context_routes:
   - "docs/architecture/modular-game-engine-and-profiles.md"
   - "docs/architecture/current-engine-ownership-and-dependencies.md"
@@ -55,21 +55,24 @@ owned_paths:
   - "docs/agents/tasks/active/OTH-20260727-mge004-composition-root-lifecycle.md"
 proven:
   - "MGE-003 registry validation is merged and archived on main."
-  - "No open PR owned MGE-004 paths at task start."
-  - "ModuleCompositionRoot validates the graph, starts registered participants in dependency order, rolls back and stops in reverse, records stop errors and exposes no shared mutable lifecycle state."
+  - "PR #162 is open, ready for review and mergeable at head 6a355962acf525f9bc02e97014bc73014f4ae21b."
+  - "ModuleCompositionRoot validates the graph, starts registered participants in dependency order, rolls back and stops in reverse, records stop errors and isolates root instances."
   - "Focused tests cover ordering, rollback, idempotence, stop failure, registration rejection, readiness, isolation and invalid graph rejection."
-  - "CanaryServer owns one composition root and registers MonsterComputeService under logical module Creatures."
-  - "Monster compute configuration, startup location and diagnostics are preserved."
-  - "MonsterComputeService shutdown is idempotent, preserving the legacy process-level fallback."
+  - "CanaryServer registers only MonsterComputeService under logical module Creatures while preserving its configuration, startup phase and diagnostics."
+  - "CI 30223667513 passed fast checks, Lua, Linux debug/release, macOS, Docker, Linux tests and available runtime smoke checks."
+  - "Windows Solution job 89850437092 passed the MSBuild solution build."
+  - "Windows CMake job 89850437085 passed Run CMake and failed later while installing MariaDB before runtime smoke."
+  - "autofix.ci 30223667422 passed on head 6a355962acf525f9bc02e97014bc73014f4ae21b."
 derived:
-  - "A single selected participant is sufficient to prove explicit lifecycle ownership without broad infrastructure migration."
+  - "The Windows CMake failure is infrastructure-only because compilation completed before MariaDB installation failed."
+  - "A fresh exact-head validation is required after synchronizing the branch with current main."
 unknown:
-  - "Exact compile and runtime smoke result on the integrated head."
+  - "Whether the two main commits since the branch merge base conflict with any of the seven owned paths."
+  - "Whether the Windows MariaDB installation succeeds on the next exact-head CI attempt."
 conflicts: []
 first_failure:
-  marker: null
-  result: "NOT_RUN"
-  evidence: "Repository validation has not run on the integrated MGE-004 head."
+  marker: "CI 30223667513 / job 89850437085 / Install MariaDB for smoke test"
+  evidence: "Windows Run CMake passed; MariaDB installation failed before smoke, while all other completed platform builds, tests and smoke checks passed."
 rejected_hypotheses:
   - "Move all singleton services into the root in one package."
   - "Treat every MGE-003 descriptor as lifecycle-owned."
@@ -83,9 +86,38 @@ changed_paths:
   - "tests/unit/modules/CMakeLists.txt"
   - "tests/unit/modules/mge_004_module_lifecycle_test.cpp"
 validation:
-  focused_tests: "NOT_RUN"
-  full_ci: "NOT_RUN"
-  required: "NOT_RUN"
-blockers: []
-next_action: "Open the draft PR, run exact-head CI, fix the first compile/test failure, then complete live audits and merge with expected-head protection."
+  - command: "autofix.ci 30223667422"
+    result: "PASS"
+    evidence: "Completed successfully on head 6a355962acf525f9bc02e97014bc73014f4ae21b."
+  - command: "CI 30223667513 fast checks and Lua"
+    result: "PASS"
+    evidence: "Formatting, analysis and Lua tests completed successfully."
+  - command: "CI 30223667513 Linux debug"
+    result: "PASS"
+    evidence: "Compile, Canary runtime smoke and full unit tests completed successfully."
+  - command: "CI 30223667513 Linux release"
+    result: "PASS"
+    evidence: "Compile plus Canary and Global datapack runtime smoke completed successfully."
+  - command: "CI 30223667513 macOS"
+    result: "PASS"
+    evidence: "Compile and Canary runtime smoke completed successfully."
+  - command: "CI 30223667513 Docker"
+    result: "PASS"
+    evidence: "Image build and validation completed successfully."
+  - command: "CI 30223667513 Windows Solution job 89850437092"
+    result: "PASS"
+    evidence: "MSBuild solution build and artifact upload completed successfully."
+  - command: "CI 30223667513 Windows CMake job 89850437085"
+    result: "BLOCKED"
+    evidence: "Run CMake passed; MariaDB installation failed before smoke and artifact steps."
+  - command: "Required 30223667420"
+    result: "BLOCKED"
+    evidence: "Aggregate failed because CI 30223667513 contained the Windows MariaDB infrastructure failure."
+  - command: "compare main...dudantas/mge-004-composition-root-lifecycle"
+    result: "BLOCKED"
+    evidence: "Branch is ahead 9 and behind 2; current main is 9703da845384423ad85883216bf8853642c21bcd."
+blockers:
+  - "Branch is behind current main by two commits and must be synchronized before final exact-head validation."
+  - "Required remains blocked by the Windows MariaDB installation failure in CI 30223667513."
+next_action: "Synchronize dudantas/mge-004-composition-root-lifecycle with main@9703da845384423ad85883216bf8853642c21bcd while preserving exactly the seven changed paths."
 ```
