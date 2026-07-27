@@ -78,7 +78,11 @@ Add deterministic SQL failure, mutation-during-save, commit-before-ack and queue
 
 The first bounded PRS-002D package extracts the result and exact-generation acknowledgement decision for one asynchronous player persistence attempt into a database-independent helper used by `SaveManager`. Controlled tests inject a `false` result and an exception, prove that matching failure acknowledgement leaves the state dirty and requests no follow-up, prove a later explicit generation may retry, prove a newer mutation requests follow-up only after success, and prove one held failing exact-owner state does not prevent an independent exact-owner state from succeeding.
 
-This evidence does not complete all Slice D work. Real SQL/KV failure injection, commit-before-ack process-crash proof, queue-overload behavior, operational metrics and any measured RPO remain separate bounded packages.
+### Implemented bounded PRS-002E evidence
+
+The bounded PRS-002E package uses the disposable integration-test MariaDB instance and a dedicated InnoDB probe table. A valid update followed by a deliberately invalid SQL statement inside `DBTransaction::executeWithinTransaction` must return failure and roll back the earlier update. Routing that real transaction result through the checkpoint-attempt boundary proves that the captured generation remains dirty, the in-flight generation is released, no implicit follow-up is requested and a later explicit generation can commit successfully and clear the state.
+
+This is transaction-boundary evidence, not a complete end-to-end `IOLoginData::savePlayer()` failure drill. Real KV post-commit failure, commit-before-ack process-crash proof, queue-overload behavior, operational metrics and any measured RPO remain separate bounded packages.
 
 ## Explicit non-goals
 
