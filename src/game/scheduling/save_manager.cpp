@@ -306,6 +306,6 @@ bool SaveManager::saveKV() {
 	}
 
 	auto duration = bm_saveKV.duration();
-	logger.debug("Saving key-value store took {} milliseconds.", duration);
+	logger.debug("Key-value store saved in {} milliseconds.", duration);
 	return saveSuccess;
 }
