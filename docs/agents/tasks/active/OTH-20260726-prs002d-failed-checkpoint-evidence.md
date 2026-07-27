@@ -1,12 +1,12 @@
 ---
 task_id: OTH-20260726-prs002d-failed-checkpoint-evidence
-status: active
+status: review
 branch: dudantas/prs-002d-failed-checkpoint-evidence
 base_branch: main
 created: 2026-07-26
 updated: 2026-07-27
 related_issue: "158"
-related_pr: "none"
+related_pr: "166"
 owned_paths:
   - src/game/scheduling/player_checkpoint_attempt.hpp
   - src/game/scheduling/save_manager.cpp
@@ -68,11 +68,11 @@ The package adds one pure header helper and focused tests, then routes the exist
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-27T09:04:00+02:00
-head: 9703da845384423ad85883216bf8853642c21bcd
+updated_at: 2026-07-27T09:14:00+02:00
+head: 642748e5b52acae6b1e7b20367fdd1bb01e07114
 branch: dudantas/prs-002d-failed-checkpoint-evidence
-pr: none
-status: implementing
+pr: 166
+status: validating
 context_routes:
   - production-resilience
   - player-persistence
@@ -92,16 +92,17 @@ owned_paths:
 proven:
   - PRS-002A through PRS-002C are merged and lifecycle-archived on main.
   - PlayerPersistenceState preserves dirty state after matching failure and rejects stale acknowledgement.
-  - SaveManager currently schedules a follow-up only after successful acknowledgement when a newer generation remains dirty.
-  - PRS-002C dirty marking does not schedule work by itself.
-  - Issue 158 authorizes only deterministic failed-attempt evidence and a minimal test seam.
+  - The helper routes false, exception and success results to exact-generation acknowledgement without owning a queue, timer, Player object or database behavior.
+  - SaveManager schedules follow-up only after accepted success acknowledgement leaves a newer generation dirty.
+  - Focused tests cover false result, exception, later explicit-generation retry, mutation during success and independent exact-owner progress.
+  - PRS-002C dirty marking remains unchanged and does not schedule work by itself.
   - Current main is 9703da845384423ad85883216bf8853642c21bcd and open PRs 162 and 165 do not own the selected paths.
-  - The stale branch state was preserved as backup/PRS-002D-pre-rebase-20260727 before resetting the working branch to current main.
+  - The stale branch state is preserved as backup/PRS-002D-pre-rebase-20260727.
 derived:
-  - A pure attempt-result helper is the smallest seam that avoids production database failure and test-only global hooks.
-  - Returning acknowledgement and follow-up decisions from the helper permits deterministic tests without constructing the complete DI/database graph.
+  - The pure attempt-result helper is the smallest seam that avoids production database failure and mutable global test hooks.
+  - Deterministic independent-state tests prove failure isolation at the exact-owner state boundary without claiming a production queue policy.
 unknown:
-  - Repository compile, formatting and full CTest result for the selected helper integration.
+  - Exact-head repository compile, formatting, full CTest and platform smoke result.
 conflicts: []
 first_failure:
   marker: local-github-clone-unavailable
@@ -114,13 +115,23 @@ rejected_hypotheses:
   - broaden Player mutation coverage
 changed_paths:
   - docs/agents/tasks/active/OTH-20260726-prs002d-failed-checkpoint-evidence.md
+  - docs/architecture/prs-002-dirty-player-checkpoint-contract.md
+  - src/game/scheduling/player_checkpoint_attempt.hpp
+  - src/game/scheduling/save_manager.cpp
+  - tests/unit/game/CMakeLists.txt
+  - tests/unit/game/player_checkpoint_attempt_test.cpp
+  - tests/unit/game/prs_002_dirty_player_checkpoint_contract_test.cpp
 validation:
   - command: standalone C++20 attempt-helper prototype with -Wall -Wextra -Werror
     result: PASS
     evidence: Boolean failure, exception, explicit retry, newer mutation and independent-state scenarios passed locally.
+  - command: changed-path audit against main
+    result: PASS
+    evidence: Branch is behind_by zero and changes exactly seven owned paths.
   - command: repository checkpoint validator
     result: NOT_RUN
-    evidence: Run through repository CI after implementation is materialized.
-blockers: []
-next_action: Add the pure attempt helper, integrate the existing SaveManager acknowledgement path, register focused tests and update the bounded PRS-002 contract evidence.
+    evidence: Ready-state repository CI must validate the materialized task.
+blockers:
+  - Ready-state exact-head compile, full CTest, platform gates, Required and autofix
+next_action: Mark PR 166 Ready, inspect exact-head CI and fix only concrete compile, test or formatting failures.
 ```
