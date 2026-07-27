@@ -10,7 +10,7 @@ completed: 2026-07-27
 related_pr: "163"
 feature_head: "7376eff79e166595a91f4581d8eef6e6c228e754"
 feature_merge: "c25fff72dd8b89f6ef1565af2d84ab9eef33dce9"
-lifecycle_pr: "pending"
+lifecycle_pr: "164"
 owned_paths:
   - docs/oam-053-network-transport-adapt.md
   - docs/agents/tasks/archive/OTH-20260727-oam053-network-transport-adapt.md
@@ -34,10 +34,10 @@ Otheryn retained its existing connection, multiprotocol and session-handoff arch
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-27T02:05:00+02:00
+updated_at: 2026-07-27T02:10:00+02:00
 head: 7376eff79e166595a91f4581d8eef6e6c228e754
 branch: docs/oam-053-network-transport-lifecycle
-pr: pending
+pr: 164
 status: completed
 context_routes:
   - agent-governance
@@ -53,6 +53,7 @@ proven:
   - Linux release macOS Windows and Docker builds passed with applicable runtime smoke.
   - Final feature comparison was behind_by zero; comments reviews and review threads were empty.
   - PR 163 squash-merged with expected-head protection as c25fff72dd8b89f6ef1565af2d84ab9eef33dce9.
+  - Lifecycle PR 164 changes only the active/archive task pair and final target report.
 derived:
   - Otheryn transport profiles now own framing checksum sequence compression and encrypted layout contracts.
   - Rejected inbound frames do not consume accepted sequence state before complete checksum/XTEA acceptance.
@@ -86,5 +87,5 @@ validation:
     result: PASS
     evidence: Eleven intended paths no discussions behind_by zero and expected-head squash merge.
 blockers: []
-next_action: Merge the docs-only lifecycle PR, then complete Canary OAM-053 governance, lifecycle and programme reconciliation.
+next_action: Merge lifecycle PR 164, then complete Canary OAM-053 governance, lifecycle and programme reconciliation.
 ```
