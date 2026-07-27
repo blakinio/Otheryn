@@ -16,7 +16,7 @@
 namespace login_protocol_wire {
 	void writeSessionKey(OutputMessage &output, std::string_view sessionKey) {
 		output.addByte(SESSION_KEY_OPCODE);
-		output.addString(sessionKey);
+		output.addString(std::string(sessionKey));
 	}
 
 	void writeModernCharacterList(
