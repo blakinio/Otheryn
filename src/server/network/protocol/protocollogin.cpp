@@ -12,6 +12,7 @@
 #include "config/configmanager.hpp"
 #include "security/login_session_manager.hpp"
 #include "server/network/message/outputmessage.hpp"
+#include "server/network/protocol/login_protocol_wire.hpp"
 #include "server/network/protocol/protocol_port_utils.hpp"
 #include "server/network/protocol/protocol_session_hint.hpp"
 #include "server/network/protocol/transport_codec.hpp"
@@ -58,7 +59,6 @@ void ProtocolLogin::getCharacterList(const std::string &accountDescriptor, const
 	auto output = OutputMessagePool::getOutputMessage();
 	const std::string &motd = g_configManager().getString(SERVER_MOTD);
 	if (!motd.empty()) {
-		// Add MOTD
 		output->addByte(0x14);
 
 		std::ostringstream ss;
@@ -67,7 +67,6 @@ void ProtocolLogin::getCharacterList(const std::string &accountDescriptor, const
 		output->addString(ss.str());
 	}
 
-	// Add char list
 	auto [players, result] = account.getAccountPlayers();
 	if (AccountErrors_t::Ok != result) {
 		g_logger().warn("Account[{}] failed to load players!", account.getID());
@@ -100,12 +99,8 @@ void ProtocolLogin::getCharacterList(const std::string &accountDescriptor, const
 	}
 
 	if (loginLayout && loginLayout->sendsSessionKey) {
-		// Add session key
-		output->addByte(0x28);
-		output->addString(sessionKey);
+		login_protocol_wire::writeSessionKey(*output, sessionKey);
 	}
-
-	output->addByte(0x64);
 
 	if (characterListLayout == AccountCharacterListLayout::LegacyCharacterList) {
 		const auto serverName = g_configManager().getString(SERVER_NAME);
@@ -117,22 +112,28 @@ void ProtocolLogin::getCharacterList(const std::string &accountDescriptor, const
 			return;
 		}
 
-		uint8_t size = std::min<size_t>(std::numeric_limits<uint8_t>::max(), players.size());
-		output->addByte(size);
-
 		const auto worldPort = protocolProfile ? protocol_port_utils::getGamePortForProfile(*protocolProfile) : protocol_port_utils::getModernGamePort();
+		const auto serializedCount = std::min(players.size(), login_protocol_wire::MAX_CHARACTER_COUNT);
+		std::vector<login_protocol_wire::LegacyCharacter> characters;
 		std::vector<std::string> characterNames;
-		characterNames.reserve(size);
-		for (const auto &[name, deletion] : players) {
-			output->addString(name);
-			output->addString(serverName);
-			output->add<uint32_t>(worldIp);
-			output->add<uint16_t>(worldPort);
+		characters.reserve(serializedCount);
+		characterNames.reserve(serializedCount);
+		for (size_t index = 0; index < serializedCount; ++index) {
+			const auto &[name, deletion] = players[index];
+			characters.emplace_back(login_protocol_wire::LegacyCharacter {
+				.name = name,
+				.worldName = serverName,
+				.worldIp = worldIp,
+				.worldPort = worldPort,
+			});
 			characterNames.emplace_back(name);
 		}
 
-		output->add<uint16_t>(std::min<uint32_t>(std::numeric_limits<uint16_t>::max(), account.getPremiumRemainingDays()));
-
+		login_protocol_wire::writeLegacyCharacterList(
+			*output,
+			characters,
+			static_cast<uint16_t>(std::min<uint32_t>(std::numeric_limits<uint16_t>::max(), account.getPremiumRemainingDays()))
+		);
 		send(output);
 
 		if (protocolProfile) {
@@ -143,31 +144,33 @@ void ProtocolLogin::getCharacterList(const std::string &accountDescriptor, const
 		return;
 	}
 
-	output->addByte(1); // number of worlds
-
-	output->addByte(0); // world id
-	output->addString(g_configManager().getString(SERVER_NAME));
-	output->addString(g_configManager().getString(IP));
-
-	output->add<uint16_t>(protocolProfile ? protocol_port_utils::getGamePortForProfile(*protocolProfile) : protocol_port_utils::getModernGamePort());
-
-	output->addByte(0);
-
-	uint8_t size = std::min<size_t>(std::numeric_limits<uint8_t>::max(), players.size());
-	output->addByte(size);
+	const auto serializedCount = std::min(players.size(), login_protocol_wire::MAX_CHARACTER_COUNT);
+	std::vector<login_protocol_wire::ModernCharacter> characters;
 	std::vector<std::string> characterNames;
-	characterNames.reserve(size);
-	for (const auto &[name, deletion] : players) {
-		output->addByte(0);
-		output->addString(name);
+	characters.reserve(serializedCount);
+	characterNames.reserve(serializedCount);
+	for (size_t index = 0; index < serializedCount; ++index) {
+		const auto &[name, deletion] = players[index];
+		characters.emplace_back(login_protocol_wire::ModernCharacter {
+			.worldId = 0,
+			.name = name,
+		});
 		characterNames.emplace_back(name);
 	}
 
-	// Get premium days, check is premium and get lastday
-	output->addByte(account.getPremiumRemainingDays());
-	output->addByte(account.getPremiumLastDay() > getTimeNow());
-	output->add<uint32_t>(account.getPremiumLastDay());
-
+	const std::array worlds {
+		login_protocol_wire::ModernWorld {
+			.id = 0,
+			.name = g_configManager().getString(SERVER_NAME),
+			.host = g_configManager().getString(IP),
+			.port = protocolProfile ? protocol_port_utils::getGamePortForProfile(*protocolProfile) : protocol_port_utils::getModernGamePort(),
+			.previewState = 0,
+		},
+	};
+	const bool freePremium = g_configManager().getBoolean(FREE_PREMIUM);
+	const uint32_t premiumExpiry = freePremium ? 0 : account.getPremiumLastDay();
+	const auto accountTail = login_protocol_wire::makeModernAccountTail(freePremium || premiumExpiry > getTimeNow(), premiumExpiry);
+	login_protocol_wire::writeModernCharacterList(*output, worlds, characters, accountTail);
 	send(output);
 
 	if (protocolProfile) {
@@ -239,14 +242,7 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage &msg) {
 		connection->setTransportCodec(TransportCodecs::get(loginLayout->responseTransport), InitialTransportState::ResolvedFromPrelude);
 	}
 
-	// Old protocol support
 	oldProtocol = protocolProfile->hasFeature(ProtocolFeature::OldProtocolCompat);
-	/*
-	 - Current/11.00 skips the remaining pre-RSA metadata:
-	   4 bytes client version, 12 bytes dat/spr/pic signatures, 1 preview byte.
-	 - 8.60 layouts read the dat/spr/pic signatures before RSA so the profile can
-	   be resolved from the actual asset contract instead of the protocol number only.
-	 */
 
 	if (!Protocol::RSA_decrypt(msg)) {
 		g_logger().warn("[ProtocolLogin::onRecvFirstMessage] - RSA Decrypt Failed");
@@ -336,28 +332,33 @@ void ProtocolLogin::getLivestreamCharacterList(const std::string &password) cons
 	output->addByte(0x14);
 	output->addString("Welcome to Livestream System!");
 
-	output->addByte(0x28);
-	output->addString(fmt::format("@livestream\n{}", password));
+	login_protocol_wire::writeSessionKey(*output, fmt::format("@livestream\n{}", password));
 
-	output->addByte(0x64);
-	output->addByte(0x01); // worlds
-	output->addByte(0x00);
-	output->addString(g_configManager().getString(SERVER_NAME));
-	output->addString(g_configManager().getString(IP));
-	output->add<uint16_t>(g_configManager().getNumber(GAME_PORT));
-	output->addByte(0x00);
-
-	const auto casterCount = static_cast<uint8_t>(std::min<size_t>(std::numeric_limits<uint8_t>::max(), casters.size()));
-	output->addByte(casterCount);
-	for (size_t index = 0; index < casterCount; ++index) {
-		const auto &caster = casters[index];
-		output->addByte(0x00);
-		output->addString(caster->getName());
+	const auto serializedCount = std::min(casters.size(), login_protocol_wire::MAX_CHARACTER_COUNT);
+	std::vector<login_protocol_wire::ModernCharacter> characters;
+	characters.reserve(serializedCount);
+	for (size_t index = 0; index < serializedCount; ++index) {
+		characters.emplace_back(login_protocol_wire::ModernCharacter {
+			.worldId = 0,
+			.name = casters[index]->getName(),
+		});
 	}
 
-	output->addByte(0x00);
-	output->addByte(0x00);
-	output->add<uint32_t>(0x00);
+	const std::array worlds {
+		login_protocol_wire::ModernWorld {
+			.id = 0,
+			.name = g_configManager().getString(SERVER_NAME),
+			.host = g_configManager().getString(IP),
+			.port = static_cast<uint16_t>(g_configManager().getNumber(GAME_PORT)),
+			.previewState = 0,
+		},
+	};
+	login_protocol_wire::writeModernCharacterList(
+		*output,
+		worlds,
+		characters,
+		login_protocol_wire::makeModernAccountTail(false, 0)
+	);
 
 	send(output);
 	disconnect();
