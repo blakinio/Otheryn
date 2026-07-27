@@ -9,8 +9,6 @@ namespace it_player_checkpoint_kv_post_commit_failure {
 
 	class PlayerCheckpointKvPostCommitFailureRepositoryDBTest : public ::testing::Test {
 	protected:
-		static constexpr auto ProbeTable = "prs_002f_player_sql_commit_probe";
-		static constexpr auto HiddenKvTable = "prs_002f_kv_store_unavailable";
 		static constexpr auto ProbeKey = "prs.002f.pending-wheel-kv";
 
 		void SetUp() override {
