@@ -9,6 +9,10 @@
 
 #include "server/network/message/outputmessage.hpp"
 
+#ifndef USE_PRECOMPILED_HEADERS
+	#include <algorithm>
+#endif
+
 namespace login_protocol_wire {
 	void writeSessionKey(OutputMessage &output, std::string_view sessionKey) {
 		output.addByte(SESSION_KEY_OPCODE);
