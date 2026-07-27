@@ -74,6 +74,12 @@ Instrument a small, explicitly owned set of representative SQL-backed player mut
 
 Add deterministic SQL failure, mutation-during-save, commit-before-ack and queue-overload tests. Production RPO remains unknown until a controlled crash drill measures it.
 
+### Implemented bounded PRS-002D evidence
+
+The first bounded PRS-002D package extracts the result and exact-generation acknowledgement decision for one asynchronous player persistence attempt into a database-independent helper used by `SaveManager`. Controlled tests inject a `false` result and an exception, prove that matching failure acknowledgement leaves the state dirty and requests no follow-up, prove a later explicit generation may retry, prove a newer mutation requests follow-up only after success, and prove one held failing exact-owner state does not prevent an independent exact-owner state from succeeding.
+
+This evidence does not complete all Slice D work. Real SQL/KV failure injection, commit-before-ack process-crash proof, queue-overload behavior, operational metrics and any measured RPO remain separate bounded packages.
+
 ## Explicit non-goals
 
 - PRS-003 database-outage state transitions;
