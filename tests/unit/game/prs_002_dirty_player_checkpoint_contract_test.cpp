@@ -52,15 +52,37 @@ TEST(Prs002DirtyPlayerCheckpointContractTest, PinsScheduledSaveToRequestedPlayer
 }
 
 TEST(Prs002DirtyPlayerCheckpointContractTest, AcknowledgesExactGenerationAndCoalescesNewerRequests) {
+	const auto attempt = readSource("src/game/scheduling/player_checkpoint_attempt.hpp");
+	expectContains(attempt, "state.acknowledgeFailure(generation)");
+	expectContains(attempt, "state.acknowledgeSuccess(generation)");
+	expectContains(attempt, "acknowledged && state.isDirty()");
+
 	const auto source = readSource("src/game/scheduling/save_manager.cpp");
-	expectContains(source, "state->acknowledgeFailure(generation)");
-	expectContains(source, "state->acknowledgeSuccess(generation)");
-	expectContains(source, "if (state->isDirty() && player->isOnline()");
+	expectContains(source, "executePlayerCheckpointAttempt(*state, generation");
+	expectContains(source, "attempt.followUpRequired && player->isOnline()");
 	expectContains(source, "scheduleDirtyPlayer(player, state);");
 	expectContains(source, "Coalescing player save because a checkpoint is already in flight");
 
 	const auto scheduleDirty = functionBody(source, "void SaveManager::scheduleDirtyPlayer", "bool SaveManager::doSavePlayer");
 	EXPECT_EQ(scheduleDirty.find("markDirty"), std::string_view::npos);
+}
+
+TEST(Prs002DirtyPlayerCheckpointContractTest, FailedAttemptHasNoImplicitFollowUpPath) {
+	const auto attempt = readSource("src/game/scheduling/player_checkpoint_attempt.hpp");
+	expectContains(attempt, "PlayerCheckpointAttemptOutcome::saveFailed");
+	expectContains(attempt, "PlayerCheckpointAttemptOutcome::saveThrew");
+	expectContains(attempt, "state.acknowledgeFailure(generation)");
+
+	const auto source = readSource("src/game/scheduling/save_manager.cpp");
+	const auto scheduleDirty = functionBody(source, "void SaveManager::scheduleDirtyPlayer", "bool SaveManager::doSavePlayer");
+	const auto successBranch = scheduleDirty.find("if (attempt.outcome == PlayerCheckpointAttemptOutcome::saved)");
+	const auto followUp = scheduleDirty.find("if (attempt.followUpRequired");
+	const auto failureBranch = scheduleDirty.find("if (!attempt.acknowledgementAccepted)");
+	ASSERT_NE(successBranch, std::string_view::npos);
+	ASSERT_NE(followUp, std::string_view::npos);
+	ASSERT_NE(failureBranch, std::string_view::npos);
+	EXPECT_LT(successBranch, followUp);
+	EXPECT_LT(followUp, failureBranch);
 }
 
 TEST(Prs002DirtyPlayerCheckpointContractTest, MarksOnlyTrackedPlayerStorageMutations) {
@@ -119,4 +141,5 @@ TEST(Prs002DirtyPlayerCheckpointContractTest, RecordsGenerationSafeTargetAndBoun
 	expectContains(contract, "Queue coalescing is based on generation, not wall-clock timestamps.");
 	expectContains(contract, "Session/revision fencing remains PRS-004");
 	expectContains(contract, "Slice C — bounded mutation coverage");
+	expectContains(contract, "bounded PRS-002D evidence");
 }
