@@ -14,11 +14,52 @@
 #ifndef USE_PRECOMPILED_HEADERS
 	#include <cstdint>
 	#include <optional>
+	#include <string_view>
 #endif
 
 class NetworkMessage;
 class OutputMessage;
 class Protocol;
+
+enum class InboundTransportStatus : uint8_t {
+	Accepted,
+	ZeroSequence,
+	SequenceMismatch,
+	ChecksumMismatch,
+	DecryptFailure,
+	MalformedFrame,
+};
+
+struct InboundTransportResult {
+	InboundTransportStatus status = InboundTransportStatus::MalformedFrame;
+	std::optional<uint32_t> receivedSequence;
+	std::optional<uint32_t> expectedSequence;
+
+	[[nodiscard]] bool accepted() const {
+		return status == InboundTransportStatus::Accepted;
+	}
+
+	[[nodiscard]] explicit operator bool() const {
+		return accepted();
+	}
+};
+
+[[nodiscard]] constexpr uint32_t nextInboundSequence(uint32_t acceptedSequence) {
+	return acceptedSequence + 1;
+}
+
+[[nodiscard]] constexpr uint32_t storedInboundSequence(uint32_t acceptedSequence) {
+	return acceptedSequence >= 0x7FFFFFFF ? 0 : acceptedSequence;
+}
+
+[[nodiscard]] std::string_view getInboundTransportStatusName(InboundTransportStatus status);
+
+#ifdef BUILD_TESTS
+static_assert(nextInboundSequence(0) == 1);
+static_assert(nextInboundSequence(1) == 2);
+static_assert(storedInboundSequence(1) == 1);
+static_assert(storedInboundSequence(0x7FFFFFFF) == 0);
+#endif
 
 class TransportCodec {
 public:
@@ -31,26 +72,20 @@ public:
 
 	[[nodiscard]] std::optional<uint16_t> decodeBodySize(uint16_t rawLengthHeader) const;
 	/**
-	 * @brief Encodes an outbound message using the active transport framing.
+	 * @brief Encodes an outbound message using the complete active transport contract.
 	 *
-	 * @details Outer length and encrypted payload layout come from the bound
-	 * TransportProfile, but checksum/compression behavior is still finalized from
-	 * the current Protocol state. This preserves the shipped login/game byte
-	 * contracts while multiprotocol transport ownership is phased in.
+	 * @details Framing, encrypted payload layout, checksum, sequence and compression
+	 * are all selected by the bound TransportProfile. Protocol only owns per-session
+	 * crypto keys and sequence counters.
 	 */
 	void encodeOutbound(Protocol &protocol, OutputMessage &msg) const;
 	/**
-	 * @brief Validates and unwraps an inbound message using the active transport framing.
-	 *
-	 * @details Inbound checksum handling still mirrors the current Protocol state
-	 * instead of relying exclusively on TransportProfile metadata. The profile
-	 * describes the intended contract, but Protocol remains part of the runtime
-	 * authority for checksum/compression-sensitive paths.
+	 * @brief Validates and unwraps an inbound message using the complete active transport contract.
 	 */
-	[[nodiscard]] bool prepareInbound(Protocol &protocol, NetworkMessage &msg) const;
+	[[nodiscard]] InboundTransportResult prepareInbound(Protocol &protocol, NetworkMessage &msg) const;
 
 private:
-	[[nodiscard]] bool decryptXtea(Protocol &protocol, NetworkMessage &msg) const;
+	[[nodiscard]] InboundTransportStatus decryptXtea(Protocol &protocol, NetworkMessage &msg) const;
 	void encryptXtea(Protocol &protocol, OutputMessage &msg) const;
 
 	const TransportProfile &profile;
@@ -60,7 +95,13 @@ class TransportCodecs {
 public:
 	[[nodiscard]] static const TransportCodec &get(TransportProfileId id);
 	[[nodiscard]] static const TransportCodec &rawClientFirst();
-	[[nodiscard]] static const TransportCodec &currentModern();
+	[[nodiscard]] static const TransportCodec &currentLogin();
+	[[nodiscard]] static const TransportCodec &currentGameSequence();
+	[[nodiscard]] static const TransportCodec &currentGamePlain();
+	// Source-compatible name for pre-OAM callers; resolves to the sequenced game contract.
+	[[nodiscard]] static const TransportCodec &currentModern() {
+		return currentGameSequence();
+	}
 	[[nodiscard]] static const TransportCodec &legacyRawWithLoginHeader();
 	[[nodiscard]] static const TransportCodec &legacyClassic();
 };
