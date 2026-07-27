@@ -1,12 +1,12 @@
 ---
 task_id: OTH-20260727-prs002f-kv-post-commit-failure-evidence
-status: active
+status: review
 branch: dudantas/prs-002f-kv-post-commit-failure-evidence
 base_branch: main
 created: 2026-07-27
 updated: 2026-07-27
 related_issue: "171"
-related_pr: "none"
+related_pr: "172"
 owned_paths:
   - tests/integration/database/CMakeLists.txt
   - tests/integration/database/player_checkpoint_kv_post_commit_failure_it.cpp
@@ -66,10 +66,10 @@ Delete the integration test, its CMake registration, the bounded contract note a
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-27T10:46:00+02:00
-head: 93aaf156eaade356300d58e5bd35b19b286302b9
+updated_at: 2026-07-27T10:52:00+02:00
+head: 16dd8e2540b8d52ee6ed342a30f08baeebea418a
 branch: dudantas/prs-002f-kv-post-commit-failure-evidence
-pr: none
+pr: 172
 status: validating
 context_routes:
   - production-resilience
@@ -115,7 +115,10 @@ validation:
   - command: deterministic fixture audit
     result: PASS
     evidence: Dedicated SQL table/key, defensive kv_store restoration, explicit persisted-state queries and one retained-key retry are present.
+  - command: exact-head repository CI
+    result: NOT_RUN
+    evidence: PR 172 must complete CI, Required and autofix on its final head.
 blockers:
   - Exact-head CI, Required and autofix
-next_action: Open the bounded PR, inspect exact-head CI and fix only concrete failures.
+next_action: Inspect PR 172 exact-head CI and fix only concrete compile, integration-test or formatting failures.
 ```
