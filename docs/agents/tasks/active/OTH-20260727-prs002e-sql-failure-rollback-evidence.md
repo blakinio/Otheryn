@@ -1,12 +1,12 @@
 ---
 task_id: OTH-20260727-prs002e-sql-failure-rollback-evidence
-status: active
+status: review
 branch: dudantas/prs-002e-sql-failure-rollback-evidence
 base_branch: main
 created: 2026-07-27
 updated: 2026-07-27
 related_issue: "168"
-related_pr: "none"
+related_pr: "169"
 owned_paths:
   - tests/integration/database/CMakeLists.txt
   - tests/integration/database/player_checkpoint_sql_failure_it.cpp
@@ -64,10 +64,10 @@ Delete the integration test, its CMake registration, the bounded contract note a
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-27T10:12:00+02:00
-head: 92bcaeb41a90a5beb84ac972a93d65e9e879fda1
+updated_at: 2026-07-27T10:18:00+02:00
+head: d1170d9ca6ad6e59b9df362e8f42456039274bca
 branch: dudantas/prs-002e-sql-failure-rollback-evidence
-pr: none
+pr: 169
 status: validating
 context_routes:
   - production-resilience
@@ -112,6 +112,10 @@ validation:
   - command: deterministic test-structure audit
     result: PASS
     evidence: The fixture owns a unique probe table, drops it before and after each test, checks rollback state and performs an explicit successful retry.
-blockers: []
-next_action: Open the bounded PR, run exact-head repository CI and fix only concrete failures.
+  - command: exact-head repository CI
+    result: NOT_RUN
+    evidence: PR 169 must complete CI, Required and autofix on its final head.
+blockers:
+  - Exact-head CI, Required and autofix
+next_action: Inspect PR 169 exact-head CI and fix only concrete compile, integration-test or formatting failures.
 ```
