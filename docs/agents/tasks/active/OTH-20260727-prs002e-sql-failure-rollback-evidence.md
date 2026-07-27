@@ -5,7 +5,7 @@ branch: dudantas/prs-002e-sql-failure-rollback-evidence
 base_branch: main
 created: 2026-07-27
 updated: 2026-07-27
-related_issue: "pending"
+related_issue: "168"
 related_pr: "none"
 owned_paths:
   - tests/integration/database/CMakeLists.txt
@@ -64,11 +64,11 @@ Delete the integration test, its CMake registration, the bounded contract note a
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-27T10:03:00+02:00
-head: ec5038a7f132a4c2ed030edda38a56b5b1ec916a
+updated_at: 2026-07-27T10:12:00+02:00
+head: 92bcaeb41a90a5beb84ac972a93d65e9e879fda1
 branch: dudantas/prs-002e-sql-failure-rollback-evidence
 pr: none
-status: implementing
+status: validating
 context_routes:
   - production-resilience
   - player-persistence
@@ -86,6 +86,8 @@ proven:
   - DBTransaction rolls back when its callback returns false.
   - Integration tests initialize a disposable MariaDB database through TestDatabase.
   - The existing checkpoint-attempt helper maps a false persistence result to exact-generation failure acknowledgement without an implicit follow-up.
+  - The integration test creates and drops one dedicated InnoDB probe table, performs one valid update followed by an invalid-column statement and inspects the persisted sentinel after rollback.
+  - The same test package exercises one later explicit generation with a valid transaction and verifies clean acknowledgement after commit.
   - Open PRs 162 and 165 do not own the selected paths.
 derived:
   - A dedicated integration probe is the smallest real-SQL evidence package and requires no production seam.
@@ -100,10 +102,16 @@ rejected_hypotheses:
   - combine KV, crash and queue-overload evidence
 changed_paths:
   - docs/agents/tasks/active/OTH-20260727-prs002e-sql-failure-rollback-evidence.md
+  - docs/architecture/prs-002-dirty-player-checkpoint-contract.md
+  - tests/integration/database/CMakeLists.txt
+  - tests/integration/database/player_checkpoint_sql_failure_it.cpp
 validation:
   - command: source and conflict preflight
     result: PASS
     evidence: Current main ec5038a7f132a4c2ed030edda38a56b5b1ec916a; selected paths do not overlap open PRs.
+  - command: deterministic test-structure audit
+    result: PASS
+    evidence: The fixture owns a unique probe table, drops it before and after each test, checks rollback state and performs an explicit successful retry.
 blockers: []
-next_action: Add the real-SQL rollback integration test, register it and update the bounded PRS-002 contract evidence.
+next_action: Open the bounded PR, run exact-head repository CI and fix only concrete failures.
 ```
