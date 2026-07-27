@@ -72,20 +72,23 @@ void ProtocolLogin::getCharacterList(const std::string &accountDescriptor, const
 		g_logger().warn("Account[{}] failed to load players!", account.getID());
 	}
 
+	std::vector<std::string> serializedCharacterNames;
+	serializedCharacterNames.reserve(std::min(players.size(), login_protocol_wire::MAX_CHARACTER_COUNT));
+	for (const auto &[name, deletion] : players) {
+		if (serializedCharacterNames.size() >= login_protocol_wire::MAX_CHARACTER_COUNT) {
+			break;
+		}
+		serializedCharacterNames.emplace_back(name);
+	}
+
 	const auto* loginLayout = protocolProfile ? ProtocolProfileRegistry::resolveAccountLoginLayout(protocolProfile->id) : nullptr;
 	const auto characterListLayout = loginLayout ? loginLayout->characterListLayout : AccountCharacterListLayout::WorldListWithSessionKey;
 
 	std::string sessionKey = accountDescriptor + "\n" + password;
 	if (loginLayout && loginLayout->sendsSessionKey && !oldProtocol && protocolProfile && g_configManager().getString(AUTH_TYPE) == "session") {
-		std::vector<std::string> allowedCharacterNames;
-		allowedCharacterNames.reserve(players.size());
-		for (const auto &[name, deletion] : players) {
-			allowedCharacterNames.emplace_back(name);
-		}
-
 		LoginSessionIssueParams issueParams;
 		issueParams.accountId = account.getID();
-		issueParams.allowedCharacterNames = std::move(allowedCharacterNames);
+		issueParams.allowedCharacterNames = serializedCharacterNames;
 		issueParams.protocolProfile = protocolProfile->id;
 
 		auto secureToken = LoginSessionManager::getInstance().issueToken(issueParams);
@@ -113,20 +116,15 @@ void ProtocolLogin::getCharacterList(const std::string &accountDescriptor, const
 		}
 
 		const auto worldPort = protocolProfile ? protocol_port_utils::getGamePortForProfile(*protocolProfile) : protocol_port_utils::getModernGamePort();
-		const auto serializedCount = std::min(players.size(), login_protocol_wire::MAX_CHARACTER_COUNT);
 		std::vector<login_protocol_wire::LegacyCharacter> characters;
-		std::vector<std::string> characterNames;
-		characters.reserve(serializedCount);
-		characterNames.reserve(serializedCount);
-		for (size_t index = 0; index < serializedCount; ++index) {
-			const auto &[name, deletion] = players[index];
+		characters.reserve(serializedCharacterNames.size());
+		for (const auto &name : serializedCharacterNames) {
 			characters.emplace_back(login_protocol_wire::LegacyCharacter {
 				.name = name,
 				.worldName = serverName,
 				.worldIp = worldIp,
 				.worldPort = worldPort,
 			});
-			characterNames.emplace_back(name);
 		}
 
 		login_protocol_wire::writeLegacyCharacterList(
@@ -137,25 +135,20 @@ void ProtocolLogin::getCharacterList(const std::string &accountDescriptor, const
 		send(output);
 
 		if (protocolProfile) {
-			ProtocolSessionHintStore::getInstance().registerHint(getIP(), protocolProfile->id, sessionKey, characterNames);
+			ProtocolSessionHintStore::getInstance().registerHint(getIP(), protocolProfile->id, sessionKey, serializedCharacterNames);
 		}
 
 		disconnect();
 		return;
 	}
 
-	const auto serializedCount = std::min(players.size(), login_protocol_wire::MAX_CHARACTER_COUNT);
 	std::vector<login_protocol_wire::ModernCharacter> characters;
-	std::vector<std::string> characterNames;
-	characters.reserve(serializedCount);
-	characterNames.reserve(serializedCount);
-	for (size_t index = 0; index < serializedCount; ++index) {
-		const auto &[name, deletion] = players[index];
+	characters.reserve(serializedCharacterNames.size());
+	for (const auto &name : serializedCharacterNames) {
 		characters.emplace_back(login_protocol_wire::ModernCharacter {
 			.worldId = 0,
 			.name = name,
 		});
-		characterNames.emplace_back(name);
 	}
 
 	const std::array worlds {
@@ -168,13 +161,13 @@ void ProtocolLogin::getCharacterList(const std::string &accountDescriptor, const
 		},
 	};
 	const bool freePremium = g_configManager().getBoolean(FREE_PREMIUM);
-	const uint32_t premiumExpiry = freePremium ? 0 : account.getPremiumLastDay();
+	const uint32_t premiumExpiry = freePremium ? 0 : static_cast<uint32_t>(account.getPremiumLastDay());
 	const auto accountTail = login_protocol_wire::makeModernAccountTail(freePremium || premiumExpiry > getTimeNow(), premiumExpiry);
 	login_protocol_wire::writeModernCharacterList(*output, worlds, characters, accountTail);
 	send(output);
 
 	if (protocolProfile) {
-		ProtocolSessionHintStore::getInstance().registerHint(getIP(), protocolProfile->id, sessionKey, characterNames);
+		ProtocolSessionHintStore::getInstance().registerHint(getIP(), protocolProfile->id, sessionKey, serializedCharacterNames);
 	}
 
 	disconnect();
