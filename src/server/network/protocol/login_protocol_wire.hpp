@@ -9,6 +9,7 @@
 
 #ifndef USE_PRECOMPILED_HEADERS
 	#include <cstdint>
+	#include <limits>
 	#include <span>
 	#include <string>
 	#include <string_view>
