@@ -12,6 +12,7 @@
 #include "config/configmanager.hpp"
 #include "creatures/players/grouping/guild.hpp"
 #include "game/game.hpp"
+#include "game/scheduling/player_checkpoint_attempt.hpp"
 #include "game/scheduling/player_persistence_state.hpp"
 #include "io/ioguild.hpp"
 #include "io/iologindata.hpp"
@@ -199,33 +200,34 @@ void SaveManager::scheduleDirtyPlayer(std::weak_ptr<Player> playerPtr, std::shar
 			return;
 		}
 
-		bool saveSuccess = false;
-		try {
-			saveSuccess = doSavePlayer(player);
-		} catch (const std::exception &e) {
-			state->acknowledgeFailure(generation);
-			logger.error("Failed to save player {} generation {}: {}", player->getName(), generation, e.what());
-			return;
-		} catch (...) {
-			state->acknowledgeFailure(generation);
-			logger.error("Failed to save player {} generation {} because of an unknown exception.", player->getName(), generation);
-			return;
-		}
+		const auto attempt = executePlayerCheckpointAttempt(*state, generation, [this, &player] {
+			return doSavePlayer(player);
+		});
 
-		if (!saveSuccess) {
-			if (!state->acknowledgeFailure(generation)) {
-				logger.error("Failed to acknowledge player {} generation {} save failure.", player->getName(), generation);
+		if (attempt.outcome == PlayerCheckpointAttemptOutcome::saved) {
+			if (!attempt.acknowledgementAccepted) {
+				logger.error("Failed to acknowledge player {} generation {} save success.", player->getName(), generation);
+				return;
+			}
+
+			if (attempt.followUpRequired && player->isOnline() && game.getGameState() != GAME_STATE_SHUTDOWN) {
+				scheduleDirtyPlayer(player, state);
 			}
 			return;
 		}
 
-		if (!state->acknowledgeSuccess(generation)) {
-			logger.error("Failed to acknowledge player {} generation {} save success.", player->getName(), generation);
-			return;
+		if (!attempt.acknowledgementAccepted) {
+			logger.error("Failed to acknowledge player {} generation {} save failure.", player->getName(), generation);
 		}
 
-		if (state->isDirty() && player->isOnline() && game.getGameState() != GAME_STATE_SHUTDOWN) {
-			scheduleDirtyPlayer(player, state);
+		if (attempt.outcome == PlayerCheckpointAttemptOutcome::saveThrew) {
+			try {
+				std::rethrow_exception(attempt.exception);
+			} catch (const std::exception &e) {
+				logger.error("Failed to save player {} generation {}: {}", player->getName(), generation, e.what());
+			} catch (...) {
+				logger.error("Failed to save player {} generation {} because of an unknown exception.", player->getName(), generation);
+			}
 		}
 	});
 }
@@ -304,6 +306,6 @@ bool SaveManager::saveKV() {
 	}
 
 	auto duration = bm_saveKV.duration();
-	logger.debug("Key-value store saved in {} milliseconds.", duration);
+	logger.debug("Saving key-value store took {} milliseconds.", duration);
 	return saveSuccess;
 }
