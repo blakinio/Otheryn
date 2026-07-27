@@ -1,6 +1,6 @@
 # OTH-20260727 — MGE-004 composition root lifecycle
 
-Status: **review**
+Status: **ready**
 
 Issue: `#161`
 Branch: `dudantas/mge-004-composition-root-lifecycle`
@@ -35,12 +35,12 @@ Add a bounded module composition root with deterministic dependency-order start,
 
 ```yaml
 checkpoint_version: 1
-updated_at: "2026-07-27T10:56:36+02:00"
-head: "88b657b6ade78498ca3a52f34c5d57f31ad81b6b"
-head_scope: "latest fully validated build-affecting head; this task-record update is checkpoint-only"
+updated_at: "2026-07-27T12:39:28+02:00"
+head: "90532840270372f2b49d76c2531ab46141d9a37f"
+head_scope: "latest fully validated exact head before this checkpoint-only update"
 branch: "dudantas/mge-004-composition-root-lifecycle"
 pr: "https://github.com/blakinio/Otheryn/pull/162"
-status: "review"
+status: "ready"
 context_routes:
   - "docs/architecture/modular-game-engine-and-profiles.md"
   - "docs/architecture/current-engine-ownership-and-dependencies.md"
@@ -58,27 +58,24 @@ proven:
   - "MGE-003 registry validation is merged and archived on main."
   - "ModuleCompositionRoot validates the graph, starts registered participants in dependency order, rolls back and stops in reverse, records stop errors and isolates root instances."
   - "Focused tests cover ordering, rollback, idempotence, stop failure, registration rejection, readiness, isolation and invalid graph rejection."
-  - "CanaryServer registers only MonsterComputeService under logical module Creatures while preserving its configuration, startup phase and diagnostics."
-  - "The implementation branch is synchronized with main@4ad8c0f2ed1c6bd60da9b747b8ff180ced60b593 at validated head 88b657b6ade78498ca3a52f34c5d57f31ad81b6b."
+  - "CanaryServer registers only MonsterComputeService under logical module Creatures while preserving configuration, startup phase and diagnostics."
+  - "The branch is synchronized with main@41bc0562c263781df85c2f6855295fefa201db0a at validated head 90532840270372f2b49d76c2531ab46141d9a37f."
   - "The exact main comparison is behind zero and changes exactly the seven owned paths."
-  - "CI 30250205214 passed fast checks, Lua, Docker, Linux debug with full tests, Linux release, macOS, Windows Solution, Windows CMake and all applicable runtime smoke checks."
+  - "CI 30252795116 passed fast checks, Lua, Docker, Linux debug with full tests, Linux release, macOS, Windows Solution, Windows CMake and all applicable runtime smoke checks."
   - "Windows CMake passed compilation, MariaDB installation, Canary runtime smoke and artifact upload."
   - "Linux debug passed compilation, Canary runtime smoke, schema import and the full test suite."
-  - "Linux release passed compilation plus Canary and Global datapack runtime smoke."
-  - "macOS passed compilation and Canary runtime smoke without a rerun on the final synchronized head."
-  - "autofix.ci 30250204998 passed on the exact validated head."
-  - "Required 30250204935 job 89926244941 passed on the exact validated head."
+  - "autofix.ci 30252794765 and Required 30252794812 passed on the exact validated head."
   - "PR #162 is open, non-draft and mergeable at the exact validated head."
   - "PR comments, submitted reviews and inline review threads are empty."
 derived:
-  - "The earlier macOS queue-latency warning was a hosted-runner flake because the unchanged prior head passed on rerun and the final synchronized head passed macOS without rerun."
-  - "The implementation is ready for expected-head merge after focused validation of this checkpoint-only commit and one final live main-drift audit."
+  - "The earlier macOS queue-latency warning was a hosted-runner flake because the unchanged prior head passed on rerun and later exact heads passed macOS without rerun."
+  - "This checkpoint-only update does not invalidate the completed build-affecting validation and requires only repository-selected focused checks."
 unknown: []
 conflicts: []
 first_failure:
   marker: "CI 30247921486 attempt 1 / macOS job 89919380421 / Smoke test Canary datapack runtime"
   result: "RESOLVED"
-  evidence: "The server reached readiness and shut down cleanly; the unchanged prior head passed on rerun, and final-head macOS job 89926709126 passed without rerun."
+  evidence: "The server reached readiness and shut down cleanly; the unchanged head passed on rerun, and later exact-head macOS jobs passed without rerun."
 rejected_hypotheses:
   - "Move all singleton services into the root in one package."
   - "Treat every MGE-003 descriptor as lifecycle-owned."
@@ -95,32 +92,32 @@ changed_paths:
 validation:
   - command: "compare main...dudantas/mge-004-composition-root-lifecycle"
     result: "PASS"
-    evidence: "Merge base is main@4ad8c0f2ed1c6bd60da9b747b8ff180ced60b593, behind_by is zero and exactly seven owned paths differ."
-  - command: "autofix.ci 30250204998"
+    evidence: "Merge base is main@41bc0562c263781df85c2f6855295fefa201db0a, behind_by is zero and exactly seven owned paths differ."
+  - command: "autofix.ci 30252794765"
     result: "PASS"
-    evidence: "Completed successfully on head 88b657b6ade78498ca3a52f34c5d57f31ad81b6b."
-  - command: "CI 30250205214 fast checks and Lua"
+    evidence: "Completed successfully on head 90532840270372f2b49d76c2531ab46141d9a37f."
+  - command: "CI 30252795116 fast checks and Lua"
     result: "PASS"
     evidence: "Formatting, analysis, yamllint and Lua tests completed successfully."
-  - command: "CI 30250205214 Docker"
+  - command: "CI 30252795116 Docker"
     result: "PASS"
     evidence: "Image build, export, validation and artifact upload completed successfully."
-  - command: "CI 30250205214 Linux debug"
+  - command: "CI 30252795116 Linux debug"
     result: "PASS"
     evidence: "Compile, Canary runtime smoke, database schema import and full tests completed successfully."
-  - command: "CI 30250205214 Linux release"
+  - command: "CI 30252795116 Linux release"
     result: "PASS"
     evidence: "Compile plus Canary and Global datapack runtime smoke completed successfully."
-  - command: "CI 30250205214 macOS"
+  - command: "CI 30252795116 macOS"
     result: "PASS"
-    evidence: "Compile, MySQL startup, Canary runtime smoke and artifact upload completed successfully without rerun."
-  - command: "CI 30250205214 Windows Solution"
+    evidence: "Compile, MySQL startup, Canary runtime smoke and artifact upload completed successfully."
+  - command: "CI 30252795116 Windows Solution"
     result: "PASS"
     evidence: "MSBuild solution build and artifact upload completed successfully."
-  - command: "CI 30250205214 Windows CMake"
+  - command: "CI 30252795116 Windows CMake"
     result: "PASS"
     evidence: "Run CMake, MariaDB installation, Canary runtime smoke and artifact upload completed successfully."
-  - command: "Required 30250204935 job 89926244941"
+  - command: "Required 30252794812"
     result: "PASS"
     evidence: "Applicable CI workflow aggregation completed successfully."
   - command: "PR #162 discussion, review and thread audit"
@@ -128,7 +125,7 @@ validation:
     evidence: "No comments, submitted reviews or inline review threads exist."
   - command: "PR #162 live state audit"
     result: "PASS"
-    evidence: "Open, non-draft and mergeable at head 88b657b6ade78498ca3a52f34c5d57f31ad81b6b."
+    evidence: "Open, non-draft and mergeable at head 90532840270372f2b49d76c2531ab46141d9a37f."
 blockers: []
-next_action: "Re-read the live PR head and main, then merge PR #162 with expected-head protection if behind_by remains zero, the seven-path diff is unchanged and the focused checks triggered by this checkpoint-only commit are green."
+next_action: "Merge PR #162 with expected-head protection after the checkpoint-only head passes its repository-selected checks and a final live audit still shows behind_by zero with exactly the seven owned paths."
 ```
