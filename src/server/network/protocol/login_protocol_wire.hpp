@@ -8,6 +8,7 @@
 #pragma once
 
 #ifndef USE_PRECOMPILED_HEADERS
+	#include <cstddef>
 	#include <cstdint>
 	#include <limits>
 	#include <span>
