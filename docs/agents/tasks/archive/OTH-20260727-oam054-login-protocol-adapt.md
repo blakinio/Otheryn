@@ -10,7 +10,7 @@ completed: 2026-07-27
 related_pr: "165"
 feature_head: "f6db2136248b39ccd7aa57178a1c63c788b9bcec"
 feature_merge: "e077c51fe948652a4849e15f6c518059f4370717"
-lifecycle_pr: "pending"
+lifecycle_pr: "173"
 owned_paths:
   - docs/oam-054-login-protocol-adapt.md
   - docs/agents/tasks/archive/OTH-20260727-oam054-login-protocol-adapt.md
@@ -30,10 +30,10 @@ Final disposition: `login-protocol → ADAPT`.
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-27T12:20:00+02:00
+updated_at: 2026-07-27T12:25:00+02:00
 head: f6db2136248b39ccd7aa57178a1c63c788b9bcec
 branch: docs/oam-054-login-protocol-lifecycle
-pr: pending
+pr: 173
 status: completed
 context_routes:
   - agent-governance
@@ -49,6 +49,7 @@ proven:
   - Linux debug passed runtime smoke schema import and full CTest including six OAM-054 tests plus existing OAM-044 and OAM-045 regressions.
   - Linux release Docker macOS and Windows builds passed applicable runtime gates.
   - PR 165 had no comments reviews or review threads and squash-merged with expected-head protection as e077c51fe948652a4849e15f6c518059f4370717.
+  - Lifecycle PR 173 changes exactly the active/archive task pair and final target report.
 derived:
   - Otheryn owns an explicit maintained-client-correspondent login response serializer while retaining existing request parsing authentication token issuance and session handoff.
   - The validated disposition is ADAPT and the canonical OAM inventory is complete after Canary governance lifecycle and reconciliation.
@@ -81,5 +82,5 @@ validation:
     result: PASS
     evidence: Six intended paths no discussions behind_by zero and expected-head squash merge.
 blockers: []
-next_action: Merge this docs-only lifecycle PR, then complete Canary OAM-054 governance lifecycle and programme reconciliation.
+next_action: Keep this lifecycle head unchanged, pass docs-only gates, merge PR 173, then complete Canary OAM-054 governance lifecycle and programme reconciliation.
 ```
