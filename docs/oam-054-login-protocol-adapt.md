@@ -23,34 +23,54 @@ Relevant donors:
 
 ## Target gap
 
-The maintained client decodes modern opcode `0x64` as:
+The maintained client decodes modern opcode `0x64` as world list, character list, account status `u8`, subscription status `u8` and premium expiry `u32`. Legacy protocols decode the legacy character list followed by premium days `u16`.
 
-1. world list;
-2. character list;
-3. account status `u8`;
-4. subscription status `u8`;
-5. premium expiry `u32`.
+At task start Otheryn wrote premium remaining days into the modern account-status byte, followed by a premium boolean and premium-last-day timestamp. The second and third values resembled subscription/expiry semantics, but the first field had no explicit status contract and no direct server/client regression existed.
 
-For legacy protocols it decodes the legacy character list followed by premium days `u16`.
+## Adapted behavior
 
-At task start Otheryn wrote premium remaining days into the modern account-status byte, followed by a premium boolean and premium-last-day timestamp. Although the second and third values matched the intended subscription/expiry convention, the first field had no explicit status semantics and no direct server/client regression existed.
-
-## Adapted boundary
-
-The package will introduce a small login-wire serializer that owns only:
+The target now contains a small login-wire serializer owning only:
 
 - opcode `0x28` session-key response framing;
 - current world/character list response framing;
 - explicit modern account status/subscription/expiry tail;
 - legacy character list and premium-days tail;
+- bounded `u8` character count shared by secure-token authorization, serialized payload and session hints;
 - deterministic field-order tests based on the maintained-client parser.
 
 `ProtocolLogin` retains request parsing, profile/layout selection, RSA/XTEA setup, account loading/authentication, token issuance, session-hint registration, error handling, send and disconnect lifecycle.
 
+## Deterministic regressions
+
+Six target tests decode exact response order and consume each message to the end:
+
+- session-key opcode and token string;
+- modern premium response;
+- modern free response;
+- legacy response with premium days;
+- modern character count capped at 255;
+- legacy character count capped at 255.
+
+Existing OAM-044 profile and OAM-045 session-handoff regressions remain in the same full CTest suite.
+
+## Implementation validation
+
+Implementation head `c6fe5d8a2f48e6c8425c3db39ff2372a7cde3c3f` passed:
+
+- repository CI `30245438536`;
+- `Required` `30245438107`;
+- autofix `30245438145` with no follow-up commit;
+- Fast Checks and Lua;
+- Linux debug with full tests and schema import;
+- Linux release;
+- Docker image;
+- macOS build and runtime smoke;
+- Windows builds.
+
 ## Evidence boundary
 
-A green result will prove exact target serialization and parser correspondence for registered fixtures. It will not prove password security, arbitrary-account authorization, all protocol versions, game-world authentication, reconnect races, client UI behavior, sustained load or production safety.
+The green result proves exact target serialization and parser correspondence for registered fixtures. It does not prove password security, arbitrary-account authorization, all protocol versions, game-world authentication, reconnect races, client UI behavior, sustained load or production safety.
 
 ## Delivery evidence
 
-Pending target implementation, exact-final validation, feature merge and lifecycle archive.
+Implementation is validated. Exact-final checkpoint gates, merge and lifecycle archive remain pending.
