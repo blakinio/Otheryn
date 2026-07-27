@@ -1,0 +1,40 @@
+---
+name: OAM-054 final main sync
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/oam054-final-sync-main.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: oam054-final-main-sync-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'dudantas/oam-054-login-protocol-adapt'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout OAM-054 branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          persist-credentials: true
+          fetch-depth: 0
+      - name: Merge current main and remove helper
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git merge --no-edit origin/main
+          git rm .github/workflows/oam054-final-sync-main.yml
+          git commit --amend --no-edit
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
