@@ -13,7 +13,7 @@
 namespace {
 	class WireReader {
 	public:
-		explicit WireReader(const OutputMessage &message) :
+		explicit WireReader(OutputMessage &message) :
 			data(message.getOutputBuffer()), size(message.getLength()) { }
 
 		template <typename T>
