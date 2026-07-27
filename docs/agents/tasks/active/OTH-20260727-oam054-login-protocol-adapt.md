@@ -8,9 +8,7 @@ created: 2026-07-27
 updated: 2026-07-27
 related_pr: "165"
 owned_paths:
-  - src/server/CMakeLists.txt
   - src/server/network/protocol/login_protocol_wire.hpp
-  - src/server/network/protocol/login_protocol_wire.cpp
   - src/server/network/protocol/protocollogin.cpp
   - tests/unit/server/CMakeLists.txt
   - tests/unit/server/network/protocol/oam_054_login_protocol_test.cpp
@@ -58,8 +56,8 @@ No password hashing, credential policy, account repository, game-world authentic
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-27T10:05:00+02:00
-head: c6fe5d8a2f48e6c8425c3db39ff2372a7cde3c3f
+updated_at: 2026-07-27T10:15:00+02:00
+head: d896ff16ef7f558c0e44bda54a2d0f33d8539710
 branch: dudantas/oam-054-login-protocol-adapt
 pr: 165
 status: validating
@@ -74,7 +72,7 @@ proven:
   - Otheryn task-start main is 9703da845384423ad85883216bf8853642c21bcd.
   - No active Otheryn PR owns ProtocolLogin or target login-wire paths.
   - Otheryn explicit current/11.00/8.60 request layouts, transport selection, RSA/XTEA, secure token issuance and session hints remain in ProtocolLogin.
-  - Target-owned login_protocol_wire writes opcode 0x28 and deterministic modern/legacy opcode 0x64 responses.
+  - Target-owned header-only login_protocol_wire writes opcode 0x28 and deterministic modern/legacy opcode 0x64 responses.
   - Modern account tail is explicitly status zero, subscription free/premium and premium-expiry u32, matching maintained OTClient parser order.
   - Legacy response retains character records followed by premium-days u16.
   - A single capped snapshot of at most 255 names feeds secure-token authorization, serialized payload and session hints.
@@ -82,6 +80,7 @@ proven:
   - Existing OAM-044 and OAM-045 regressions remain registered and passed in the same full CTest.
   - Implementation head c6fe5d8a2f48e6c8425c3db39ff2372a7cde3c3f passed CI 30245438536 Required 30245438107 and autofix 30245438145 without a follow-up commit.
   - CI 30245438536 passed Fast Checks Lua Linux debug full tests and schema import Linux release Docker macOS runtime smoke and Windows builds.
+  - Final PR diff contains exactly six intended paths; no separate serializer cpp or server-level CMake change exists.
 derived:
   - The bounded serializer closes the wire-evidence gap without copying Canary ProtocolLogin or changing the maintained client.
   - The validated target disposition is ADAPT.
@@ -100,9 +99,7 @@ rejected_hypotheses:
 changed_paths:
   - docs/agents/tasks/active/OTH-20260727-oam054-login-protocol-adapt.md
   - docs/oam-054-login-protocol-adapt.md
-  - src/server/CMakeLists.txt
   - src/server/network/protocol/login_protocol_wire.hpp
-  - src/server/network/protocol/login_protocol_wire.cpp
   - src/server/network/protocol/protocollogin.cpp
   - tests/unit/server/CMakeLists.txt
   - tests/unit/server/network/protocol/oam_054_login_protocol_test.cpp
@@ -116,7 +113,10 @@ validation:
   - command: implementation-head autofix 30245438145
     result: PASS
     evidence: Formatting passed without changing the head.
+  - command: final changed-file audit
+    result: PASS
+    evidence: Exactly six intended files; header-only serializer requires no separate cpp or src/server CMake entry.
 blockers:
   - exact-final-head CI Required and autofix must pass without another commit
-next_action: Freeze this exact head, pass exact-final gates, audit eight intended paths and discussions with behind_by zero, then squash-merge with expected-head protection and complete lifecycle archival.
+next_action: Freeze this exact head, pass exact-final gates, audit six intended paths and discussions with behind_by zero, then squash-merge with expected-head protection and complete lifecycle archival.
 ```
