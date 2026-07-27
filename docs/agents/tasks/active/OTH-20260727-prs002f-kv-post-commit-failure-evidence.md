@@ -66,11 +66,11 @@ Delete the integration test, its CMake registration, the bounded contract note a
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-27T10:35:00+02:00
-head: 4ad8c0f2ed1c6bd60da9b747b8ff180ced60b593
+updated_at: 2026-07-27T10:46:00+02:00
+head: 93aaf156eaade356300d58e5bd35b19b286302b9
 branch: dudantas/prs-002f-kv-post-commit-failure-evidence
 pr: none
-status: implementing
+status: validating
 context_routes:
   - production-resilience
   - player-persistence
@@ -88,6 +88,8 @@ proven:
   - IOLoginData commits its SQL transaction before staging wheel KV data.
   - KVSQL persists its in-memory snapshot in a separate DBTransaction and returns false when that batch fails.
   - KVStore retains staged in-memory entries after saveAll failure.
+  - The fixture restores kv_store before setup, immediately after the injected failure and again in teardown.
+  - The test commits a dedicated SQL probe, forces the real KV batch to fail, proves SQL remains durable and the KV row is absent, then persists the retained key on one explicit later generation.
   - Integration tests use a disposable MariaDB database and execute serially.
   - Open PRs 162 and 165 do not own the selected paths.
 derived:
@@ -103,10 +105,17 @@ rejected_hypotheses:
   - combine process-crash or queue-overload evidence
 changed_paths:
   - docs/agents/tasks/active/OTH-20260727-prs002f-kv-post-commit-failure-evidence.md
+  - docs/architecture/prs-002-dirty-player-checkpoint-contract.md
+  - tests/integration/database/CMakeLists.txt
+  - tests/integration/database/player_checkpoint_kv_post_commit_failure_it.cpp
 validation:
   - command: source and conflict preflight
     result: PASS
     evidence: Current main 4ad8c0f2ed1c6bd60da9b747b8ff180ced60b593; selected paths do not overlap open PRs.
-blockers: []
-next_action: Add the real KV post-commit failure integration test, register it and update the bounded PRS-002 contract evidence.
+  - command: deterministic fixture audit
+    result: PASS
+    evidence: Dedicated SQL table/key, defensive kv_store restoration, explicit persisted-state queries and one retained-key retry are present.
+blockers:
+  - Exact-head CI, Required and autofix
+next_action: Open the bounded PR, inspect exact-head CI and fix only concrete failures.
 ```
