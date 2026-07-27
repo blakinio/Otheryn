@@ -45,8 +45,9 @@ Preserve Otheryn secure login-session tokens, explicit current/11.00/8.60 layout
 - [x] Disconnect after the complete response exactly as before.
 - [x] Add deterministic tests decoding session-key, modern and legacy responses with the maintained-client field order.
 - [x] Cap token authorization, response count, payload records and session hints to the same `u8` character snapshot.
-- [ ] Preserve existing OAM-044 profile and OAM-045 session-handoff regressions under full CTest.
-- [ ] Pass exact-final-head repository CI, `Required`, autofix and applicable runtime smoke.
+- [x] Preserve existing OAM-044 profile and OAM-045 session-handoff regressions under full CTest.
+- [x] Pass implementation-head repository CI, `Required`, autofix and applicable runtime smoke.
+- [ ] Pass exact-final-head repository CI, `Required` and autofix without another commit.
 - [ ] Merge with expected-head protection and complete a separate lifecycle archive.
 
 ## Safety boundaries
@@ -57,8 +58,8 @@ No password hashing, credential policy, account repository, game-world authentic
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-27T09:10:00+02:00
-head: 0a528ad0160214cb3ec9fe8c43ee2e90b0dd9720
+updated_at: 2026-07-27T10:05:00+02:00
+head: c6fe5d8a2f48e6c8425c3db39ff2372a7cde3c3f
 branch: dudantas/oam-054-login-protocol-adapt
 pr: 165
 status: validating
@@ -76,18 +77,21 @@ proven:
   - Target-owned login_protocol_wire writes opcode 0x28 and deterministic modern/legacy opcode 0x64 responses.
   - Modern account tail is explicitly status zero, subscription free/premium and premium-expiry u32, matching maintained OTClient parser order.
   - Legacy response retains character records followed by premium-days u16.
-  - A single capped snapshot of at most 255 names now feeds secure-token authorization, serialized payload and session hints.
+  - A single capped snapshot of at most 255 names feeds secure-token authorization, serialized payload and session hints.
   - Six deterministic tests decode session key, modern premium/free responses, legacy response and modern/legacy count caps to exact message end.
-  - Existing OAM-044/OAM-045 tests remain registered in the same canary_ut target.
+  - Existing OAM-044 and OAM-045 regressions remain registered and passed in the same full CTest.
+  - Implementation head c6fe5d8a2f48e6c8425c3db39ff2372a7cde3c3f passed CI 30245438536 Required 30245438107 and autofix 30245438145 without a follow-up commit.
+  - CI 30245438536 passed Fast Checks Lua Linux debug full tests and schema import Linux release Docker macOS runtime smoke and Windows builds.
 derived:
   - The bounded serializer closes the wire-evidence gap without copying Canary ProtocolLogin or changing the maintained client.
+  - The validated target disposition is ADAPT.
 unknown:
-  - First Ready-state compile, linker and full CTest result.
+  - Exact-final checkpoint gate and merge result.
 conflicts: []
 first_failure:
   marker: maintained-client-account-tail-correspondence
   result: FIXED
-  evidence: Modern serializer now emits explicit AccountStatus Ok, SubscriptionStatus and premium expiry in maintained-client order with deterministic decoding tests.
+  evidence: Modern serializer emits explicit AccountStatus Ok SubscriptionStatus and premium expiry in maintained-client order with deterministic decoding tests.
 rejected_hypotheses:
   - classify existing ProtocolLogin as REUSE without wire tests
   - copy Canary ProtocolLogin wholesale
@@ -103,13 +107,16 @@ changed_paths:
   - tests/unit/server/CMakeLists.txt
   - tests/unit/server/network/protocol/oam_054_login_protocol_test.cpp
 validation:
-  - command: target ownership and wire-contract preflight
+  - command: implementation-head CI 30245438536
     result: PASS
-    evidence: Exact server/client revisions and field order are pinned; no active target overlap exists.
-  - command: implementation review
+    evidence: Full platform matrix runtime smoke and Linux tests passed.
+  - command: implementation-head Required 30245438107
     result: PASS
-    evidence: Pure serializer, target integration and deterministic client-order decoder tests are present with bounded character counts.
+    evidence: Required accepted the complete implementation-head matrix.
+  - command: implementation-head autofix 30245438145
+    result: PASS
+    evidence: Formatting passed without changing the head.
 blockers:
-  - Ready-state exact-head compile, full CTest, platform gates, Required and autofix
-next_action: Mark PR 165 Ready. Fix only concrete compile/test failures, then freeze the final head, complete exact-head gates and merge audit.
+  - exact-final-head CI Required and autofix must pass without another commit
+next_action: Freeze this exact head, pass exact-final gates, audit eight intended paths and discussions with behind_by zero, then squash-merge with expected-head protection and complete lifecycle archival.
 ```
