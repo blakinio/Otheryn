@@ -9,8 +9,13 @@
 
 #pragma once
 
+#include "modules/module_lifecycle.hpp"
 #include "security/rsa.hpp"
 #include "server/server.hpp"
+
+#ifndef USE_PRECOMPILED_HEADERS
+	#include <memory>
+#endif
 
 class Logger;
 
@@ -50,6 +55,7 @@ private:
 	Logger &logger;
 	RSAManager &rsa;
 	ServiceManager &serviceManager;
+	std::unique_ptr<ModuleCompositionRoot> moduleCompositionRoot;
 
 	LoaderStatus loaderStatus = LoaderStatus::LOADING;
 	std::mutex loaderMutex;
@@ -72,4 +78,6 @@ private:
 	void loadMaps() const;
 	void setupHousesRent();
 	void modulesLoadHelper(bool loaded, std::string_view identifier);
+	void startSelectedInfrastructure(const GameProfile &profile);
+	void stopSelectedInfrastructure() noexcept;
 };
