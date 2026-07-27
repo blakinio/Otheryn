@@ -82,7 +82,11 @@ The first bounded PRS-002D package extracts the result and exact-generation ackn
 
 The bounded PRS-002E package uses the disposable integration-test MariaDB instance and a dedicated InnoDB probe table. A valid update followed by a deliberately invalid SQL statement inside `DBTransaction::executeWithinTransaction` must return failure and roll back the earlier update. Routing that real transaction result through the checkpoint-attempt boundary proves that the captured generation remains dirty, the in-flight generation is released, no implicit follow-up is requested and a later explicit generation can commit successfully and clear the state.
 
-This is transaction-boundary evidence, not a complete end-to-end `IOLoginData::savePlayer()` failure drill. Real KV post-commit failure, commit-before-ack process-crash proof, queue-overload behavior, operational metrics and any measured RPO remain separate bounded packages.
+### Implemented bounded PRS-002F evidence
+
+The bounded PRS-002F package uses a standalone `KVSQL` in the disposable integration database. A dedicated SQL-domain probe commits first, then the test temporarily renames `kv_store` so the real KV batch transaction fails. The probe remains committed while the dedicated KV key is absent, and routing the combined result through the checkpoint-attempt boundary leaves the generation dirty with no implicit follow-up. Restoring `kv_store` and issuing one later explicit generation persists the still-staged key and clears the checkpoint state.
+
+This is SQL/KV boundary evidence, not generic reconciliation or an end-to-end wheel serialization drill. Commit-before-ack process-crash proof, queue-overload behavior, operational metrics and any measured RPO remain separate bounded packages.
 
 ## Explicit non-goals
 
