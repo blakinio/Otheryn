@@ -77,7 +77,7 @@ TEST(Prs002DirtyPlayerCheckpointContractTest, FailedAttemptHasNoImplicitFollowUp
 	const auto scheduleDirty = functionBody(source, "void SaveManager::scheduleDirtyPlayer", "bool SaveManager::doSavePlayer");
 	const auto successBranch = scheduleDirty.find("if (attempt.outcome == PlayerCheckpointAttemptOutcome::saved)");
 	const auto followUp = scheduleDirty.find("if (attempt.followUpRequired");
-	const auto failureBranch = scheduleDirty.find("if (!attempt.acknowledgementAccepted)");
+	const auto failureBranch = scheduleDirty.find("if (!attempt.acknowledgementAccepted)", followUp);
 	ASSERT_NE(successBranch, std::string_view::npos);
 	ASSERT_NE(followUp, std::string_view::npos);
 	ASSERT_NE(failureBranch, std::string_view::npos);
