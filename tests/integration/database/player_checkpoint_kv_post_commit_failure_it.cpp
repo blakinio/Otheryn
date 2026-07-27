@@ -36,16 +36,18 @@ namespace it_player_checkpoint_kv_post_commit_failure {
 
 		static bool primaryKvTableExists() {
 			return Database::getInstance().storeQuery(
-				"SELECT 1 AS `present` FROM `information_schema`.`tables` "
-				"WHERE `table_schema` = DATABASE() AND `table_name` = 'kv_store' LIMIT 1"
-			) != nullptr;
+					   "SELECT 1 AS `present` FROM `information_schema`.`tables` "
+					   "WHERE `table_schema` = DATABASE() AND `table_name` = 'kv_store' LIMIT 1"
+				   )
+				!= nullptr;
 		}
 
 		static bool hiddenKvTableExists() {
 			return Database::getInstance().storeQuery(
-				"SELECT 1 AS `present` FROM `information_schema`.`tables` "
-				"WHERE `table_schema` = DATABASE() AND `table_name` = 'prs_002f_kv_store_unavailable' LIMIT 1"
-			) != nullptr;
+					   "SELECT 1 AS `present` FROM `information_schema`.`tables` "
+					   "WHERE `table_schema` = DATABASE() AND `table_name` = 'prs_002f_kv_store_unavailable' LIMIT 1"
+				   )
+				!= nullptr;
 		}
 
 		static bool ensureKvStoreAvailable() {
@@ -81,9 +83,10 @@ namespace it_player_checkpoint_kv_post_commit_failure {
 
 		static bool committedKvKeyExists() {
 			return Database::getInstance().storeQuery(
-				"SELECT 1 AS `present` FROM `kv_store` "
-				"WHERE `key_name` = 'prs.002f.pending-wheel-kv' LIMIT 1"
-			) != nullptr;
+					   "SELECT 1 AS `present` FROM `kv_store` "
+					   "WHERE `key_name` = 'prs.002f.pending-wheel-kv' LIMIT 1"
+				   )
+				!= nullptr;
 		}
 	};
 
