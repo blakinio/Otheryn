@@ -156,11 +156,11 @@ std::shared_ptr<PlayerPersistenceState> SaveManager::persistenceStateFor(const s
 	return state;
 }
 
-void SaveManager::schedulePlayer(std::weak_ptr<Player> playerPtr) {
+bool SaveManager::schedulePlayer(std::weak_ptr<Player> playerPtr) {
 	auto playerToSave = playerPtr.lock();
 	if (!playerToSave) {
 		logger.debug("Skipping save for player because player is no longer online.");
-		return;
+		return false;
 	}
 
 	// Disable save async if the config is set to false
@@ -169,26 +169,26 @@ void SaveManager::schedulePlayer(std::weak_ptr<Player> playerPtr) {
 			logger.debug("Saving player {}.", playerToSave->getName());
 		}
 		doSavePlayer(playerToSave);
-		return;
+		return true;
 	}
 
 	auto state = persistenceStateFor(playerToSave);
 	state->markDirty();
-	scheduleDirtyPlayer(playerPtr, std::move(state));
+	return scheduleDirtyPlayer(playerPtr, std::move(state));
 }
 
-void SaveManager::scheduleDirtyPlayer(std::weak_ptr<Player> playerPtr, std::shared_ptr<PlayerPersistenceState> state) {
+bool SaveManager::scheduleDirtyPlayer(std::weak_ptr<Player> playerPtr, std::shared_ptr<PlayerPersistenceState> state) {
 	const auto generation = state->beginCheckpoint();
 	if (!generation.has_value()) {
 		logger.debug("Coalescing player save because a checkpoint is already in flight or no dirty generation exists.");
-		return;
+		return true;
 	}
 
 	auto playerToSave = playerPtr.lock();
 	if (!playerToSave) {
 		state->acknowledgeFailure(*generation);
 		logger.debug("Skipping save for player because player is no longer online.");
-		return;
+		return false;
 	}
 
 	const auto admission = tryAdmitPlayerCheckpoint(m_playerCheckpointQueueAdmission, *state, *generation);
@@ -203,7 +203,7 @@ void SaveManager::scheduleDirtyPlayer(std::weak_ptr<Player> playerPtr, std::shar
 			m_playerCheckpointQueueAdmission.outstanding(),
 			m_playerCheckpointQueueAdmission.capacity()
 		);
-		return;
+		return false;
 	}
 
 	logger.debug("Scheduling player {} generation {} for saving.", playerToSave->getName(), *generation);
@@ -232,7 +232,7 @@ void SaveManager::scheduleDirtyPlayer(std::weak_ptr<Player> playerPtr, std::shar
 						logger.error("Failed to release player {} generation {} checkpoint queue slot before follow-up.", player->getName(), generation);
 						return;
 					}
-					scheduleDirtyPlayer(player, state);
+					(void)scheduleDirtyPlayer(player, state);
 				}
 				return;
 			}
@@ -251,6 +251,7 @@ void SaveManager::scheduleDirtyPlayer(std::weak_ptr<Player> playerPtr, std::shar
 				}
 			}
 		});
+		return true;
 	} catch (const std::exception &e) {
 		const bool queueReleased = m_playerCheckpointQueueAdmission.release();
 		const bool checkpointReleased = state->abandonCheckpoint(*generation);
@@ -258,6 +259,7 @@ void SaveManager::scheduleDirtyPlayer(std::weak_ptr<Player> playerPtr, std::shar
 			logger.error("Failed to fully roll back player {} generation {} checkpoint admission after scheduling exception.", playerToSave->getName(), *generation);
 		}
 		logger.error("Failed to schedule player {} generation {} checkpoint: {}", playerToSave->getName(), *generation, e.what());
+		return false;
 	} catch (...) {
 		const bool queueReleased = m_playerCheckpointQueueAdmission.release();
 		const bool checkpointReleased = state->abandonCheckpoint(*generation);
@@ -265,6 +267,7 @@ void SaveManager::scheduleDirtyPlayer(std::weak_ptr<Player> playerPtr, std::shar
 			logger.error("Failed to fully roll back player {} generation {} checkpoint admission after unknown scheduling exception.", playerToSave->getName(), *generation);
 		}
 		logger.error("Failed to schedule player {} generation {} checkpoint because of an unknown exception.", playerToSave->getName(), *generation);
+		return false;
 	}
 }
 
@@ -296,8 +299,7 @@ bool SaveManager::savePlayer(std::shared_ptr<Player> player) {
 		return false;
 	}
 	if (player->isOnline() && g_game().getGameState() != GAME_STATE_SHUTDOWN) {
-		schedulePlayer(player);
-		return true;
+		return schedulePlayer(player);
 	}
 	return doSavePlayer(player);
 }
