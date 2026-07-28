@@ -6,6 +6,9 @@ base_branch: main
 start_sha: 7d6e4763377ee150e7ce44cfd29c60ce63c62760
 feature_head: 81fb70e31775f15533d704161ec786f011a43221
 feature_merge_sha: 7b25e2eec849df99fd881f36508202f20a04f8e3
+lifecycle_pr: "185"
+lifecycle_head: bf29de9ebae3fb6d287d635ad9d3ceb9e26d2cd8
+lifecycle_merge_sha: 5b3c5bff523705d494a0db9b04295dc22b922ea4
 created: 2026-07-28
 updated: 2026-07-28
 completed: 2026-07-28
@@ -33,7 +36,7 @@ required_reads:
 
 ## Result
 
-Completed and merged through feature PR #184. Issue #183 closed automatically by the protected squash merge.
+Completed and merged through feature PR #184. Issue #183 closed automatically by the protected squash merge, and lifecycle PR #185 moved the durable task record from `active` to `archive`.
 
 ## Proven behavior
 
@@ -60,7 +63,14 @@ Completed and merged through feature PR #184. Issue #183 closed automatically by
 - focused CTest evidence includes capacity-one overload/retry, capacity-three 32-way concurrent admission, exact stale-abandon rejection and release-before-follow-up slot reuse;
 - final feature drift audit: `behind_by=0`, exactly nine owned paths;
 - final feature discussion audit: no comments, reviews, review threads or requested reviewers;
-- feature squash merge: `7b25e2eec849df99fd881f36508202f20a04f8e3`.
+- feature squash merge: `7b25e2eec849df99fd881f36508202f20a04f8e3`;
+- lifecycle head: `bf29de9ebae3fb6d287d635ad9d3ceb9e26d2cd8`;
+- lifecycle Required #602, run `30400534300`: PASS;
+- lifecycle scope: exactly the active/archive task pair;
+- lifecycle discussion audit: no comments, reviews or review threads;
+- lifecycle squash merge: `5b3c5bff523705d494a0db9b04295dc22b922ea4`;
+- active task record: absent from `main`;
+- archive task record: present on `main`.
 
 ## Safety boundaries preserved
 
@@ -87,11 +97,11 @@ Revert feature merge `7b25e2eec849df99fd881f36508202f20a04f8e3`. No persistent d
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-28T23:25:00+02:00
-head: 7b25e2eec849df99fd881f36508202f20a04f8e3
-head_scope: feature squash merge on main
+updated_at: 2026-07-28T23:29:00+02:00
+head: 5b3c5bff523705d494a0db9b04295dc22b922ea4
+head_scope: final lifecycle archive merge on main; later record-only corrections do not alter PRS-002H implementation or validation evidence
 branch: main
-pr: 184
+pr: 185
 status: ready
 context_routes:
   - production-resilience
@@ -109,21 +119,24 @@ proven:
   - Full Linux debug CTest proved bounded overload, explicit recovery, concurrent capacity and follow-up slot reuse.
   - Final feature audit found behind_by zero and no comments, reviews or review threads.
   - Issue 183 closed as completed after the feature merge.
+  - Lifecycle PR 185 changed exactly the active/archive task pair, passed Required 30400534300 and merged as 5b3c5bff523705d494a0db9b04295dc22b922ea4.
+  - The active task record is absent from main and this archive record is present.
 derived:
   - Player-checkpoint admission is bounded without globally replacing the shared ThreadPool or adding retry policy.
-  - PRS-002H requires no further implementation or feature validation.
+  - PRS-002H requires no further implementation, validation, merge or archive action.
 unknown:
   - Operational metrics export and measured production RPO remain parent-program gaps outside PRS-002H.
 conflicts: []
 first_failure:
   marker: no failing exact-head validation
-  evidence: CI, Required and autofix all completed successfully on the final feature head.
+  evidence: Feature CI, Required, autofix and lifecycle Required all completed successfully on their exact heads.
 rejected_hypotheses:
   - replace the shared thread pool
   - block the producer
   - count queue rejection as a database failure
   - hide rejection behind successful savePlayer acceptance
   - add retry policy or metrics export in PRS-002H
+  - treat parent-program metrics gaps as unfinished PRS-002H scope
 changed_paths:
   - docs/agents/tasks/active/OTH-20260728-prs002h-bounded-checkpoint-queue-admission.md
   - docs/agents/tasks/archive/OTH-20260728-prs002h-bounded-checkpoint-queue-admission.md
@@ -134,6 +147,12 @@ validation:
   - command: feature final audit and expected-head merge
     result: PASS
     evidence: Exactly nine owned paths, behind_by zero, no discussion or review items, and squash merge 7b25e2eec849df99fd881f36508202f20a04f8e3.
+  - command: lifecycle archive PR 185
+    result: PASS
+    evidence: Exactly the active/archive task pair changed; Required 30400534300 succeeded and squash merge produced 5b3c5bff523705d494a0db9b04295dc22b922ea4.
+  - command: final repository-state audit
+    result: PASS
+    evidence: Issue closed, feature and lifecycle PRs merged, active record absent and archive record present.
 blockers: []
-next_action: Merge the docs-only lifecycle archive after its exact-head Required check passes.
+next_action: No further action is required for PRS-002H; start operational metrics only as a separately scoped PRS-002I task with a fresh preflight.
 ```
