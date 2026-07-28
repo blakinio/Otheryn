@@ -1,13 +1,17 @@
 ---
 task_id: OTH-20260728-prs002g-commit-before-ack-crash-evidence
-status: complete
+status: completed
 branch: dudantas/prs-002g-commit-before-ack-crash-evidence
 base_branch: main
 start_sha: d46e39d6f28557b85f6f4c7e78dc707bb287b77f
 feature_head: 86ec5475f0820ea13fc65b572f8d6de11ee88d29
 feature_merge_sha: 472971b618b905d9d5722eee9bee5dc0ae546504
+lifecycle_pr: "181"
+lifecycle_head: 94c236d760a7b18564353ecf9a4ad538e047a354
+lifecycle_merge_sha: 91d8d7d07f21971a29299057a4f0514cae33c587
 created: 2026-07-28
 updated: 2026-07-28
+completed: 2026-07-28
 related_issue: "179"
 related_pr: "180"
 owned_paths:
@@ -27,7 +31,7 @@ required_reads:
 
 ## Result
 
-Completed and merged through feature PR #180. Issue #179 closed automatically by the protected squash merge.
+Completed and merged through feature PR #180. Issue #179 closed automatically by the protected squash merge, and lifecycle PR #181 moved the durable task record from `active` to `archive`.
 
 ## Proven evidence
 
@@ -56,9 +60,16 @@ PRS-002G proves the commit-before-ack ambiguity. The current in-memory checkpoin
 - Linux debug compile: PASS;
 - disposable MariaDB schema import: PASS;
 - full Linux debug CTest, including the fresh-process death test: PASS;
-- final drift audit: branch `behind_by=0`, exactly four owned feature paths;
-- final discussion audit: no review threads, reviews or requested reviewers;
-- feature squash merge: `472971b618b905d9d5722eee9bee5dc0ae546504`.
+- final feature drift audit: branch `behind_by=0`, exactly four owned feature paths;
+- final feature discussion audit: no comments, review threads or reviews;
+- feature squash merge: `472971b618b905d9d5722eee9bee5dc0ae546504`;
+- lifecycle head: `94c236d760a7b18564353ecf9a4ad538e047a354`;
+- lifecycle Required #598, run `30397354141`: PASS;
+- lifecycle scope: exactly the active/archive task pair;
+- lifecycle discussion audit: no comments, review threads or reviews;
+- lifecycle squash merge: `91d8d7d07f21971a29299057a4f0514cae33c587`;
+- active task record: absent from `main`;
+- archive task record: present on `main`.
 
 ## Safety boundaries preserved
 
@@ -69,7 +80,9 @@ PRS-002G proves the commit-before-ack ambiguity. The current in-memory checkpoin
 - no SQL/KV completeness, checkpoint interval or measured RPO claim;
 - no PRS-003 outage state, PRS-004 fencing or PRS-006 reconciliation implementation.
 
-## Remaining PRS-002 gaps
+## Remaining parent-program gaps
+
+These are separate future packages, not unfinished PRS-002G work:
 
 - controlled process crash before a pending dirty generation is saved;
 - overloaded checkpoint queue behavior;
@@ -84,11 +97,12 @@ Revert feature merge `472971b618b905d9d5722eee9bee5dc0ae546504`. The test owns a
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-28T22:42:00+02:00
-head: 472971b618b905d9d5722eee9bee5dc0ae546504
-branch: dudantas/archive-prs-002g-commit-before-ack-crash-evidence
-pr: null
-status: complete
+updated_at: 2026-07-28T22:43:23+02:00
+head: 91d8d7d07f21971a29299057a4f0514cae33c587
+head_scope: final lifecycle archive merge on main; later record-only corrections do not alter PRS-002G implementation or validation evidence
+branch: main
+pr: 181
+status: completed
 context_routes:
   - production-resilience
   - player-persistence
@@ -96,32 +110,42 @@ context_routes:
   - integration-testing
   - agent-governance
 owned_paths:
-  - docs/agents/tasks/active/OTH-20260728-prs002g-commit-before-ack-crash-evidence.md
   - docs/agents/tasks/archive/OTH-20260728-prs002g-commit-before-ack-crash-evidence.md
 proven:
-  - Feature PR 180 merged at 472971b618b905d9d5722eee9bee5dc0ae546504.
-  - Issue 179 is closed as completed.
-  - Exact-head CI, Required and autofix passed.
-  - Linux debug full CTest proved committed SQL survives child exit before acknowledgement.
+  - Feature PR 180 changed exactly four owned paths and merged from exact head 86ec5475f0820ea13fc65b572f8d6de11ee88d29 as 472971b618b905d9d5722eee9bee5dc0ae546504.
+  - Exact-head CI 30395893383, Required 30395893226 and autofix 30395893053 passed.
+  - Linux debug full CTest proved committed SQL survives child exit before acknowledgement while a fresh persistence state is clean.
+  - Final feature audit found behind_by zero and no comments, reviews or review threads.
+  - Issue 179 closed as completed after the feature merge.
+  - Lifecycle PR 181 changed exactly the active/archive task pair, passed Required 30397354141 and merged as 91d8d7d07f21971a29299057a4f0514cae33c587.
+  - The active task record is absent from main and this archive record is present.
 derived:
   - A fresh process cannot reconstruct the lost in-memory dirty generation without future durable metadata or reconciliation.
+  - PRS-002G requires no further implementation, validation, merge or archive action.
 unknown:
-  - Queue-overload behavior and measured production RPO.
+  - Queue-overload behavior and measured production RPO remain parent-program gaps outside PRS-002G.
 conflicts: []
 first_failure: null
 rejected_hypotheses:
   - claim a complete SQL/KV checkpoint
   - claim automatic retry or measured RPO
+  - treat parent-program resilience gaps as unfinished PRS-002G scope
 changed_paths:
   - docs/agents/tasks/active/OTH-20260728-prs002g-commit-before-ack-crash-evidence.md
   - docs/agents/tasks/archive/OTH-20260728-prs002g-commit-before-ack-crash-evidence.md
 validation:
-  - command: feature exact-head validation
+  - command: feature exact-head CI, Required and autofix
     result: PASS
-    evidence: CI 559, Required 597 and autofix 480 succeeded on 86ec5475f0820ea13fc65b572f8d6de11ee88d29.
-  - command: feature merge and issue closure
+    evidence: Runs 30395893383, 30395893226 and 30395893053 succeeded on 86ec5475f0820ea13fc65b572f8d6de11ee88d29.
+  - command: feature final audit and expected-head merge
     result: PASS
-    evidence: PR 180 merged as 472971b618b905d9d5722eee9bee5dc0ae546504 and issue 179 closed.
+    evidence: Exactly four owned paths, behind_by zero, no discussion or review items, and squash merge 472971b618b905d9d5722eee9bee5dc0ae546504.
+  - command: lifecycle archive PR 181
+    result: PASS
+    evidence: Exactly the active/archive task pair changed; Required 30397354141 succeeded and squash merge produced 91d8d7d07f21971a29299057a4f0514cae33c587.
+  - command: final repository-state audit
+    result: PASS
+    evidence: Issue closed, feature and lifecycle PRs merged, active record absent and archive record present.
 blockers: []
-next_action: Merge the docs-only lifecycle archive after its exact-head Required check passes.
+next_action: No further action is required for PRS-002G; start any remaining parent-program gap only as a separately scoped task with a fresh preflight.
 ```
