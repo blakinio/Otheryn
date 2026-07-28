@@ -191,45 +191,81 @@ void SaveManager::scheduleDirtyPlayer(std::weak_ptr<Player> playerPtr, std::shar
 		return;
 	}
 
-	logger.debug("Scheduling player {} generation {} for saving.", playerToSave->getName(), *generation);
-	threadPool.detach_task([this, playerPtr, state = std::move(state), generation = *generation]() {
-		auto player = playerPtr.lock();
-		if (!player) {
-			state->acknowledgeFailure(generation);
-			logger.debug("Skipping save for player because player is no longer online.");
-			return;
+	const auto admission = tryAdmitPlayerCheckpoint(m_playerCheckpointQueueAdmission, *state, *generation);
+	if (admission.outcome == PlayerCheckpointQueueAdmissionOutcome::queueFull) {
+		if (!admission.checkpointReleased) {
+			logger.error("Failed to release player {} generation {} after checkpoint queue rejection.", playerToSave->getName(), *generation);
 		}
+		logger.warn(
+			"Rejecting player {} generation {} checkpoint because the bounded queue is full ({}/{}); the generation remains dirty and requires a later explicit schedule.",
+			playerToSave->getName(),
+			*generation,
+			m_playerCheckpointQueueAdmission.outstanding(),
+			m_playerCheckpointQueueAdmission.capacity()
+		);
+		return;
+	}
 
-		const auto attempt = executePlayerCheckpointAttempt(*state, generation, [this, &player] {
-			return doSavePlayer(player);
-		});
-
-		if (attempt.outcome == PlayerCheckpointAttemptOutcome::saved) {
-			if (!attempt.acknowledgementAccepted) {
-				logger.error("Failed to acknowledge player {} generation {} save success.", player->getName(), generation);
+	logger.debug("Scheduling player {} generation {} for saving.", playerToSave->getName(), *generation);
+	try {
+		threadPool.detach_task([this, playerPtr, state, generation = *generation]() {
+			PlayerCheckpointQueueSlot queueSlot(m_playerCheckpointQueueAdmission);
+			auto player = playerPtr.lock();
+			if (!player) {
+				state->acknowledgeFailure(generation);
+				logger.debug("Skipping save for player because player is no longer online.");
 				return;
 			}
 
-			if (attempt.followUpRequired && player->isOnline() && game.getGameState() != GAME_STATE_SHUTDOWN) {
-				scheduleDirtyPlayer(player, state);
-			}
-			return;
-		}
+			const auto attempt = executePlayerCheckpointAttempt(*state, generation, [this, &player] {
+				return doSavePlayer(player);
+			});
 
-		if (!attempt.acknowledgementAccepted) {
-			logger.error("Failed to acknowledge player {} generation {} save failure.", player->getName(), generation);
-		}
+			if (attempt.outcome == PlayerCheckpointAttemptOutcome::saved) {
+				if (!attempt.acknowledgementAccepted) {
+					logger.error("Failed to acknowledge player {} generation {} save success.", player->getName(), generation);
+					return;
+				}
 
-		if (attempt.outcome == PlayerCheckpointAttemptOutcome::saveThrew) {
-			try {
-				std::rethrow_exception(attempt.exception);
-			} catch (const std::exception &e) {
-				logger.error("Failed to save player {} generation {}: {}", player->getName(), generation, e.what());
-			} catch (...) {
-				logger.error("Failed to save player {} generation {} because of an unknown exception.", player->getName(), generation);
+				if (attempt.followUpRequired && player->isOnline() && game.getGameState() != GAME_STATE_SHUTDOWN) {
+					if (!queueSlot.release()) {
+						logger.error("Failed to release player {} generation {} checkpoint queue slot before follow-up.", player->getName(), generation);
+						return;
+					}
+					scheduleDirtyPlayer(player, state);
+				}
+				return;
 			}
+
+			if (!attempt.acknowledgementAccepted) {
+				logger.error("Failed to acknowledge player {} generation {} save failure.", player->getName(), generation);
+			}
+
+			if (attempt.outcome == PlayerCheckpointAttemptOutcome::saveThrew) {
+				try {
+					std::rethrow_exception(attempt.exception);
+				} catch (const std::exception &e) {
+					logger.error("Failed to save player {} generation {}: {}", player->getName(), generation, e.what());
+				} catch (...) {
+					logger.error("Failed to save player {} generation {} because of an unknown exception.", player->getName(), generation);
+				}
+			}
+		});
+	} catch (const std::exception &e) {
+		const bool queueReleased = m_playerCheckpointQueueAdmission.release();
+		const bool checkpointReleased = state->abandonCheckpoint(*generation);
+		if (!queueReleased || !checkpointReleased) {
+			logger.error("Failed to fully roll back player {} generation {} checkpoint admission after scheduling exception.", playerToSave->getName(), *generation);
 		}
-	});
+		logger.error("Failed to schedule player {} generation {} checkpoint: {}", playerToSave->getName(), *generation, e.what());
+	} catch (...) {
+		const bool queueReleased = m_playerCheckpointQueueAdmission.release();
+		const bool checkpointReleased = state->abandonCheckpoint(*generation);
+		if (!queueReleased || !checkpointReleased) {
+			logger.error("Failed to fully roll back player {} generation {} checkpoint admission after unknown scheduling exception.", playerToSave->getName(), *generation);
+		}
+		logger.error("Failed to schedule player {} generation {} checkpoint because of an unknown exception.", playerToSave->getName(), *generation);
+	}
 }
 
 bool SaveManager::doSavePlayer(std::shared_ptr<Player> player) {
