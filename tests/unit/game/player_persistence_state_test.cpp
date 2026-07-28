@@ -70,6 +70,43 @@ TEST(PlayerPersistenceStateTest, FailedSavePreservesDirtyGenerationAndConsumesRe
 	EXPECT_FALSE(state.beginCheckpoint(2).has_value());
 }
 
+TEST(PlayerPersistenceStateTest, AbandonedCheckpointPreservesDirtyStateWithoutConsumingFailureBudget) {
+	PlayerPersistenceState state;
+
+	(void)state.markDirty();
+	const auto generation = state.beginCheckpoint();
+	ASSERT_EQ(generation, 1U);
+
+	EXPECT_TRUE(state.abandonCheckpoint(*generation));
+	EXPECT_TRUE(state.isDirty());
+	EXPECT_FALSE(state.hasCheckpointInFlight());
+	EXPECT_EQ(state.acknowledgedGeneration(), 0U);
+	EXPECT_EQ(state.consecutiveFailures(), 0U);
+
+	const auto retry = state.beginCheckpoint();
+	ASSERT_EQ(retry, 1U);
+	EXPECT_TRUE(state.acknowledgeSuccess(*retry));
+	EXPECT_FALSE(state.isDirty());
+}
+
+TEST(PlayerPersistenceStateTest, RejectsStaleAbandonmentAndPreservesExactCheckpointOwner) {
+	PlayerPersistenceState state;
+
+	(void)state.markDirty();
+	const auto first = state.beginCheckpoint();
+	ASSERT_EQ(first, 1U);
+	EXPECT_EQ(state.markDirty(), 2U);
+
+	EXPECT_FALSE(state.abandonCheckpoint(2));
+	EXPECT_EQ(state.inFlightGeneration(), first);
+	EXPECT_TRUE(state.abandonCheckpoint(*first));
+	EXPECT_TRUE(state.isDirty());
+	EXPECT_EQ(state.consecutiveFailures(), 0U);
+
+	const auto second = state.beginCheckpoint();
+	ASSERT_EQ(second, 2U);
+}
+
 TEST(PlayerPersistenceStateTest, SuccessfulExplicitAttemptResetsFailureBudget) {
 	PlayerPersistenceState state;
 

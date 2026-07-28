@@ -92,7 +92,13 @@ This is SQL/KV boundary evidence, not generic reconciliation or an end-to-end wh
 
 The bounded PRS-002G package uses a GoogleTest threadsafe death-test child with a fresh disposable-MariaDB connection. The child starts one dirty checkpoint generation, enters `executePlayerCheckpointAttempt`, commits a dedicated InnoDB probe update and calls `std::_Exit` from inside the save callback before the helper can invoke success acknowledgement. The surviving parent observes the committed value, while a newly constructed `PlayerPersistenceState` starts clean with no dirty, in-flight or acknowledged generation.
 
-This proves the commit-before-ack process window and its ambiguity: durable SQL can survive while the dirty-generation ownership dies with the process. It does not prove a complete player SQL/KV checkpoint, automatic retry, durable checkpoint metadata, restart reconciliation or any measured RPO. Queue-overload behavior and operational metrics remain separate bounded packages.
+This proves the commit-before-ack process window and its ambiguity: durable SQL can survive while the dirty-generation ownership dies with the process. It does not prove a complete player SQL/KV checkpoint, automatic retry, durable checkpoint metadata, restart reconciliation or any measured RPO.
+
+### Implemented bounded PRS-002H behavior
+
+The bounded PRS-002H package adds an atomic admission counter around asynchronous player checkpoint submissions, with a named default runtime capacity of `1024` and smaller injectable capacities for deterministic tests. `SaveManager` acquires one slot before detaching work to the shared thread pool. A full queue abandons only the matching in-flight generation, preserves dirty state, consumes no save-failure budget and requires a later explicit scheduling request. Every admitted task releases its slot on exit, and a successful attempt releases the current slot before scheduling a newer dirty generation so capacity `1` remains live.
+
+This bounds only asynchronous player-checkpoint admission; it does not bound unrelated users of the shared thread pool. The local capacity/outstanding accessors support deterministic proof, while Prometheus/ostream export, oldest-dirty-age tracking, attempt/failure counters, alerts, automatic retry and measured RPO remain separate work.
 
 ## Explicit non-goals
 

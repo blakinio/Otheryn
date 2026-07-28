@@ -3,8 +3,11 @@
 #include "game/scheduling/player_checkpoint_attempt.hpp"
 
 #ifndef USE_PRECOMPILED_HEADERS
+	#include <atomic>
 	#include <future>
 	#include <stdexcept>
+	#include <thread>
+	#include <vector>
 #endif
 
 TEST(PlayerCheckpointAttemptTest, FailedAttemptPreservesDirtyStateAndRequestsNoFollowUp) {
@@ -129,4 +132,108 @@ TEST(PlayerCheckpointAttemptTest, FailingPlayerDoesNotBlockIndependentSuccess) {
 	EXPECT_EQ(failingResult.outcome, PlayerCheckpointAttemptOutcome::saveFailed);
 	EXPECT_TRUE(failingResult.acknowledgementAccepted);
 	EXPECT_TRUE(failingState.isDirty());
+}
+
+TEST(PlayerCheckpointQueueAdmissionTest, QueueFullReleasesCheckpointWithoutConsumingFailureBudget) {
+	PlayerCheckpointQueueAdmission admission(1);
+	ASSERT_EQ(admission.capacity(), 1U);
+	ASSERT_TRUE(admission.tryAcquire());
+	ASSERT_EQ(admission.outstanding(), 1U);
+
+	PlayerPersistenceState state;
+	(void)state.markDirty();
+	const auto generation = state.beginCheckpoint();
+	ASSERT_EQ(generation, 1U);
+
+	const auto rejected = tryAdmitPlayerCheckpoint(admission, state, *generation);
+
+	EXPECT_EQ(rejected.outcome, PlayerCheckpointQueueAdmissionOutcome::queueFull);
+	EXPECT_TRUE(rejected.checkpointReleased);
+	EXPECT_EQ(admission.outstanding(), 1U);
+	EXPECT_TRUE(state.isDirty());
+	EXPECT_FALSE(state.hasCheckpointInFlight());
+	EXPECT_EQ(state.consecutiveFailures(), 0U);
+
+	ASSERT_TRUE(admission.release());
+	const auto retryGeneration = state.beginCheckpoint();
+	ASSERT_EQ(retryGeneration, 1U);
+	const auto admitted = tryAdmitPlayerCheckpoint(admission, state, *retryGeneration);
+	ASSERT_EQ(admitted.outcome, PlayerCheckpointQueueAdmissionOutcome::admitted);
+	EXPECT_FALSE(admitted.checkpointReleased);
+
+	{
+		PlayerCheckpointQueueSlot slot(admission);
+		const auto retry = executePlayerCheckpointAttempt(state, *retryGeneration, [] { return true; });
+		EXPECT_EQ(retry.outcome, PlayerCheckpointAttemptOutcome::saved);
+		EXPECT_TRUE(retry.acknowledgementAccepted);
+		EXPECT_FALSE(retry.followUpRequired);
+	}
+
+	EXPECT_EQ(admission.outstanding(), 0U);
+	EXPECT_FALSE(state.isDirty());
+}
+
+TEST(PlayerCheckpointQueueAdmissionTest, ConcurrentAdmissionNeverExceedsCapacity) {
+	constexpr uint32_t capacity = 3;
+	constexpr uint32_t workerCount = 32;
+	PlayerCheckpointQueueAdmission admission(capacity);
+	std::atomic<uint32_t> admitted = 0;
+	std::vector<std::thread> workers;
+	workers.reserve(workerCount);
+
+	for (uint32_t index = 0; index < workerCount; ++index) {
+		workers.emplace_back([&] {
+			if (admission.tryAcquire()) {
+				admitted.fetch_add(1, std::memory_order_relaxed);
+			}
+		});
+	}
+	for (auto &worker : workers) {
+		worker.join();
+	}
+
+	EXPECT_EQ(admitted.load(std::memory_order_relaxed), capacity);
+	EXPECT_EQ(admission.outstanding(), capacity);
+	EXPECT_FALSE(admission.tryAcquire());
+	for (uint32_t index = 0; index < capacity; ++index) {
+		EXPECT_TRUE(admission.release());
+	}
+	EXPECT_FALSE(admission.release());
+	EXPECT_EQ(admission.outstanding(), 0U);
+}
+
+TEST(PlayerCheckpointQueueAdmissionTest, ReleasingCurrentSlotBeforeFollowUpAllowsCapacityOneProgress) {
+	PlayerCheckpointQueueAdmission admission(1);
+	PlayerPersistenceState state;
+	(void)state.markDirty();
+	const auto firstGeneration = state.beginCheckpoint();
+	ASSERT_EQ(firstGeneration, 1U);
+	ASSERT_EQ(
+		tryAdmitPlayerCheckpoint(admission, state, *firstGeneration).outcome,
+		PlayerCheckpointQueueAdmissionOutcome::admitted
+	);
+	PlayerCheckpointQueueSlot firstSlot(admission);
+
+	EXPECT_EQ(state.markDirty(), 2U);
+	const auto firstAttempt = executePlayerCheckpointAttempt(state, *firstGeneration, [] { return true; });
+	ASSERT_TRUE(firstAttempt.acknowledgementAccepted);
+	ASSERT_TRUE(firstAttempt.followUpRequired);
+	ASSERT_TRUE(firstSlot.release());
+	EXPECT_EQ(admission.outstanding(), 0U);
+
+	const auto followUpGeneration = state.beginCheckpoint();
+	ASSERT_EQ(followUpGeneration, 2U);
+	ASSERT_EQ(
+		tryAdmitPlayerCheckpoint(admission, state, *followUpGeneration).outcome,
+		PlayerCheckpointQueueAdmissionOutcome::admitted
+	);
+	{
+		PlayerCheckpointQueueSlot followUpSlot(admission);
+		const auto followUpAttempt = executePlayerCheckpointAttempt(state, *followUpGeneration, [] { return true; });
+		EXPECT_TRUE(followUpAttempt.acknowledgementAccepted);
+		EXPECT_FALSE(followUpAttempt.followUpRequired);
+	}
+
+	EXPECT_EQ(admission.outstanding(), 0U);
+	EXPECT_FALSE(state.isDirty());
 }

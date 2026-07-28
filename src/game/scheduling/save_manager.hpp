@@ -10,7 +10,7 @@
 #pragma once
 
 #include "lib/thread/thread_pool.hpp"
-#include "game/scheduling/player_persistence_state.hpp"
+#include "game/scheduling/player_checkpoint_attempt.hpp"
 
 #ifndef USE_PRECOMPILED_HEADERS
 	#include <map>
@@ -63,8 +63,8 @@ private:
 	 * can point at a later session for the same character, while the save must
 	 * target the object that requested it or skip if that object is gone.
 	 */
-	void schedulePlayer(std::weak_ptr<Player> player);
-	void scheduleDirtyPlayer(std::weak_ptr<Player> player, std::shared_ptr<PlayerPersistenceState> state);
+	bool schedulePlayer(std::weak_ptr<Player> player);
+	bool scheduleDirtyPlayer(std::weak_ptr<Player> player, std::shared_ptr<PlayerPersistenceState> state);
 	static std::shared_ptr<PlayerPersistenceState> persistenceStateFor(const std::shared_ptr<Player> &player);
 
 	/**
@@ -78,6 +78,7 @@ private:
 	std::atomic<std::chrono::steady_clock::time_point> m_scheduledAt;
 	inline static std::mutex m_playerPersistenceMutex;
 	inline static std::map<std::weak_ptr<Player>, std::shared_ptr<PlayerPersistenceState>, std::owner_less<std::weak_ptr<Player>>> m_playerPersistenceStates;
+	PlayerCheckpointQueueAdmission m_playerCheckpointQueueAdmission;
 
 	ThreadPool &threadPool;
 	KVStore &kv;
