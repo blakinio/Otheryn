@@ -7,7 +7,7 @@ start_sha: d46e39d6f28557b85f6f4c7e78dc707bb287b77f
 created: 2026-07-28
 updated: 2026-07-28
 related_issue: "179"
-related_pr: null
+related_pr: "180"
 owned_paths:
   - tests/integration/database/CMakeLists.txt
   - tests/integration/database/player_checkpoint_commit_before_ack_crash_it.cpp
@@ -69,10 +69,10 @@ Delete the integration test, its CMake registration, the bounded contract note a
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-28T22:25:00+02:00
-head: eacfe4ceae9361b912ec3eb6ac112cb03b9ee6e0
+updated_at: 2026-07-28T22:21:00+02:00
+head: aeb8fc10943fb39b9f5085d403bddaf8a2defdb8
 branch: dudantas/prs-002g-commit-before-ack-crash-evidence
-pr: null
+pr: 180
 status: validating
 context_routes:
   - production-resilience
@@ -115,7 +115,7 @@ validation:
     evidence: Dedicated InnoDB table, threadsafe child, explicit post-commit exit codes, parent durability query and fresh-state assertions are present.
   - command: exact-head repository CI
     result: NOT_RUN
-    evidence: Feature PR must run CI, Required and autofix on the final head.
+    evidence: PR 180 must complete CI, Required and autofix on its final head.
 blockers: []
-next_action: Open the bounded feature PR and inspect exact-head CI for concrete compile, death-test or formatting failures.
+next_action: Inspect PR 180 exact-head CI and fix only concrete compile, death-test or formatting failures.
 ```
