@@ -85,6 +85,32 @@ TEST(Prs002DirtyPlayerCheckpointContractTest, FailedAttemptHasNoImplicitFollowUp
 	EXPECT_LT(followUp, failureBranch);
 }
 
+TEST(Prs002DirtyPlayerCheckpointContractTest, BoundsQueueAdmissionBeforeDetachAndReleasesBeforeFollowUp) {
+	const auto attempt = readSource("src/game/scheduling/player_checkpoint_attempt.hpp");
+	expectContains(attempt, "DEFAULT_PLAYER_CHECKPOINT_QUEUE_CAPACITY = 1024");
+	expectContains(attempt, "class PlayerCheckpointQueueAdmission final");
+	expectContains(attempt, "state.abandonCheckpoint(generation)");
+
+	const auto header = readSource("src/game/scheduling/save_manager.hpp");
+	expectContains(header, "PlayerCheckpointQueueAdmission m_playerCheckpointQueueAdmission;");
+
+	const auto source = readSource("src/game/scheduling/save_manager.cpp");
+	const auto scheduleDirty = functionBody(source, "void SaveManager::scheduleDirtyPlayer", "bool SaveManager::doSavePlayer");
+	const auto admission = scheduleDirty.find("tryAdmitPlayerCheckpoint");
+	const auto queueFull = scheduleDirty.find("PlayerCheckpointQueueAdmissionOutcome::queueFull");
+	const auto detach = scheduleDirty.find("threadPool.detach_task");
+	const auto earlyRelease = scheduleDirty.find("queueSlot.release()");
+	const auto followUp = scheduleDirty.find("scheduleDirtyPlayer(player, state);");
+	ASSERT_NE(admission, std::string_view::npos);
+	ASSERT_NE(queueFull, std::string_view::npos);
+	ASSERT_NE(detach, std::string_view::npos);
+	ASSERT_NE(earlyRelease, std::string_view::npos);
+	ASSERT_NE(followUp, std::string_view::npos);
+	EXPECT_LT(admission, queueFull);
+	EXPECT_LT(queueFull, detach);
+	EXPECT_LT(earlyRelease, followUp);
+}
+
 TEST(Prs002DirtyPlayerCheckpointContractTest, MarksOnlyTrackedPlayerStorageMutations) {
 	const auto managerHeader = readSource("src/game/scheduling/save_manager.hpp");
 	const auto marker = functionBody(managerHeader, "static void markPlayerDirty", "private:");
@@ -142,4 +168,5 @@ TEST(Prs002DirtyPlayerCheckpointContractTest, RecordsGenerationSafeTargetAndBoun
 	expectContains(contract, "Session/revision fencing remains PRS-004");
 	expectContains(contract, "Slice C — bounded mutation coverage");
 	expectContains(contract, "bounded PRS-002D evidence");
+	expectContains(contract, "bounded PRS-002H behavior");
 }
