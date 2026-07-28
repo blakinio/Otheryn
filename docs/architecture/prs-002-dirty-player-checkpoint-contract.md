@@ -86,7 +86,13 @@ The bounded PRS-002E package uses the disposable integration-test MariaDB instan
 
 The bounded PRS-002F package uses a standalone `KVSQL` in the disposable integration database. A dedicated SQL-domain probe commits first, then the test temporarily renames `kv_store` so the real KV batch transaction fails. The probe remains committed while the dedicated KV key is absent, and routing the combined result through the checkpoint-attempt boundary leaves the generation dirty with no implicit follow-up. Restoring `kv_store` and issuing one later explicit generation persists the still-staged key and clears the checkpoint state.
 
-This is SQL/KV boundary evidence, not generic reconciliation or an end-to-end wheel serialization drill. Commit-before-ack process-crash proof, queue-overload behavior, operational metrics and any measured RPO remain separate bounded packages.
+This is SQL/KV boundary evidence, not generic reconciliation or an end-to-end wheel serialization drill.
+
+### Implemented bounded PRS-002G evidence
+
+The bounded PRS-002G package uses a GoogleTest threadsafe death-test child with a fresh disposable-MariaDB connection. The child starts one dirty checkpoint generation, enters `executePlayerCheckpointAttempt`, commits a dedicated InnoDB probe update and calls `std::_Exit` from inside the save callback before the helper can invoke success acknowledgement. The surviving parent observes the committed value, while a newly constructed `PlayerPersistenceState` starts clean with no dirty, in-flight or acknowledged generation.
+
+This proves the commit-before-ack process window and its ambiguity: durable SQL can survive while the dirty-generation ownership dies with the process. It does not prove a complete player SQL/KV checkpoint, automatic retry, durable checkpoint metadata, restart reconciliation or any measured RPO. Queue-overload behavior and operational metrics remain separate bounded packages.
 
 ## Explicit non-goals
 
