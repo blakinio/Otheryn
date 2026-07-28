@@ -37,8 +37,8 @@ namespace {
 
 TEST(Prs002DirtyPlayerCheckpointContractTest, PinsScheduledSaveToRequestedPlayerObject) {
 	const auto header = readSource("src/game/scheduling/save_manager.hpp");
-	expectContains(header, "void schedulePlayer(std::weak_ptr<Player> player);");
-	expectContains(header, "void scheduleDirtyPlayer(std::weak_ptr<Player> player, std::shared_ptr<PlayerPersistenceState> state);");
+	expectContains(header, "bool schedulePlayer(std::weak_ptr<Player> player);");
+	expectContains(header, "bool scheduleDirtyPlayer(std::weak_ptr<Player> player, std::shared_ptr<PlayerPersistenceState> state);");
 	expectContains(header, "std::owner_less<std::weak_ptr<Player>>");
 	expectContains(header, "GUID or player runtime ID re-resolution");
 	expectContains(header, "target the object that requested it");
@@ -63,7 +63,7 @@ TEST(Prs002DirtyPlayerCheckpointContractTest, AcknowledgesExactGenerationAndCoal
 	expectContains(source, "scheduleDirtyPlayer(player, state);");
 	expectContains(source, "Coalescing player save because a checkpoint is already in flight");
 
-	const auto scheduleDirty = functionBody(source, "void SaveManager::scheduleDirtyPlayer", "bool SaveManager::doSavePlayer");
+	const auto scheduleDirty = functionBody(source, "bool SaveManager::scheduleDirtyPlayer", "bool SaveManager::doSavePlayer");
 	EXPECT_EQ(scheduleDirty.find("markDirty"), std::string_view::npos);
 }
 
@@ -74,7 +74,7 @@ TEST(Prs002DirtyPlayerCheckpointContractTest, FailedAttemptHasNoImplicitFollowUp
 	expectContains(attempt, "state.acknowledgeFailure(generation)");
 
 	const auto source = readSource("src/game/scheduling/save_manager.cpp");
-	const auto scheduleDirty = functionBody(source, "void SaveManager::scheduleDirtyPlayer", "bool SaveManager::doSavePlayer");
+	const auto scheduleDirty = functionBody(source, "bool SaveManager::scheduleDirtyPlayer", "bool SaveManager::doSavePlayer");
 	const auto successBranch = scheduleDirty.find("if (attempt.outcome == PlayerCheckpointAttemptOutcome::saved)");
 	const auto followUp = scheduleDirty.find("if (attempt.followUpRequired");
 	const auto failureBranch = scheduleDirty.find("if (!attempt.acknowledgementAccepted)", followUp);
@@ -95,7 +95,7 @@ TEST(Prs002DirtyPlayerCheckpointContractTest, BoundsQueueAdmissionBeforeDetachAn
 	expectContains(header, "PlayerCheckpointQueueAdmission m_playerCheckpointQueueAdmission;");
 
 	const auto source = readSource("src/game/scheduling/save_manager.cpp");
-	const auto scheduleDirty = functionBody(source, "void SaveManager::scheduleDirtyPlayer", "bool SaveManager::doSavePlayer");
+	const auto scheduleDirty = functionBody(source, "bool SaveManager::scheduleDirtyPlayer", "bool SaveManager::doSavePlayer");
 	const auto admission = scheduleDirty.find("tryAdmitPlayerCheckpoint");
 	const auto queueFull = scheduleDirty.find("PlayerCheckpointQueueAdmissionOutcome::queueFull");
 	const auto detach = scheduleDirty.find("threadPool.detach_task");
@@ -109,6 +109,9 @@ TEST(Prs002DirtyPlayerCheckpointContractTest, BoundsQueueAdmissionBeforeDetachAn
 	EXPECT_LT(admission, queueFull);
 	EXPECT_LT(queueFull, detach);
 	EXPECT_LT(earlyRelease, followUp);
+
+	const auto savePlayer = functionBody(source, "bool SaveManager::savePlayer", "bool SaveManager::saveGuild");
+	expectContains(std::string(savePlayer), "return schedulePlayer(player);");
 }
 
 TEST(Prs002DirtyPlayerCheckpointContractTest, MarksOnlyTrackedPlayerStorageMutations) {
@@ -142,7 +145,7 @@ TEST(Prs002DirtyPlayerCheckpointContractTest, PreservesSaveOutcomeAndDomainBound
 	expectContains(manager, "Player::PlayerLock lock(player);");
 	expectContains(manager, "bool saveSuccess = IOLoginData::savePlayer(player);");
 	expectContains(manager, "return saveSuccess;");
-	expectContains(manager, "schedulePlayer(player);");
+	expectContains(manager, "return schedulePlayer(player);");
 	expectContains(manager, "return doSavePlayer(player);");
 
 	const auto loginData = readSource("src/io/iologindata.cpp");
