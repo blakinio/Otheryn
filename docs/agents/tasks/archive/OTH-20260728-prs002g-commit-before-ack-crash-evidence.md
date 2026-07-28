@@ -102,7 +102,7 @@ head: 91d8d7d07f21971a29299057a4f0514cae33c587
 head_scope: final lifecycle archive merge on main; later record-only corrections do not alter PRS-002G implementation or validation evidence
 branch: main
 pr: 181
-status: completed
+status: ready
 context_routes:
   - production-resilience
   - player-persistence
@@ -125,7 +125,9 @@ derived:
 unknown:
   - Queue-overload behavior and measured production RPO remain parent-program gaps outside PRS-002G.
 conflicts: []
-first_failure: null
+first_failure:
+  marker: no failing exact-head validation
+  evidence: Feature CI, Required, autofix and lifecycle Required all completed successfully on their exact heads.
 rejected_hypotheses:
   - claim a complete SQL/KV checkpoint
   - claim automatic retry or measured RPO
