@@ -1,6 +1,6 @@
 ---
 task_id: OTH-20260728-prs002g-commit-before-ack-crash-evidence
-status: active
+status: review
 branch: dudantas/prs-002g-commit-before-ack-crash-evidence
 base_branch: main
 start_sha: d46e39d6f28557b85f6f4c7e78dc707bb287b77f
@@ -69,11 +69,11 @@ Delete the integration test, its CMake registration, the bounded contract note a
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-28T22:20:00+02:00
-head: d46e39d6f28557b85f6f4c7e78dc707bb287b77f
+updated_at: 2026-07-28T22:25:00+02:00
+head: eacfe4ceae9361b912ec3eb6ac112cb03b9ee6e0
 branch: dudantas/prs-002g-commit-before-ack-crash-evidence
 pr: null
-status: implementing
+status: validating
 context_routes:
   - production-resilience
   - player-persistence
@@ -89,7 +89,8 @@ proven:
   - PRS-002E and PRS-002F are merged and lifecycle-archived.
   - The save callback runs before checkpoint success acknowledgement.
   - PlayerPersistenceState generations are memory-only.
-  - The integration database is disposable and tests run serially.
+  - The death-test source exits inside the save callback only after DBTransaction reports commit success.
+  - The parent asserts durable value 200 and a fresh clean persistence state.
 derived:
   - A threadsafe death test is the smallest cross-platform fresh-process crash injection without production hooks.
 unknown:
@@ -102,10 +103,19 @@ rejected_hypotheses:
   - claim automatic retry or measured RPO
 changed_paths:
   - docs/agents/tasks/active/OTH-20260728-prs002g-commit-before-ack-crash-evidence.md
+  - docs/architecture/prs-002-dirty-player-checkpoint-contract.md
+  - tests/integration/database/CMakeLists.txt
+  - tests/integration/database/player_checkpoint_commit_before_ack_crash_it.cpp
 validation:
-  - command: governance and source preflight
+  - command: governance and conflict preflight
     result: PASS
-    evidence: Current main d46e39d6f28557b85f6f4c7e78dc707bb287b77f; no open PR owns the selected paths.
+    evidence: Task started from main d46e39d6f28557b85f6f4c7e78dc707bb287b77f; no open PR owns the selected paths.
+  - command: deterministic source audit
+    result: PASS
+    evidence: Dedicated InnoDB table, threadsafe child, explicit post-commit exit codes, parent durability query and fresh-state assertions are present.
+  - command: exact-head repository CI
+    result: NOT_RUN
+    evidence: Feature PR must run CI, Required and autofix on the final head.
 blockers: []
-next_action: Add the focused death-test integration source, CMake registration and bounded architecture evidence.
+next_action: Open the bounded feature PR and inspect exact-head CI for concrete compile, death-test or formatting failures.
 ```
