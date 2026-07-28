@@ -56,6 +56,16 @@ public:
 		return inFlightGeneration_;
 	}
 
+	bool abandonCheckpoint(Generation generation) {
+		std::lock_guard lock(mutex_);
+		if (!matchesInFlightLocked(generation)) {
+			return false;
+		}
+
+		inFlightGeneration_.reset();
+		return true;
+	}
+
 	bool acknowledgeSuccess(Generation generation) {
 		std::lock_guard lock(mutex_);
 		if (!matchesInFlightLocked(generation)) {
