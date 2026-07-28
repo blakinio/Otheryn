@@ -63,8 +63,8 @@ private:
 	 * can point at a later session for the same character, while the save must
 	 * target the object that requested it or skip if that object is gone.
 	 */
-	void schedulePlayer(std::weak_ptr<Player> player);
-	void scheduleDirtyPlayer(std::weak_ptr<Player> player, std::shared_ptr<PlayerPersistenceState> state);
+	bool schedulePlayer(std::weak_ptr<Player> player);
+	bool scheduleDirtyPlayer(std::weak_ptr<Player> player, std::shared_ptr<PlayerPersistenceState> state);
 	static std::shared_ptr<PlayerPersistenceState> persistenceStateFor(const std::shared_ptr<Player> &player);
 
 	/**
