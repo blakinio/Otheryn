@@ -48,6 +48,7 @@
 #include "lua/modules/modules.hpp"
 #include "server/network/connection/connection.hpp"
 #include "server/network/message/outputmessage.hpp"
+#include "server/network/protocol/database_outage_protocol_admission.hpp"
 #include "server/network/protocol/protocol_port_utils.hpp"
 #include "server/network/protocol/transport_codec.hpp"
 #include "utils/tools.hpp"
@@ -514,6 +515,18 @@ namespace {
 		}
 	}
 
+	[[nodiscard]] std::string getDatabaseOutageAdmissionMessage(const DatabaseOutageProtocolAdmissionResult &admission) {
+		if (admission.decision.reason == DatabaseOutageAdmissionReason::LifecycleClosed) {
+			auto maintainMessage = g_configManager().getString(MAINTAIN_MODE_MESSAGE);
+			if (!maintainMessage.empty()) {
+				return maintainMessage;
+			}
+			return std::string(DatabaseOutageProtocolAdmission::ClosedMessage);
+		}
+
+		return std::string(admission.message);
+	}
+
 	[[nodiscard]] bool usesLegacyInnerLength(const ProtocolProfile* profile) {
 		return profile
 			&& ProtocolProfileRegistry::getTransportProfile(profile->initialBehavior.transport).encryptedPayload == EncryptedPayloadLayout::LegacyInnerLength;
@@ -915,6 +928,12 @@ void ProtocolGame::login(const std::string &name, uint32_t accountId, OperatingS
 
 	g_logger().debug("Player logging in in version '{}' and oldProtocol '{}'", getVersion(), oldProtocol);
 
+	const auto gameAdmission = DatabaseOutageProtocolAdmission::evaluateGameLogin(g_game().getGameState());
+	if (gameAdmission.rejected()) {
+		disconnectClient(getDatabaseOutageAdmissionMessage(gameAdmission));
+		return;
+	}
+
 	// dispatcher thread
 	std::shared_ptr<Player> foundPlayer = g_game().getPlayerByName(name);
 	if (!foundPlayer) {
@@ -1048,6 +1067,14 @@ void ProtocolGame::login(const std::string &name, uint32_t accountId, OperatingS
 		}
 
 		if (foundPlayer->client) {
+			const auto handoffAdmission = DatabaseOutageProtocolAdmission::evaluateChannelHandoff(
+				g_game().getGameState(), foundPlayer->hasFlag(PlayerFlags_t::CanAlwaysLogin)
+			);
+			if (handoffAdmission.rejected()) {
+				disconnectClient(getDatabaseOutageAdmissionMessage(handoffAdmission));
+				return;
+			}
+
 			foundPlayer->disconnect();
 			foundPlayer->isConnecting = true;
 
@@ -1079,6 +1106,15 @@ void ProtocolGame::connect(const std::string &playerName, OperatingSystem_t oper
 	if (isConnectionExpired()) {
 		// ProtocolGame::release() has been called at this point and the Connection object
 		// no longer exists, so we return to prevent leakage of the Player.
+		return;
+	}
+
+	const auto handoffAdmission = DatabaseOutageProtocolAdmission::evaluateChannelHandoff(
+		g_game().getGameState(), foundPlayer->hasFlag(PlayerFlags_t::CanAlwaysLogin)
+	);
+	if (handoffAdmission.rejected()) {
+		foundPlayer->isConnecting = false;
+		disconnectClient(getDatabaseOutageAdmissionMessage(handoffAdmission));
 		return;
 	}
 
@@ -1314,6 +1350,14 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage &msg) {
 	const auto &onlinePlayer = g_game().getPlayerByName(characterName);
 	const auto &foundPlayer = !onlinePlayer ? g_game().getDeadPlayer(characterName) : onlinePlayer;
 	if (foundPlayer && foundPlayer->client && accountDescriptor != "@livestream") {
+		const auto handoffAdmission = DatabaseOutageProtocolAdmission::evaluateChannelHandoff(
+			g_game().getGameState(), foundPlayer->hasFlag(PlayerFlags_t::CanAlwaysLogin)
+		);
+		if (handoffAdmission.rejected()) {
+			disconnectClient(getDatabaseOutageAdmissionMessage(handoffAdmission));
+			return;
+		}
+
 		if (foundPlayer->isDead()) {
 			disconnectClient("You are already logged in.");
 			return;
@@ -1364,6 +1408,12 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage &msg) {
 
 	if (g_game().getGameState() == GAME_STATE_MAINTAIN) {
 		disconnectClient("Gameworld is under maintenance. Please re-connect in a while.");
+		return;
+	}
+
+	const auto gameAdmission = DatabaseOutageProtocolAdmission::evaluateGameLogin(g_game().getGameState());
+	if (gameAdmission.rejected()) {
+		disconnectClient(getDatabaseOutageAdmissionMessage(gameAdmission));
 		return;
 	}
 

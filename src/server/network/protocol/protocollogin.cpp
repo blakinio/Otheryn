@@ -13,6 +13,7 @@
 #include "security/login_session_manager.hpp"
 #include "server/network/message/outputmessage.hpp"
 #include "server/network/protocol/login_protocol_wire.hpp"
+#include "server/network/protocol/database_outage_protocol_admission.hpp"
 #include "server/network/protocol/protocol_port_utils.hpp"
 #include "server/network/protocol/protocol_session_hint.hpp"
 #include "server/network/protocol/transport_codec.hpp"
@@ -256,6 +257,12 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage &msg) {
 
 	if (g_game().getGameState() == GAME_STATE_MAINTAIN) {
 		disconnectClient("Gameworld is under maintenance.\nPlease re-connect in a while.");
+		return;
+	}
+
+	const auto outageAdmission = DatabaseOutageProtocolAdmission::evaluateAccountLogin(g_game().getGameState());
+	if (outageAdmission.rejected()) {
+		disconnectClient(std::string(outageAdmission.message));
 		return;
 	}
 
