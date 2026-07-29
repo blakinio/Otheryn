@@ -1,0 +1,41 @@
+name: PRS-003C branch patch
+
+on:
+  push:
+    branches:
+      - dudantas/prs-003c-live-protocol-wiring
+
+permissions:
+  contents: write
+
+jobs:
+  apply-patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: dudantas/prs-003c-live-protocol-wiring
+          fetch-depth: 0
+
+      - name: Apply exact protocol patch
+        run: |
+          git apply --check tools/agents/patches/prs003c-live-protocol-wiring.patch
+          git apply tools/agents/patches/prs003c-live-protocol-wiring.patch
+
+      - name: Remove branch-only patch machinery
+        run: |
+          rm tools/agents/patches/prs003c-live-protocol-wiring.patch
+          rm .github/workflows/prs003c-branch-patch.yml
+
+      - name: Commit patched protocol call sites
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/server/network/protocol/protocollogin.cpp \
+                  src/server/network/protocol/protocolgame.cpp \
+                  tools/agents/patches/prs003c-live-protocol-wiring.patch \
+                  .github/workflows/prs003c-branch-patch.yml
+          git commit -m "feat(resilience): wire outage admission into live protocols"
+          git push origin HEAD:dudantas/prs-003c-live-protocol-wiring
