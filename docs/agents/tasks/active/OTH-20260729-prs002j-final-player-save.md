@@ -7,7 +7,7 @@ start_sha: 8fb339146897a3b9695f0788a63d6df199a253a4
 created: 2026-07-29
 updated: 2026-07-29
 related_issue: "191"
-related_pr: null
+related_pr: "192"
 owned_paths:
   - src/game/scheduling/player_persistence_state.hpp
   - src/game/scheduling/save_manager.hpp
@@ -87,11 +87,11 @@ Revert this bounded feature merge. No schema, database data, KV data, credential
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-29T09:18:00+02:00
-head: da5bf10d6999ff2ed91341f383871ad0a234d660
-head_scope: implementation before PR-link checkpoint commit
+updated_at: 2026-07-29T09:26:00+02:00
+head: f4e06afd1825057383897bc668993bc84205d571
+head_scope: implementation plus pre-PR checkpoint
 branch: dudantas/prs-002j-final-player-save
-pr: null
+pr: 192
 status: validating
 context_routes:
   - production-resilience
@@ -114,7 +114,7 @@ proven:
   - Logout and forced shutdown removal converge on Player::onRemoveCreature with isLogout true.
   - Player::onRemoveCreature updates loginPosition and lastLogout before calling SaveManager::savePlayer.
   - Shutdown removes players before saveAll, so the removal callback is the per-player shutdown final-save boundary.
-  - The implementation changes exactly seven declared paths and is behind main by zero.
+  - PR 192 changes exactly seven declared paths and is behind main by zero.
   - Final ownership waits on a condition variable and never steals or acknowledges an older owner.
   - The final save is synchronous, exact-owner, limited to five seconds per claim and two attempts.
   - Deterministic tests cover generation handoff, timeout preservation and source wiring.
@@ -126,7 +126,7 @@ unknown:
 conflicts: []
 first_failure:
   marker: no failing validation observed before CI
-  evidence: Source and changed-path audits agree with the bounded contract; exact-head CI has not run yet.
+  evidence: Source and changed-path audits agree with the bounded contract; PR 192 exact-head CI is pending.
 rejected_hypotheses:
   - detach another asynchronous logout save
   - wait without a fixed timeout
@@ -153,7 +153,7 @@ validation:
     evidence: Bounded condition-variable ownership, two-attempt synchronous final path, exact-generation helper reuse and deterministic tests are present.
   - command: exact-head repository CI
     result: NOT_RUN
-    evidence: A feature PR must run full applicable CI, Required and autofix on its exact final head.
+    evidence: PR 192 must complete full applicable CI, Required and autofix on its final head.
 blockers: []
-next_action: Open the PR, inspect exact-head CI, and fix only concrete compile, test or formatting failures within the seven declared paths.
+next_action: Inspect PR 192 exact-head CI and fix only concrete compile, test or formatting failures within the seven declared paths.
 ```
