@@ -9,30 +9,30 @@
 #endif
 
 namespace {
-constexpr SessionFenceSubjectId subjectId = 42;
-constexpr SessionFenceWriterToken firstWriter = 1001;
-constexpr SessionFenceWriterToken secondWriter = 2002;
+	constexpr SessionFenceSubjectId subjectId = 42;
+	constexpr SessionFenceWriterToken firstWriter = 1001;
+	constexpr SessionFenceWriterToken secondWriter = 2002;
 
-SessionFenceOwnerContext owner(SessionFenceOwnershipGeneration generation, SessionFenceWriterToken writerToken) {
-	return SessionFenceOwnerContext {
-		.subjectId = subjectId,
-		.ownershipGeneration = generation,
-		.writerToken = writerToken,
-	};
-}
+	SessionFenceOwnerContext owner(SessionFenceOwnershipGeneration generation, SessionFenceWriterToken writerToken) {
+		return SessionFenceOwnerContext {
+			.subjectId = subjectId,
+			.ownershipGeneration = generation,
+			.writerToken = writerToken,
+		};
+	}
 
-SessionFenceAcquireEvent acquisition(
-	SessionFenceEventSequence sequence,
-	SessionFenceOwnershipGeneration generation,
-	SessionFenceWriterToken writerToken
-) {
-	return SessionFenceAcquireEvent {
-		.eventSequence = sequence,
-		.subjectId = subjectId,
-		.ownershipGeneration = generation,
-		.writerToken = writerToken,
-	};
-}
+	SessionFenceAcquireEvent acquisition(
+		SessionFenceEventSequence sequence,
+		SessionFenceOwnershipGeneration generation,
+		SessionFenceWriterToken writerToken
+	) {
+		return SessionFenceAcquireEvent {
+			.eventSequence = sequence,
+			.subjectId = subjectId,
+			.ownershipGeneration = generation,
+			.writerToken = writerToken,
+		};
+	}
 } // namespace
 
 TEST(SessionRevisionFenceTest, RejectsInvalidStableSubject) {
