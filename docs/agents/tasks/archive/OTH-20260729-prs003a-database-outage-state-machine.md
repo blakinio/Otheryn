@@ -7,8 +7,8 @@ start_sha: 322264e69a64b0204c9ab98534b421046e6d5602
 feature_head: 45ed0385be9e1626be42c60d396069d04ca36585
 feature_merge_sha: bc1aa5a8a9c0094f555a8b73b8a32679797bc20c
 lifecycle_pr: "203"
-lifecycle_head: f487082e9af2f3ca8545c3b382f4723ed7310248
-lifecycle_merge_sha: pending
+lifecycle_head: e057fa0a62a9db6389844e59148850cc52b747e4
+lifecycle_merge_sha: 36d514773710075315b5ebb99f85865e34eea9e6
 created: 2026-07-29
 updated: 2026-07-29
 completed: 2026-07-29
@@ -28,7 +28,7 @@ owned_paths:
 
 PRS-003 Slice A is complete. The repository now contains one database-independent, header-only and mutex-serialized outage policy state machine with deterministic caller-supplied time and event sequence, finite injected durations, immutable event snapshots and explicit transition results.
 
-Feature PR #202 was squash-merged into `main` as `bc1aa5a8a9c0094f555a8b73b8a32679797bc20c`. Issue #201 is closed as completed.
+Feature PR #202 was squash-merged into `main` as `bc1aa5a8a9c0094f555a8b73b8a32679797bc20c`. Lifecycle PR #203 was squash-merged as `36d514773710075315b5ebb99f85865e34eea9e6`. Issue #201 is closed as completed.
 
 ## Implemented contract
 
@@ -58,7 +58,11 @@ Exact feature head: `45ed0385be9e1626be42c60d396069d04ca36585`.
 - deterministic state, deadline, recovery, stale-event and concurrency tests: PASS;
 - changed-path audit: exactly the five declared feature paths;
 - base drift audit: `behind_by=0` immediately before feature merge;
-- feature PR comments, reviews, unresolved threads and requested reviewers: none.
+- feature PR comments, reviews, unresolved threads and requested reviewers: none;
+- lifecycle Required `30479524521`: PASS on exact lifecycle head `e057fa0a62a9db6389844e59148850cc52b747e4`;
+- lifecycle changed-path audit: active record removed and matching archive record added only;
+- lifecycle drift audit: `behind_by=0` immediately before lifecycle merge;
+- lifecycle PR comments, reviews, unresolved threads and requested reviewers: none.
 
 One superseded head failed only because an existing source-contract test required the exact sentence `Do not wire it into Database, protocols or gameplay in the same slice.` The sentence was restored without changing runtime code; all replacement exact-head gates then passed. Earlier workflow results are not merge evidence for the final head.
 
@@ -74,7 +78,7 @@ One superseded head failed only because an existing source-contract test require
 
 ## Rollback
 
-Revert feature merge `bc1aa5a8a9c0094f555a8b73b8a32679797bc20c`. The package changes only one database-independent header, deterministic tests, test registration, architecture documentation and the durable task record.
+Revert feature merge `bc1aa5a8a9c0094f555a8b73b8a32679797bc20c`. The package changes only one database-independent header, deterministic tests, test registration, architecture documentation and the durable task record. Revert lifecycle merge `36d514773710075315b5ebb99f85865e34eea9e6` only to restore the active/archive record placement.
 
 ## Remaining parent-program gaps
 
@@ -93,16 +97,17 @@ The following remain separate future packages and are not implied complete by th
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-29T20:20:00+02:00
-head: f487082e9af2f3ca8545c3b382f4723ed7310248
-head_scope: lifecycle active-to-archive move before this PR-number-only metadata update
+updated_at: 2026-07-29T20:23:00+02:00
+head: 36d514773710075315b5ebb99f85865e34eea9e6
+head_scope: terminal lifecycle merge on main; this record-only correction adds known lifecycle merge metadata
 status: completed
 feature_pr: 202
 feature_head: 45ed0385be9e1626be42c60d396069d04ca36585
 feature_merge_sha: bc1aa5a8a9c0094f555a8b73b8a32679797bc20c
 lifecycle_pr: 203
-lifecycle_head: f487082e9af2f3ca8545c3b382f4723ed7310248
-lifecycle_merge_sha: pending
+lifecycle_head: e057fa0a62a9db6389844e59148850cc52b747e4
+lifecycle_merge_sha: 36d514773710075315b5ebb99f85865e34eea9e6
+lifecycle_required_run: 30479524521
 issue: 201
 issue_state: closed_completed
 ci_run: 30477984422
@@ -111,8 +116,7 @@ autofix_run: 30477983735
 first_failure:
   marker: Prs003DatabaseOutageContractTest.RecordsBoundedFailClosedTargetAndImplementationSequence
   evidence: Superseded CI 30475562855 passed 591 of 592 tests and failed only on a preserved architecture-contract literal; the sentence was restored and replacement exact-head CI passed.
-unknown:
-  - lifecycle Required run and lifecycle merge SHA
+unknown: []
 blockers: []
-next_action: Validate lifecycle PR 203 on its live exact head, audit scope, drift and discussions, then squash-merge with expected-head protection.
+next_action: none; no further action is required for this completed package
 ```
