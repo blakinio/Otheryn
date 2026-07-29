@@ -152,7 +152,9 @@ namespace metrics {
 			const int64_t previousValue = previous == gaugeValues.end() ? 0 : previous->second;
 			const int64_t delta = value - previousValue;
 			if (delta != 0) {
-				gauges[name]->Add(delta);
+				std::map<std::string, std::string> attrs;
+				auto attrskv = opentelemetry::common::KeyValueIterableView<decltype(attrs)> { attrs };
+				gauges[name]->Add(delta, attrskv);
 			}
 			gaugeValues[name] = value;
 		}
