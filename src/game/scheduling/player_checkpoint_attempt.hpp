@@ -4,9 +4,12 @@
 
 #ifndef USE_PRECOMPILED_HEADERS
 	#include <atomic>
+	#include <cstdint>
 	#include <exception>
 	#include <functional>
+	#include <memory>
 	#include <utility>
+	#include <vector>
 #endif
 
 inline constexpr uint32_t DEFAULT_PLAYER_CHECKPOINT_QUEUE_CAPACITY = 1024;
@@ -65,14 +68,14 @@ private:
 };
 
 /**
- * Releases one previously acquired admission slot on every scope exit. Call
- * release() early before scheduling a success follow-up so a capacity of one
- * cannot reject its own next generation.
+ * Releases one previously acquired admission slot on every scope exit. The
+ * optional observer is best-effort operational telemetry and is never allowed
+ * to turn a successful queue release into a persistence failure.
  */
 class PlayerCheckpointQueueSlot final {
 public:
-	explicit PlayerCheckpointQueueSlot(PlayerCheckpointQueueAdmission &admission) noexcept :
-		admission_(&admission) { }
+	explicit PlayerCheckpointQueueSlot(PlayerCheckpointQueueAdmission &admission, std::function<void()> releaseObserver = {}) noexcept :
+		admission_(&admission), releaseObserver_(std::move(releaseObserver)) { }
 
 	PlayerCheckpointQueueSlot(const PlayerCheckpointQueueSlot &) = delete;
 	PlayerCheckpointQueueSlot &operator=(const PlayerCheckpointQueueSlot &) = delete;
@@ -83,11 +86,24 @@ public:
 
 	[[nodiscard]] bool release() noexcept {
 		auto* admission = std::exchange(admission_, nullptr);
-		return admission != nullptr && admission->release();
+		if (admission == nullptr || !admission->release()) {
+			return false;
+		}
+
+		if (releaseObserver_) {
+			try {
+				releaseObserver_();
+			} catch (...) {
+				// Metrics must never alter checkpoint ownership or queue release.
+			}
+			releaseObserver_ = {};
+		}
+		return true;
 	}
 
 private:
 	PlayerCheckpointQueueAdmission* admission_;
+	std::function<void()> releaseObserver_;
 };
 
 [[nodiscard]] inline PlayerCheckpointQueueAdmissionResult tryAdmitPlayerCheckpoint(
@@ -107,6 +123,102 @@ private:
 		state.abandonCheckpoint(generation),
 	};
 }
+
+struct PlayerCheckpointGaugeSnapshot final {
+	uint32_t queueCapacity = 0;
+	uint32_t queueOutstanding = 0;
+	uint64_t dirtyOwners = 0;
+	int64_t oldestDirtyTimestampSeconds = 0;
+};
+
+[[nodiscard]] inline PlayerCheckpointGaugeSnapshot summarizePlayerCheckpointGauges(
+	uint32_t queueCapacity,
+	uint32_t queueOutstanding,
+	const std::vector<std::shared_ptr<PlayerPersistenceState>> &states
+) {
+	PlayerCheckpointGaugeSnapshot snapshot {
+		queueCapacity,
+		queueOutstanding,
+		0,
+		0,
+	};
+
+	for (const auto &state : states) {
+		if (!state || !state->isDirty()) {
+			continue;
+		}
+
+		++snapshot.dirtyOwners;
+		const auto timestamp = state->dirtySinceTimestampSeconds();
+		if (timestamp.has_value() && (snapshot.oldestDirtyTimestampSeconds == 0 || *timestamp < snapshot.oldestDirtyTimestampSeconds)) {
+			snapshot.oldestDirtyTimestampSeconds = *timestamp;
+		}
+	}
+	return snapshot;
+}
+
+struct PlayerCheckpointTelemetrySnapshot final {
+	uint64_t requests = 0;
+	uint64_t attempts = 0;
+	uint64_t successes = 0;
+	uint64_t failures = 0;
+	uint64_t thrownAttempts = 0;
+	uint64_t queueRejections = 0;
+	uint64_t submissionFailures = 0;
+};
+
+class PlayerCheckpointTelemetry final {
+public:
+	void recordRequest() noexcept {
+		requests_.fetch_add(1, std::memory_order_relaxed);
+	}
+
+	void recordAttempt() noexcept {
+		attempts_.fetch_add(1, std::memory_order_relaxed);
+	}
+
+	void recordSuccess() noexcept {
+		successes_.fetch_add(1, std::memory_order_relaxed);
+	}
+
+	void recordFailure() noexcept {
+		failures_.fetch_add(1, std::memory_order_relaxed);
+	}
+
+	void recordThrownAttempt() noexcept {
+		failures_.fetch_add(1, std::memory_order_relaxed);
+		thrownAttempts_.fetch_add(1, std::memory_order_relaxed);
+	}
+
+	void recordQueueRejection() noexcept {
+		queueRejections_.fetch_add(1, std::memory_order_relaxed);
+	}
+
+	void recordSubmissionFailure() noexcept {
+		submissionFailures_.fetch_add(1, std::memory_order_relaxed);
+	}
+
+	[[nodiscard]] PlayerCheckpointTelemetrySnapshot snapshot() const noexcept {
+		return {
+			requests_.load(std::memory_order_relaxed),
+			attempts_.load(std::memory_order_relaxed),
+			successes_.load(std::memory_order_relaxed),
+			failures_.load(std::memory_order_relaxed),
+			thrownAttempts_.load(std::memory_order_relaxed),
+			queueRejections_.load(std::memory_order_relaxed),
+			submissionFailures_.load(std::memory_order_relaxed),
+		};
+	}
+
+private:
+	std::atomic<uint64_t> requests_ = 0;
+	std::atomic<uint64_t> attempts_ = 0;
+	std::atomic<uint64_t> successes_ = 0;
+	std::atomic<uint64_t> failures_ = 0;
+	std::atomic<uint64_t> thrownAttempts_ = 0;
+	std::atomic<uint64_t> queueRejections_ = 0;
+	std::atomic<uint64_t> submissionFailures_ = 0;
+};
 
 enum class PlayerCheckpointAttemptOutcome : uint8_t {
 	saved,
