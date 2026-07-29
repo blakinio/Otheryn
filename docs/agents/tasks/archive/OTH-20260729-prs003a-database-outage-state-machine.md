@@ -6,8 +6,8 @@ base_branch: main
 start_sha: 322264e69a64b0204c9ab98534b421046e6d5602
 feature_head: 45ed0385be9e1626be42c60d396069d04ca36585
 feature_merge_sha: bc1aa5a8a9c0094f555a8b73b8a32679797bc20c
-lifecycle_pr: pending
-lifecycle_head: pending
+lifecycle_pr: "203"
+lifecycle_head: f487082e9af2f3ca8545c3b382f4723ed7310248
 lifecycle_merge_sha: pending
 created: 2026-07-29
 updated: 2026-07-29
@@ -93,13 +93,16 @@ The following remain separate future packages and are not implied complete by th
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-29T20:19:00+02:00
-head: bc1aa5a8a9c0094f555a8b73b8a32679797bc20c
-head_scope: feature merge on main before the lifecycle-only active-to-archive move
+updated_at: 2026-07-29T20:20:00+02:00
+head: f487082e9af2f3ca8545c3b382f4723ed7310248
+head_scope: lifecycle active-to-archive move before this PR-number-only metadata update
 status: completed
 feature_pr: 202
 feature_head: 45ed0385be9e1626be42c60d396069d04ca36585
 feature_merge_sha: bc1aa5a8a9c0094f555a8b73b8a32679797bc20c
+lifecycle_pr: 203
+lifecycle_head: f487082e9af2f3ca8545c3b382f4723ed7310248
+lifecycle_merge_sha: pending
 issue: 201
 issue_state: closed_completed
 ci_run: 30477984422
@@ -109,7 +112,7 @@ first_failure:
   marker: Prs003DatabaseOutageContractTest.RecordsBoundedFailClosedTargetAndImplementationSequence
   evidence: Superseded CI 30475562855 passed 591 of 592 tests and failed only on a preserved architecture-contract literal; the sentence was restored and replacement exact-head CI passed.
 unknown:
-  - lifecycle PR number, final lifecycle head, lifecycle Required run and lifecycle merge SHA
+  - lifecycle Required run and lifecycle merge SHA
 blockers: []
-next_action: Complete and validate the lifecycle-only active-to-archive PR, then record its terminal merge metadata and verify final repository state.
+next_action: Validate lifecycle PR 203 on its live exact head, audit scope, drift and discussions, then squash-merge with expected-head protection.
 ```
