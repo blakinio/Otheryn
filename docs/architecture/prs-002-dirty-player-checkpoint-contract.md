@@ -121,6 +121,16 @@ clamp_min(time() - player_checkpoint_oldest_dirty_timestamp_seconds, 0)
 
 Consumers should treat a zero timestamp as no measured dirty owner. This package exports evidence; it does not choose alert thresholds, provision dashboards, claim a checkpoint SLO/RPO or alter retry and queue policy.
 
+### Implemented bounded PRS-002J final-save lifecycle
+
+The bounded PRS-002J package recognizes the existing logout lifecycle only after `Player::onRemoveCreature` has finalized the login position and `lastLogout`. At that boundary, `SaveManager::savePlayer` routes the exact live `Player` object into a synchronous final-save path instead of detaching another asynchronous checkpoint.
+
+`PlayerPersistenceState::beginFinalCheckpoint` waits on a condition variable for at most five seconds for an older exact-generation owner to settle. It never steals, releases or acknowledges that owner. Once ownership is free, it atomically claims the newest dirty generation. The final path performs at most two synchronous exact-generation attempts through the existing checkpoint-attempt helper, allowing one newer mutation observed during the first save to be captured without creating an unbounded retry policy.
+
+Timeout, save failure, thrown save, rejected acknowledgement or a still-dirty state after the finite attempt budget returns failure and is logged. Normal logout and forced shutdown removal both reach the same player-removal callback; shutdown removes players before the later `saveAll`, so the callback is the per-player shutdown final-save boundary.
+
+This package does not establish channel-handoff safety, session/revision fencing, database-outage behavior, a production save-latency guarantee or a measured RPO. Channel handoff remains PRS-004.
+
 ## Explicit non-goals
 
 - PRS-003 database-outage state transitions;

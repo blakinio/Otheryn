@@ -21,6 +21,11 @@
 #include "lib/metrics/metrics.hpp"
 #include "creatures/players/player.hpp"
 
+namespace {
+	constexpr auto PLAYER_FINAL_SAVE_WAIT_TIMEOUT = std::chrono::seconds(5);
+	constexpr uint8_t PLAYER_FINAL_SAVE_MAX_ATTEMPTS = 2;
+}
+
 SaveManager::SaveManager(ThreadPool &threadPool, KVStore &kvStore, Logger &logger, Game &game) :
 	threadPool(threadPool), kv(kvStore), logger(logger), game(game) { }
 
@@ -395,10 +400,101 @@ bool SaveManager::savePlayer(std::shared_ptr<Player> player) {
 		logger.debug("Failed to save player because player is null.");
 		return false;
 	}
+
+	const bool logoutStateFinalized = player->isOnline()
+		&& player->getLastLogout() != 0
+		&& player->getLastLogout() >= player->getLastLoginSaved();
+	if (logoutStateFinalized) {
+		return savePlayerFinal(std::move(player));
+	}
 	if (player->isOnline() && g_game().getGameState() != GAME_STATE_SHUTDOWN) {
 		return schedulePlayer(player);
 	}
 	return doSavePlayer(player);
+}
+
+bool SaveManager::savePlayerFinal(std::shared_ptr<Player> player) {
+	if (!player) {
+		logger.error("Final player save failed because player is null.");
+		return false;
+	}
+
+	auto state = persistenceStateFor(player);
+	const bool hadDirtyTimestamp = state->dirtySinceTimestampSeconds().has_value();
+	(void)state->markDirty(currentCheckpointTimestampSeconds());
+	if (!hadDirtyTimestamp && state->dirtySinceTimestampSeconds().has_value()) {
+		publishPlayerDirtyGauges();
+	}
+
+	m_playerCheckpointTelemetry.recordRequest();
+	g_metrics().addCounter("player_checkpoint_requests", 1);
+	publishPlayerCheckpointGauges();
+
+	for (uint8_t attemptIndex = 0; attemptIndex < PLAYER_FINAL_SAVE_MAX_ATTEMPTS; ++attemptIndex) {
+		const auto generation = state->beginFinalCheckpoint(PLAYER_FINAL_SAVE_WAIT_TIMEOUT);
+		if (!generation.has_value()) {
+			publishPlayerCheckpointGauges();
+			logger.error(
+				"Final save for player {} timed out waiting {} seconds for existing checkpoint ownership.",
+				player->getName(),
+				PLAYER_FINAL_SAVE_WAIT_TIMEOUT.count()
+			);
+			return false;
+		}
+
+		m_playerCheckpointTelemetry.recordAttempt();
+		g_metrics().addCounter("player_checkpoint_attempts", 1);
+		metrics::method_latency checkpointLatency("player_checkpoint_save");
+		const auto attempt = executePlayerCheckpointAttempt(*state, *generation, [this, &player] {
+			return doSavePlayer(player);
+		});
+
+		if (attempt.outcome != PlayerCheckpointAttemptOutcome::saved) {
+			if (attempt.outcome == PlayerCheckpointAttemptOutcome::saveThrew) {
+				m_playerCheckpointTelemetry.recordThrownAttempt();
+				g_metrics().addCounter("player_checkpoint_failures", 1, { { "reason", "save_threw" } });
+				g_metrics().addCounter("player_checkpoint_thrown_attempts", 1);
+				try {
+					std::rethrow_exception(attempt.exception);
+				} catch (const std::exception &e) {
+					logger.error("Final save for player {} generation {} threw: {}", player->getName(), *generation, e.what());
+				} catch (...) {
+					logger.error("Final save for player {} generation {} threw an unknown exception.", player->getName(), *generation);
+				}
+			} else {
+				m_playerCheckpointTelemetry.recordFailure();
+				g_metrics().addCounter("player_checkpoint_failures", 1, { { "reason", "save_failed" } });
+				logger.error("Final save for player {} generation {} failed.", player->getName(), *generation);
+			}
+			publishPlayerCheckpointGauges();
+			if (!attempt.acknowledgementAccepted) {
+				logger.error("Failed to acknowledge player {} generation {} final-save failure.", player->getName(), *generation);
+			}
+			return false;
+		}
+
+		if (!attempt.acknowledgementAccepted) {
+			m_playerCheckpointTelemetry.recordFailure();
+			g_metrics().addCounter("player_checkpoint_failures", 1, { { "reason", "acknowledgement_rejected" } });
+			publishPlayerCheckpointGauges();
+			logger.error("Failed to acknowledge player {} generation {} final-save success.", player->getName(), *generation);
+			return false;
+		}
+
+		m_playerCheckpointTelemetry.recordSuccess();
+		g_metrics().addCounter("player_checkpoint_successes", 1);
+		publishPlayerCheckpointGauges();
+		if (!attempt.followUpRequired && !state->isDirty()) {
+			return true;
+		}
+	}
+
+	logger.error(
+		"Final save for player {} exhausted {} bounded attempts while a newer dirty generation remained.",
+		player->getName(),
+		PLAYER_FINAL_SAVE_MAX_ATTEMPTS
+	);
+	return false;
 }
 
 bool SaveManager::saveGuild(std::shared_ptr<Guild> guild) {

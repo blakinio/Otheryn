@@ -110,7 +110,7 @@ TEST(Prs002DirtyPlayerCheckpointContractTest, BoundsQueueAdmissionBeforeDetachAn
 	EXPECT_LT(queueFull, detach);
 	EXPECT_LT(earlyRelease, followUp);
 
-	const auto savePlayer = functionBody(source, "bool SaveManager::savePlayer", "bool SaveManager::saveGuild");
+	const auto savePlayer = functionBody(source, "bool SaveManager::savePlayer", "bool SaveManager::savePlayerFinal");
 	expectContains(std::string(savePlayer), "return schedulePlayer(player);");
 }
 
@@ -172,6 +172,49 @@ TEST(Prs002DirtyPlayerCheckpointContractTest, ExportsBoundedLowCardinalityCheckp
 	expectContains(state, "if (!isDirtyLocked())");
 }
 
+TEST(Prs002DirtyPlayerCheckpointContractTest, BoundsFinalLogoutAndShutdownSaveLifecycle) {
+	const auto header = readSource("src/game/scheduling/save_manager.hpp");
+	expectContains(header, "bool savePlayerFinal(std::shared_ptr<Player> player);");
+
+	const auto state = readSource("src/game/scheduling/player_persistence_state.hpp");
+	expectContains(state, "beginFinalCheckpoint(std::chrono::milliseconds waitTimeout)");
+	expectContains(state, "checkpointSettled_.wait_for");
+	expectContains(state, "checkpointSettled_.notify_all()");
+
+	const auto source = readSource("src/game/scheduling/save_manager.cpp");
+	expectContains(source, "PLAYER_FINAL_SAVE_WAIT_TIMEOUT");
+	expectContains(source, "PLAYER_FINAL_SAVE_MAX_ATTEMPTS = 2");
+	const auto savePlayer = functionBody(source, "bool SaveManager::savePlayer", "bool SaveManager::savePlayerFinal");
+	expectContains(std::string(savePlayer), "player->getLastLogout() >= player->getLastLoginSaved()");
+	expectContains(std::string(savePlayer), "return savePlayerFinal(std::move(player));");
+
+	const auto finalSave = functionBody(source, "bool SaveManager::savePlayerFinal", "bool SaveManager::saveGuild");
+	expectContains(std::string(finalSave), "state->markDirty(currentCheckpointTimestampSeconds())");
+	expectContains(std::string(finalSave), "state->beginFinalCheckpoint(PLAYER_FINAL_SAVE_WAIT_TIMEOUT)");
+	expectContains(std::string(finalSave), "executePlayerCheckpointAttempt(*state, *generation");
+	expectContains(std::string(finalSave), "attemptIndex < PLAYER_FINAL_SAVE_MAX_ATTEMPTS");
+	expectContains(std::string(finalSave), "timed out waiting");
+	expectContains(std::string(finalSave), "exhausted {} bounded attempts");
+	EXPECT_EQ(finalSave.find("detach_task"), std::string_view::npos);
+	EXPECT_EQ(finalSave.find("scheduleDirtyPlayer"), std::string_view::npos);
+
+	const auto player = readSource("src/creatures/players/player.cpp");
+	const auto removal = functionBody(player, "void Player::onRemoveCreature", "void Player::onCreatureMove");
+	const auto logoutTimestamp = removal.find("lastLogout = time(nullptr);");
+	const auto finalDispatch = removal.find("g_saveManager().savePlayer(player);");
+	ASSERT_NE(logoutTimestamp, std::string_view::npos);
+	ASSERT_NE(finalDispatch, std::string_view::npos);
+	EXPECT_LT(logoutTimestamp, finalDispatch);
+
+	const auto game = readSource("src/game/game.cpp");
+	const auto shutdown = functionBody(game, "case GAME_STATE_SHUTDOWN", "case GAME_STATE_CLOSED");
+	const auto removePlayers = shutdown.find("it->second->removePlayer(true);");
+	const auto saveAll = shutdown.find("g_saveManager().saveAll();");
+	ASSERT_NE(removePlayers, std::string_view::npos);
+	ASSERT_NE(saveAll, std::string_view::npos);
+	EXPECT_LT(removePlayers, saveAll);
+}
+
 TEST(Prs002DirtyPlayerCheckpointContractTest, PreservesSaveOutcomeAndDomainBoundaries) {
 	const auto manager = readSource("src/game/scheduling/save_manager.cpp");
 	expectContains(manager, "Player::PlayerLock lock(player);");
@@ -205,5 +248,6 @@ TEST(Prs002DirtyPlayerCheckpointContractTest, RecordsGenerationSafeTargetAndBoun
 	expectContains(contract, "bounded PRS-002D evidence");
 	expectContains(contract, "bounded PRS-002H behavior");
 	expectContains(contract, "bounded PRS-002I observability");
+	expectContains(contract, "bounded PRS-002J final-save lifecycle");
 	expectContains(contract, "time() - player_checkpoint_oldest_dirty_timestamp_seconds");
 }
