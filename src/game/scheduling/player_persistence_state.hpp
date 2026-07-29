@@ -2,6 +2,8 @@
 
 #ifndef USE_PRECOMPILED_HEADERS
 	#include <algorithm>
+	#include <chrono>
+	#include <condition_variable>
 	#include <cstdint>
 	#include <limits>
 	#include <mutex>
@@ -59,6 +61,28 @@ public:
 		return inFlightGeneration_;
 	}
 
+	/**
+	 * Waits a finite interval for an older checkpoint owner to settle and then
+	 * atomically claims the newest dirty generation for a synchronous final save.
+	 *
+	 * A timeout never steals, releases or acknowledges the existing owner. The
+	 * caller must mark the final state dirty before invoking this operation.
+	 */
+	[[nodiscard]] std::optional<Generation> beginFinalCheckpoint(std::chrono::milliseconds waitTimeout) {
+		std::unique_lock lock(mutex_);
+		if (!checkpointSettled_.wait_for(lock, waitTimeout, [this] {
+			    return !inFlightGeneration_.has_value();
+		    })) {
+			return std::nullopt;
+		}
+		if (!isDirtyLocked()) {
+			return std::nullopt;
+		}
+
+		inFlightGeneration_ = dirtyGeneration_;
+		return inFlightGeneration_;
+	}
+
 	bool abandonCheckpoint(Generation generation) {
 		std::lock_guard lock(mutex_);
 		if (!matchesInFlightLocked(generation)) {
@@ -66,6 +90,7 @@ public:
 		}
 
 		inFlightGeneration_.reset();
+		checkpointSettled_.notify_all();
 		return true;
 	}
 
@@ -81,6 +106,7 @@ public:
 		if (!isDirtyLocked()) {
 			dirtySinceTimestampSeconds_.reset();
 		}
+		checkpointSettled_.notify_all();
 		return true;
 	}
 
@@ -94,6 +120,7 @@ public:
 		if (consecutiveFailures_ < std::numeric_limits<uint32_t>::max()) {
 			++consecutiveFailures_;
 		}
+		checkpointSettled_.notify_all();
 		return true;
 	}
 
@@ -138,6 +165,7 @@ private:
 	}
 
 	mutable std::mutex mutex_;
+	std::condition_variable checkpointSettled_;
 	Generation dirtyGeneration_ = 0;
 	Generation acknowledgedGeneration_ = 0;
 	std::optional<Generation> inFlightGeneration_;
