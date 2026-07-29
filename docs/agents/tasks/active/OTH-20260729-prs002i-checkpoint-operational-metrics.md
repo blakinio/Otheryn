@@ -7,7 +7,7 @@ start_sha: d36ad9a5bfd8970ab1a108e6017945b91a4683e6
 created: 2026-07-29
 updated: 2026-07-29
 related_issue: "187"
-related_pr: null
+related_pr: "188"
 owned_paths:
   - src/game/scheduling/player_persistence_state.hpp
   - src/game/scheduling/player_checkpoint_attempt.hpp
@@ -85,10 +85,11 @@ Revert the feature merge. No schema, database data, KV data, credentials, deploy
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-29T08:27:00+02:00
-head: 97d03a83ff8622df3e820210eed7597482b62dd5
+updated_at: 2026-07-29T08:32:00+02:00
+head: 8efa4767fbd31cac19a73de7350378d51e9c66c2
+head_scope: implementation and task checkpoint before final PR-link record commit
 branch: dudantas/prs-002i-checkpoint-operational-metrics
-pr: null
+pr: 188
 status: validating
 context_routes:
   - production-resilience
@@ -117,7 +118,7 @@ proven:
   - Gauge export uses a retained absolute value and emits only the OpenTelemetry up/down-counter delta.
   - SaveManager wiring covers request, admission, queue rejection, worker release, attempt, success, failure, thrown attempt and submission failure transitions.
   - Focused tests cover continuous dirty timestamps, backfill, rejection/failure preservation, gauge summaries, observer single-fire and concurrent counter safety.
-  - The branch is behind_by zero and changes exactly eleven owned paths.
+  - The feature diff is behind_by zero and changes exactly eleven owned paths.
 derived:
   - Prometheus can derive a continuously increasing oldest dirty age from its own scrape time without adding a game-thread timer.
 unknown:
@@ -150,7 +151,10 @@ validation:
     evidence: Exact-owner timestamp, atomic counters, label-free gauges, four fixed failure reasons and release-before-follow-up publication are present.
   - command: changed-path audit
     result: PASS
-    evidence: Branch is behind_by zero and changes exactly eleven declared paths.
+    evidence: Feature diff is behind_by zero and changes exactly eleven declared paths.
+  - command: exact-head repository CI
+    result: NOT_RUN
+    evidence: PR 188 must complete CI, Required and autofix on its final head.
 blockers: []
-next_action: Open the feature PR, record its number, and run full exact-head CI, Required and autofix validation.
+next_action: Inspect PR 188 exact-head CI and fix only concrete compile, test or formatting failures.
 ```
