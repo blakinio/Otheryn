@@ -51,8 +51,15 @@ Current source behavior uses `PlayerFlags_t::CanAlwaysLogin` only for game login
 - no reconnect, query, replay, retry, wait, disconnect or mutation occurs;
 - handoff remains independently classified even where its lifecycle result matches game login.
 
-## Later integration
+## Live PRS-003C-B integration
 
-A later PRS-003C package must obtain the immutable snapshot from the accepted owner, classify the exact entry point, map fixed reasons to existing protocol responses and prove gate placement before database-backed admission work or handoff ownership mutation. It must preserve shutdown ordering and must not invent a generic staff bypass.
+The live adapter obtains exactly one immutable snapshot from `getDatabaseOutageSnapshot()` at each accepted protocol boundary and invokes only the existing pure policy:
 
-This package does not settle snapshot ownership, caller-visible wording, the exact adapter insertion points or PRS-004 handoff fencing.
+- account login evaluates the live snapshot after the existing startup, shutdown and lifecycle-maintenance responses, but before IP-ban lookup, account load or authentication work;
+- game login captures its snapshot before IP-ban lookup and game-world authentication, evaluates that same snapshot with the exact `GameLogin` operation and `GAME_STATE_NORMAL` to reject every non-healthy or unknown outage state before database work, then carries the immutable snapshot into the dispatcher;
+- new-character game login performs only the existing minimal player preload needed to expose `PlayerFlags_t::CanAlwaysLogin`, then re-evaluates the same snapshot with the real lifecycle and capability before name-lock, account-ban, waiting-list, full player load or placement work;
+- reconnect/session handoff evaluates a fresh live snapshot with the exact `ChannelHandoff` operation and the resolved player's existing `CanAlwaysLogin` capability before assigning the protocol player, removing channel membership, clearing modal state or replacing `player->client` ownership.
+
+Lifecycle-specific caller responses remain the existing startup, shutdown, closing and closed behavior. Database-outage and fail-closed unknown rejections use the existing maintenance response rather than introducing a new protocol error framework. Account login and the pre-database game-login outage check supply no staff capability. The post-preload game-login decision and handoff supply only the already-present `CanAlwaysLogin` flag, which never bypasses a non-healthy outage snapshot.
+
+The integration does not add a diagnostic route, reconnect, SQL retry or replay, draining/disconnect orchestration, deadline scheduling, schema work, deployment change or durable PRS-004 fencing.

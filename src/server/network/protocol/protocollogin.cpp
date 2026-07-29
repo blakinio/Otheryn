@@ -9,6 +9,9 @@
 
 #include "server/network/protocol/protocollogin.hpp"
 
+#include "database/database_failure_classification.hpp"
+#include "server/network/protocol/database_outage_admission_gate.hpp"
+
 #include "config/configmanager.hpp"
 #include "security/login_session_manager.hpp"
 #include "server/network/message/outputmessage.hpp"
@@ -256,6 +259,23 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage &msg) {
 
 	if (g_game().getGameState() == GAME_STATE_MAINTAIN) {
 		disconnectClient("Gameworld is under maintenance.\nPlease re-connect in a while.");
+		return;
+	}
+
+	const auto outageAdmission = DatabaseOutageAdmissionGate::evaluateLive(
+		getDatabaseOutageSnapshot,
+		DatabaseOutageAdmissionOperation::AccountLogin,
+		{},
+		g_game().getGameState()
+	);
+	if (!outageAdmission.allowed()) {
+		if (outageAdmission.reason == DatabaseOutageAdmissionReason::LifecycleShutdown) {
+			disconnect();
+		} else if (outageAdmission.reason == DatabaseOutageAdmissionReason::LifecycleStartup) {
+			disconnectClient("Gameworld is starting up. Please wait.");
+		} else {
+			disconnectClient("Gameworld is under maintenance.\nPlease re-connect in a while.");
+		}
 		return;
 	}
 
