@@ -7,9 +7,9 @@ start_sha: 6a6007667dfd82010b0240342180961cd553466f
 feature_pr: "213"
 feature_head: d1a36eada901dacb4634f6b417ff7535e046d5b2
 feature_merge_sha: 3790aa4a0d5d43bbcc09f0e8725849fbcfe7d4fb
-lifecycle_pr: pending
-lifecycle_head: pending
-lifecycle_merge_sha: pending
+lifecycle_pr: "217"
+lifecycle_head: c7075607fa7eaefc6b356825116beea87736e146
+lifecycle_merge_sha: 1ec8c43c448f99e72f0319784b041bdab9e2231f
 issue: "206"
 issue_state: closed_completed
 created: 2026-07-29
@@ -28,6 +28,8 @@ owned_paths:
 ## Completion
 
 PRS-003C-A is complete. Feature PR #213 was squash-merged into `main` as `3790aa4a0d5d43bbcc09f0e8725849fbcfe7d4fb` from exact validated head `d1a36eada901dacb4634f6b417ff7535e046d5b2`. Issue #206 is closed as completed.
+
+Repository lifecycle is also complete. Lifecycle PR #217 was squash-merged as `1ec8c43c448f99e72f0319784b041bdab9e2231f` from exact head `c7075607fa7eaefc6b356825116beea87736e146` after Required run `30489134990` passed. The active task record no longer exists; this archive is the durable terminal record.
 
 The package adds one deterministic, header-only, `constexpr` and `noexcept` admission decision component. It accepts only an immutable PRS-003A outage snapshot, an explicit operation class, narrow caller capabilities and the existing `GameState_t`. It returns an explicit allow/reject disposition, a fixed reason code and sufficient typed context for a later protocol adapter.
 
@@ -55,13 +57,17 @@ Lifecycle restrictions are evaluated before outage admission:
 
 ## Changed paths
 
-- `docs/agents/tasks/active/OTH-20260729-prs003c-login-handoff-admission-policy.md` during feature development, moved to this archive path by lifecycle handling;
+Feature PR #213 changed exactly:
+
+- `docs/agents/tasks/active/OTH-20260729-prs003c-login-handoff-admission-policy.md`, later moved to this archive path;
 - `docs/architecture/prs-003c-login-handoff-admission-policy.md`;
 - `src/server/network/protocol/database_outage_admission_policy.hpp`;
 - `tests/unit/server/network/protocol/database_outage_admission_policy_test.cpp`;
 - one source registration line in shared `tests/unit/server/CMakeLists.txt`.
 
-The feature PR changed exactly those five feature paths. It did not edit `ProtocolLogin`, `ProtocolGame`, `ProtocolSessionHintStore`, result classification, outage publication, drain orchestration or any live channel-handoff implementation.
+Lifecycle PR #217 changed exactly the active and archive task-record paths. This finalizer changes only this archive path.
+
+The feature PR did not edit `ProtocolLogin`, `ProtocolGame`, `ProtocolSessionHintStore`, result classification, outage publication, drain orchestration or any live channel-handoff implementation.
 
 ## Validation evidence
 
@@ -82,7 +88,14 @@ Exact feature head: `d1a36eada901dacb4634f6b417ff7535e046d5b2`.
 - feature PR comments, reviews and unresolved threads: none;
 - feature PR was mergeable immediately before expected-head squash merge.
 
-The first superseded validation head failed only the test assertion `static_assert(noexcept(...))` because test helper `makeSnapshot()` lacked a `noexcept` declaration. The production policy was already `noexcept`. Marking the helper `constexpr noexcept` fixed the confirmed cause; the final exact head passed every required gate.
+Exact lifecycle head: `c7075607fa7eaefc6b356825116beea87736e146`.
+
+- Required run `30489134990`: PASS;
+- exact changed-path audit: active record removed and archive record added only;
+- lifecycle PR comments, reviews and unresolved threads: none;
+- lifecycle base remained feature merge `3790aa4a0d5d43bbcc09f0e8725849fbcfe7d4fb` immediately before expected-head squash merge.
+
+The first superseded feature validation head failed only the test assertion `static_assert(noexcept(...))` because test helper `makeSnapshot()` lacked a `noexcept` declaration. The production policy was already `noexcept`. Marking the helper `constexpr noexcept` fixed the confirmed cause; the final exact head passed every required gate.
 
 Database failure injection was not applicable because this pure package performs no database operation, outage publication or runtime wiring.
 
@@ -103,27 +116,28 @@ Snapshot ownership, caller-visible wording, exact adapter insertion points and P
 
 ## Rollback
 
-Revert feature merge `3790aa4a0d5d43bbcc09f0e8725849fbcfe7d4fb`. The feature is isolated to one pure header, deterministic tests, one minimal test registration line, one architecture document and its task record. Revert the lifecycle merge only to restore active/archive record placement.
+Revert feature merge `3790aa4a0d5d43bbcc09f0e8725849fbcfe7d4fb` to remove the policy package. Revert lifecycle merge `1ec8c43c448f99e72f0319784b041bdab9e2231f` only to restore active/archive record placement.
 
 ## Context checkpoint
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-29T22:35:00+02:00
-head: 3790aa4a0d5d43bbcc09f0e8725849fbcfe7d4fb
-head_scope: merged feature on main; lifecycle archive PR and merge metadata are pending
+updated_at: 2026-07-29T22:39:00+02:00
+head: 1ec8c43c448f99e72f0319784b041bdab9e2231f
+head_scope: merged feature and completed lifecycle archive; this one-path finalizer records exact terminal metadata
 status: completed
 feature_pr: 213
 feature_head: d1a36eada901dacb4634f6b417ff7535e046d5b2
 feature_merge_sha: 3790aa4a0d5d43bbcc09f0e8725849fbcfe7d4fb
-lifecycle_pr: pending
-lifecycle_head: pending
-lifecycle_merge_sha: pending
+lifecycle_pr: 217
+lifecycle_head: c7075607fa7eaefc6b356825116beea87736e146
+lifecycle_merge_sha: 1ec8c43c448f99e72f0319784b041bdab9e2231f
 issue: 206
 issue_state: closed_completed
 ci_run: 30487806313
 required_run: 30487806104
 autofix_run: 30487806142
+lifecycle_required_run: 30489134990
 context_routes:
   - production-resilience
   - database-outage
@@ -140,12 +154,13 @@ proven:
   - the pure admission policy and full deterministic matrix are merged
   - exact feature head passed CI, Required and autofix
   - issue 206 is closed completed
+  - lifecycle PR 217 moved the task to archive after Required passed
+  - active task record is absent
   - no live protocol wiring changed
   - later protocol integration remains explicitly separate
 derived:
   - identical immutable inputs fully determine the decision
-unknown:
-  - exact lifecycle PR, head and merge SHA
+unknown: []
 conflicts: []
 first_failure:
   marker: linux-debug test helper noexcept assertion on a superseded head
@@ -174,6 +189,12 @@ validation:
   - command: feature terminal scope and discussion audit
     result: PASS
     evidence: five owned paths, behind_by zero, no comments, reviews or unresolved threads
+  - command: lifecycle Required 30489134990
+    result: PASS
+    evidence: exact lifecycle head passed the repository required gate
+  - command: lifecycle terminal scope and discussion audit
+    result: PASS
+    evidence: two task-record paths only, no comments, reviews or unresolved threads
 blockers: []
-next_action: validate and merge the record-only lifecycle archive PR, then finalize this archive with exact lifecycle metadata
+next_action: none
 ```
