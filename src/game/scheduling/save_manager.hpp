@@ -39,6 +39,16 @@ public:
 	void scheduleAll();
 
 	bool savePlayer(std::shared_ptr<Player> player);
+
+	/**
+	 * Performs the bounded synchronous final save for an exact Player object.
+	 *
+	 * The method marks the post-logout state dirty, waits only a fixed interval
+	 * for older checkpoint ownership, and executes at most a finite number of
+	 * exact-generation attempts. It never detaches work or steals an in-flight
+	 * generation.
+	 */
+	bool savePlayerFinal(std::shared_ptr<Player> player);
 	bool saveGuild(std::shared_ptr<Guild> guild);
 
 	/**
