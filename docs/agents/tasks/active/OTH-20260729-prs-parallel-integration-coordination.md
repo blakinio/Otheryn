@@ -1,13 +1,13 @@
 ---
 task_id: OTH-20260729-prs-parallel-integration-coordination
 status: active
-branch: dudantas/prs-parallel-integration-checkpoint-1
+branch: dudantas/prs-parallel-integration-checkpoint-2
 base_branch: main
 start_sha: 6a6007667dfd82010b0240342180961cd553466f
 created: 2026-07-29
 updated: 2026-07-29
 related_issue: "205"
-related_pr: "211"
+related_pr: pending
 owned_paths:
   - docs/agents/tasks/active/OTH-20260729-prs-parallel-integration-coordination.md
 required_reads:
@@ -21,7 +21,7 @@ search_first:
   - docs/agents/tasks/archive/
   - src/database/database_outage_state.hpp
   - tests/unit/database/CMakeLists.txt
-  - tests/unit/game/CMakeLists.txt
+  - tests/unit/server/CMakeLists.txt
   - vcproj/canary.vcxproj
 ---
 
@@ -29,104 +29,64 @@ search_first:
 
 ## Goal
 
-Coordinate PRS-003B, PRS-003C-A and PRS-004A as independently owned packages, prevent implementation and shared-registration conflicts, enforce exact-head merge gates and keep every issue/task/PR/archive lifecycle terminal before selecting the next package.
+Coordinate PRS-003B, PRS-003C-A and PRS-004A as independently owned packages, prevent implementation and shared-registration conflicts, enforce exact-head merge gates and complete every issue/task/PR/archive/finalizer lifecycle before selecting the next package.
 
 This task owns coordination state only. It does not authorize broad runtime, schema, persistence or deployment implementation.
 
-## Audited baseline
+## Current authoritative baseline
 
-- exact task-start `main`: `6a6007667dfd82010b0240342180961cd553466f`;
-- PRS-003A feature PR `#202` exact head `45ed0385be9e1626be42c60d396069d04ca36585` merged as `bc1aa5a8a9c0094f555a8b73b8a32679797bc20c`;
-- PRS-003A exact-head CI `30477984422`, Required `30477983720` and autofix `30477983735` passed;
-- PRS-003A issue `#201` is closed as completed;
-- lifecycle PR `#203` merged as `36d514773710075315b5ebb99f85865e34eea9e6`;
-- terminal archive finalizer PR `#204` merged as `6a6007667dfd82010b0240342180961cd553466f`;
-- coordination PR `#209` exact head `b78286053df9b977f03c712f02f52d8de86efc66` passed Required `30484314153` and squash-merged as current `main` `beea2231a0ea66fd783260a3fdbfb71afec5d566`;
-- no PRS-003A active task or open PR remains;
-- parent production-resilience tracker `#116` remains open;
-- package issues `#206`, `#207` and `#208` reserve the three parallel scopes;
-- duplicate PRS-003B issue `#210` was closed as duplicate of `#208` before implementation ownership was declared;
-- no package feature PR or exact owned-path declaration is published yet.
+- current `main`: `1ec8c43c448f99e72f0319784b041bdab9e2231f`;
+- PRS-003A remains terminal;
+- PRS-004A feature PR `#212` exact head `1571e338bb9f7fc5d7943d4b393c5b34e10ee34a` merged as `b00507ec22542b8cf284040bea57bc70941d0964`;
+- PRS-004A lifecycle PR `#215` merged as `87bc63889839960cc9dd7d4502cfb4e25a5eaadb` and finalizer PR `#216` merged as `a263e7c7370b39bbf65557ccb570cf29ed775e74`;
+- PRS-003C-A feature PR `#213` exact head `d1a36eada901dacb4634f6b417ff7535e046d5b2` passed CI `30487806313`, Required `30487806104` and autofix `30487806142`, then merged as `3790aa4a0d5d43bbcc09f0e8725849fbcfe7d4fb`;
+- PRS-003C-A lifecycle PR `#217` exact head `c7075607fa7eaefc6b356825116beea87736e146` passed Required `30489134990` and merged as current `main`;
+- issue `#206` is closed completed; its archive finalizer metadata remains pending;
+- PRS-003B issue `#208` owns feature PR `#214`; duplicate issue `#210` remains closed as duplicate.
 
 ## Package status
 
-| package | issue | task ID | branch | logical owner | exact owned paths | dependency status | PR | exact head | CI | merge | archive | blockers |
-|---|---:|---|---|---|---|---|---:|---|---|---|---|---|
-| PRS-003B | #208 | awaiting task declaration | awaiting declaration | Agent PRS-003B | awaiting exact declaration | PRS-003A merged; primary runtime foundation | — | — | not run | not merged | not started | exact task/branch/paths not yet published |
-| PRS-003C-A | #206 | awaiting task declaration | awaiting declaration | Agent PRS-003C-A | awaiting exact declaration | PRS-003A merged; pure policy may proceed independently | — | — | not run | not merged | not started | exact task/branch/paths not yet published |
-| PRS-004A | #207 | OTH-20260729-prs004a-session-revision-fencing-contract | awaiting declaration | Agent PRS-004A | awaiting exact declaration | pure model; independent of PRS-003 runtime wiring | — | — | not run | not merged | not started | exact branch/paths not yet published |
+| package | issue | task ID | branch | owned paths | dependency status | PR | exact head | CI | merge | archive | blockers |
+|---|---:|---|---|---|---|---:|---|---|---|---|---|
+| PRS-003B | #208 | OTH-20260729-prs003b-database-failure-classification | dudantas/prs-003b-database-failure-classification | task; primary PRS-003 contract; `database.cpp`; classifier header; database test; database CMake | PRS-003A merged; runtime foundation | #214 | `f48ecc0b7dba6001c8d245972abe8faec34569b4` | autofix passed; CI/Required running | not merged | not started | exact-head CI/Required incomplete; branch behind lifecycle-only main commits |
+| PRS-003C-A | #206 | OTH-20260729-prs003c-login-handoff-admission-policy | dudantas/prs-003c-login-handoff-admission-policy | five declared pure-policy paths | pure policy complete | #213 | `d1a36eada901dacb4634f6b417ff7535e046d5b2` | all exact-head gates passed | `3790aa4a...` | #217 merged; finalizer pending | terminal archive metadata not yet recorded |
+| PRS-004A | #207 | OTH-20260729-prs004a-session-revision-fencing-contract | feat/OTH-20260729-prs004a-session-revision-fencing-contract | five declared pure-model paths | independent pure model complete | #212 | `1571e338bb9f7fc5d7943d4b393c5b34e10ee34a` | CI/Required/autofix passed | `b00507ec...` | #215 and #216 merged | none; terminal |
 
 ## Ownership and conflict matrix
 
-Every executing agent must publish one active task record with exact `owned_paths` before implementation. The coordinator rejects undeclared or overlapping implementation paths.
-
-| pair | expected overlap risk | coordinator rule |
+| pair | observed overlap | disposition |
 |---|---|---|
-| PRS-003B / PRS-003C-A | database unit-test registration and primary PRS-003 contract | implementations remain separate; serialize any shared registration; C-A must not wire protocols or publish runtime events |
-| PRS-003B / PRS-004A | shared test/build registration only | 004A must not modify Database runtime, schema or persistence wiring; minimal registration overlap is rebased after the first merge |
-| PRS-003C-A / PRS-004A | shared test/build registration only | preserve separate policy and fencing models; no combined abstraction or runtime adapter |
+| PRS-003B / PRS-003C-A | no common feature path; separate database/server test registration files | no implementation conflict |
+| PRS-003B / PRS-004A | `tests/unit/database/CMakeLists.txt` | PRS-004A merged first; PRS-003B refreshed onto final PRS-004A main and preserves its registration |
+| PRS-003C-A / PRS-004A | no common feature path | no implementation conflict |
 
-Coordinator-controlled or serialized paths:
+Coordinator-controlled or serialized paths remain shared unit-test CMake files, Visual Studio registration, central architecture indexes/catalogs, task indexes and the primary PRS-003 architecture contract.
 
-- shared unit-test `CMakeLists.txt` files;
-- Visual Studio project files;
-- central architecture indexes and module catalogs;
-- repository task indexes;
-- `docs/architecture/prs-003-database-outage-state-machine-contract.md`.
+PRS-003B currently differs from `main` only because PRS-003C-A feature/lifecycle commits landed after its final refresh. Those commits do not touch any PRS-003B changed path. A new refresh is required only if a shared or owned path changes before merge, or repository governance requires zero-behind final heads.
 
-No two open feature PRs may make broad edits to one shared path. When a minimal registration overlap is unavoidable, merge the package with the smallest dependency surface first, rebase the other package on updated `main`, resolve only the registration entry and rerun exact-head CI.
+## Dependency state
 
-## Dependency and next-work rules
-
-- PRS-003B is the runtime event-publication dependency.
-- PRS-003C-A may merge independently because it is pure policy.
-- PRS-004A may merge independently because it is a pure fencing model.
-- live PRS-003C protocol wiring waits for merged PRS-003B and PRS-003C-A.
-- PRS-003D mutation admission and bounded draining waits for required Slice B and admission foundations.
-- PRS-003E controlled failure injection waits for a real runtime event-publication seam.
-- PRS-004 durable/runtime persistence integration remains separate from PRS-004A.
-
-After all three packages are terminal, fresh-audit actual dependencies and select exactly one smallest unblocked next package. Do not start all remaining candidates simultaneously.
-
-## Merge and lifecycle gate
-
-For every package:
-
-1. verify issue, active task scope and PR scope match;
-2. inspect all changed filenames and every relevant patch;
-3. reject prohibited runtime/schema/deployment changes;
-4. verify exact-final-head CI and all repository-required checks;
-5. verify reviews, comments and unresolved threads;
-6. compare the exact head with current `main` and refresh after shared-path drift;
-7. merge with expected-head protection using the repository-standard method;
-8. verify merge SHA and issue closure;
-9. verify active task removal, complete archive record and any required finalizer merge;
-10. verify no stale branch or duplicate PR remains.
-
-Code completion alone is not terminal.
+- PRS-003B remains the runtime event-publication dependency.
+- PRS-003C-A pure admission policy is feature-complete and archived, but not terminal until its archive finalizer records lifecycle metadata.
+- PRS-004A is terminal.
+- live PRS-003C-B protocol wiring remains blocked until PRS-003B is merged and terminal and PRS-003C-A is terminal.
+- PRS-003D remains blocked on the required Slice B and admission foundations.
+- PRS-003E remains blocked on the merged runtime event-publication seam.
+- PRS-004 durable persistence integration remains separate from PRS-004A.
 
 ## Safety boundaries
 
-Reject any package that introduces outside explicit scope:
-
-- automatic reconnect or arbitrary SQL replay;
-- unbounded retry or draining behavior;
-- schema or migration changes;
-- production credentials, production database mutation or deployment changes;
-- silent staff bypass;
-- allow-by-default unclassified operations;
-- acceptance of a stale writer when fencing context is absent or malformed;
-- unsupported RPO/RTO claims.
+No reviewed package introduced automatic reconnect, arbitrary SQL replay, unbounded retry/draining, schema or migration changes, production credentials/data/deployment changes, silent staff bypass, allow-by-default unknown operations, missing-context stale-writer acceptance or unsupported RPO/RTO claims.
 
 ## Context checkpoint
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-29T21:31:00+02:00
-head: 75f7d8c5b4bbead28e5564d22e47d410ac5e892f
-head_scope: checkpoint content head before recording PR 211 and duplicate issue 210 disposition
-branch: dudantas/prs-parallel-integration-checkpoint-1
-pr: 211
+updated_at: 2026-07-29T22:40:00+02:00
+head: 1ec8c43c448f99e72f0319784b041bdab9e2231f
+head_scope: current main after PRS-003C-A lifecycle merge; before this coordinator checkpoint update
+branch: dudantas/prs-parallel-integration-checkpoint-2
+pr: pending
 status: active
 context_routes:
   - production-resilience
@@ -138,45 +98,42 @@ context_routes:
 owned_paths:
   - docs/agents/tasks/active/OTH-20260729-prs-parallel-integration-coordination.md
 proven:
-  - PRS-003A feature, issue, archive and finalizer lifecycle are terminal.
-  - Issue 205 owns integration coordination only.
-  - Coordination PR 209 exact head b78286053df9b977f03c712f02f52d8de86efc66 passed Required 30484314153 and merged as beea2231a0ea66fd783260a3fdbfb71afec5d566.
-  - Issues 206, 207 and 208 reserve PRS-003C-A, PRS-004A and PRS-003B respectively.
-  - Duplicate PRS-003B issue 210 is closed as duplicate of 208 and owns no implementation.
-  - Shared registration and primary PRS-003 architecture paths are serialized by the coordinator.
-  - No package feature PR or exact owned-path declaration is currently published.
+  - PRS-004A feature, issue, lifecycle and finalizer are terminal.
+  - PRS-003C-A feature PR 213 passed exact-head CI, Required and autofix and merged as 3790aa4a0d5d43bbcc09f0e8725849fbcfe7d4fb.
+  - PRS-003C-A issue 206 is closed completed and lifecycle PR 217 passed Required and merged as 1ec8c43c448f99e72f0319784b041bdab9e2231f.
+  - PRS-003B PR 214 owns exactly six declared paths and preserves caller-visible false/nullptr, disabled reconnect and no replay.
+  - PRS-003B has no changed-path conflict with merged PRS-003C-A.
+  - PRS-003B exact head f48ecc0b7dba6001c8d245972abe8faec34569b4 has passing autofix; CI and Required remain active.
 derived:
-  - The three packages can proceed in parallel only after each publishes exact owned paths and preserves the declared pure/runtime boundaries.
+  - PRS-003B may be merged without a source conflict after exact-head gates complete, provided no shared/owned path changes and repository freshness policy permits the lifecycle-only behind state.
 unknown:
-  - Package task paths, branches, exact owned paths, PRs and implementation heads.
-  - Exact-head Required result for PR 211.
+  - PRS-003B terminal CI/Required result and merge SHA.
+  - PRS-003C-A archive finalizer PR/head/merge/Required metadata.
 conflicts:
-  - duplicate issue 210 was resolved by keeping issue 208 as the definitive PRS-003B owner
+  - duplicate issue 210 resolved by retaining issue 208 as sole PRS-003B owner
 first_failure: null
 rejected_hypotheses:
-  - combine all three packages into one PR
-  - start live protocol wiring before Slice B and pure admission policy merge
-  - treat code-written state as lifecycle completion
-  - allow overlapping broad edits to shared build or architecture files
+  - merge PRS-003B before exact-head CI and Required complete
+  - combine live protocol wiring into PRS-003B or PRS-003C-A lifecycle work
+  - treat PRS-003C-A as terminal before archive finalizer metadata is merged
+  - refresh PRS-003B by combining unrelated feature changes
 changed_paths:
   - docs/agents/tasks/active/OTH-20260729-prs-parallel-integration-coordination.md
 validation:
-  - command: fresh repository, main, PR, issue and PRS-003A lifecycle audit
+  - command: PRS-004A terminal lifecycle audit
     result: PASS
-    evidence: Exact main and terminal PRS-003A issue/feature/archive/finalizer evidence verified through live GitHub state.
-  - command: coordination PR 209 exact-head scope, discussion, freshness and Required audit
+    evidence: PRs 212, 215 and 216 merged; issue 207 closed; archive finalized.
+  - command: PRS-003C-A feature and lifecycle audit
     result: PASS
-    evidence: One task-record path, no reviews/comments/threads, behind_by zero, and Required 30484314153 succeeded on exact head b78286053df9b977f03c712f02f52d8de86efc66.
-  - command: coordination PR 209 squash merge
+    evidence: PR 213 exact-head gates passed and merged; issue 206 closed; PR 217 Required passed and lifecycle merge completed.
+  - command: PRS-003B ownership, full patch, discussion and freshness audit
     result: PASS
-    evidence: Expected-head protected merge created beea2231a0ea66fd783260a3fdbfb71afec5d566.
-  - command: duplicate ownership audit
-    result: PASS
-    evidence: Issue 210 is closed as duplicate; issue 208 remains the sole PRS-003B scope owner.
-  - command: PR 211 exact-head Required
+    evidence: Six declared paths only; no reviews/comments/threads; no prohibited scope; no overlap with PRS-003C-A paths; exact-head CI/Required still running.
+  - command: coordinator checkpoint exact-head Required
     result: NOT_RUN
-    evidence: This metadata update creates the replacement PR head.
+    evidence: This checkpoint update creates the candidate head.
 blockers:
-  - All three executing agents must publish exact task records, branches and owned_paths before coordinator implementation review can begin.
-next_action: Inspect each newly published active task record and branch, record exact owned paths in the conflict matrix, and stop any overlap before implementation review.
+  - PRS-003B exact-head CI and Required are not terminal.
+  - PRS-003C-A archive finalizer metadata is not yet merged.
+next_action: Finalize the PRS-003C-A archive metadata, then re-audit PRS-003B exact-head CI, discussions and main drift and merge only if every gate remains satisfied.
 ```
