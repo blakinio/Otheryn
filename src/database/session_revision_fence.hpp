@@ -4,6 +4,7 @@
 	#include <cstdint>
 	#include <limits>
 	#include <mutex>
+	#include <optional>
 	#include <stdexcept>
 #endif
 
@@ -302,14 +303,14 @@ private:
 		if (owner.writerToken != authorizedWriterToken_) {
 			return { SessionFenceDisposition::RejectedWriter, SessionFenceReason::WriterMismatch, proposedRevision, fence };
 		}
+		if (persistenceRevision_ == std::numeric_limits<SessionFencePersistenceRevision>::max()) {
+			return { SessionFenceDisposition::RejectedRevision, SessionFenceReason::PersistenceRevisionExhausted, proposedRevision, fence };
+		}
 		if (proposedRevision < persistenceRevision_) {
 			return { SessionFenceDisposition::RejectedRevision, SessionFenceReason::StalePersistenceRevision, proposedRevision, fence };
 		}
 		if (proposedRevision == persistenceRevision_) {
 			return { SessionFenceDisposition::RejectedRevision, SessionFenceReason::DuplicatePersistenceRevision, proposedRevision, fence };
-		}
-		if (persistenceRevision_ == std::numeric_limits<SessionFencePersistenceRevision>::max()) {
-			return { SessionFenceDisposition::RejectedRevision, SessionFenceReason::PersistenceRevisionExhausted, proposedRevision, fence };
 		}
 		if (proposedRevision != persistenceRevision_ + 1) {
 			return { SessionFenceDisposition::RejectedRevision, SessionFenceReason::PersistenceRevisionGap, proposedRevision, fence };
