@@ -118,8 +118,14 @@ TEST(Prs003DatabaseOutageContractTest, RecordsLiveLoginAndHandoffGatesWithoutLif
 	expectContains(login, "DatabaseOutageProtocolAdmission::evaluateAccountLogin");
 	EXPECT_EQ(login.find("GAME_STATE_DEGRADED"), std::string::npos);
 	EXPECT_EQ(login.find("GAME_STATE_DRAINING"), std::string::npos);
-	expectOrdered(login, "DatabaseOutageProtocolAdmission::evaluateAccountLogin", "IOBan::isIpBanned");
-	expectOrdered(login, "DatabaseOutageProtocolAdmission::evaluateAccountLogin", "IOLoginData::authenticateAccount");
+
+	const auto loginFirstMessage = functionBody(login, "void ProtocolLogin::onRecvFirstMessage", "void ProtocolLogin::getLivestreamCharacterList");
+	expectOrdered(loginFirstMessage, "DatabaseOutageProtocolAdmission::evaluateAccountLogin", "IOBan::isIpBanned");
+	expectOrdered(loginFirstMessage, "DatabaseOutageProtocolAdmission::evaluateAccountLogin", "dispatchProtocolTask");
+
+	const auto characterList = functionBody(login, "void ProtocolLogin::getCharacterList", "const AccountLoginLayout* ProtocolLogin::resolveLoginLayout");
+	expectContains(std::string(characterList), "account.load()");
+	expectContains(std::string(characterList), "account.authenticate(password)");
 
 	const auto game = readSource("src/server/network/protocol/protocolgame.cpp");
 	expectContains(game, "GAME_STATE_SHUTDOWN");
