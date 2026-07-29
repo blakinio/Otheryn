@@ -12,8 +12,8 @@
  * Tracks the persistence generation owned by one live Player object.
  *
  * This state object is intentionally independent from databases, schedulers and
- * wall-clock acquisition. Callers may supply a Unix timestamp when a clean
- * owner first becomes dirty, while generation acknowledgement remains entirely
+ * wall-clock acquisition. Callers may supply a Unix timestamp for one continuous
+ * dirty interval, while generation acknowledgement remains entirely
  * deterministic and independent from a clock source.
  *
  * All operations are internally synchronized so a game-thread save request may
@@ -25,11 +25,10 @@ public:
 
 	Generation markDirty(std::optional<int64_t> dirtyTimestampSeconds = std::nullopt) {
 		std::lock_guard lock(mutex_);
-		const bool wasDirty = isDirtyLocked();
 		if (dirtyGeneration_ < std::numeric_limits<Generation>::max()) {
 			++dirtyGeneration_;
 		}
-		if (!wasDirty && isDirtyLocked() && dirtyTimestampSeconds.has_value()) {
+		if (isDirtyLocked() && !dirtySinceTimestampSeconds_.has_value() && dirtyTimestampSeconds.has_value()) {
 			dirtySinceTimestampSeconds_ = dirtyTimestampSeconds;
 		}
 		return dirtyGeneration_;
