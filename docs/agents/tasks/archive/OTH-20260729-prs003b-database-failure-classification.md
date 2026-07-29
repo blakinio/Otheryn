@@ -7,9 +7,9 @@ start_sha: 6a6007667dfd82010b0240342180961cd553466f
 feature_pr: "214"
 feature_head: 6f5254386a6bc55aeb8d2a0477a8b64c4d4355f5
 feature_merge_sha: 4b186c77cee110bd2d6971916226e88f23fe2e5f
-lifecycle_pr: pending
-lifecycle_head: pending
-lifecycle_merge_sha: pending
+lifecycle_pr: "220"
+lifecycle_head: 1f105a9083bfdb26d4a22caeefc11a1f5bf55a98
+lifecycle_merge_sha: d81210d49f9e90ece3104f62ad9021af2b2ebb7e
 issue: "208"
 issue_state: closed_completed
 created: 2026-07-29
@@ -28,11 +28,11 @@ owned_paths:
 
 ## Completion
 
-PRS-003B feature work is complete. Feature PR #214 was squash-merged into `main` as `4b186c77cee110bd2d6971916226e88f23fe2e5f` from exact validated head `6f5254386a6bc55aeb8d2a0477a8b64c4d4355f5`. Issue #208 is closed as completed.
+PRS-003B is complete. Feature PR #214 was squash-merged into `main` as `4b186c77cee110bd2d6971916226e88f23fe2e5f` from exact validated head `6f5254386a6bc55aeb8d2a0477a8b64c4d4355f5`. Issue #208 is closed as completed.
+
+Repository lifecycle is also complete. Lifecycle PR #220 was squash-merged as `d81210d49f9e90ece3104f62ad9021af2b2ebb7e` from exact head `1f105a9083bfdb26d4a22caeefc11a1f5bf55a98` after Required run `30492348066` passed. The active task record no longer exists; this archive is the durable terminal record.
 
 The package adds one narrow database-layer seam that classifies direct runtime database failures into fixed semantic categories and publishes deterministic events to the existing PRS-003A state owner while preserving every caller-visible failure result.
-
-Repository lifecycle archive placement is being completed by the dedicated lifecycle PR recorded above. A separate one-path finalizer must replace the pending lifecycle metadata after that PR merges.
 
 ## Implemented contract
 
@@ -69,14 +69,14 @@ Repository lifecycle archive placement is being completed by the dedicated lifec
 
 Feature PR #214 changed exactly:
 
-- `docs/agents/tasks/active/OTH-20260729-prs003b-database-failure-classification.md`, moved to this archive path by lifecycle handling;
+- `docs/agents/tasks/active/OTH-20260729-prs003b-database-failure-classification.md`, later moved to this archive path;
 - `docs/architecture/prs-003-database-outage-state-machine-contract.md`;
 - `src/database/database_failure_classification.hpp`;
 - `src/database/database.cpp`;
 - `tests/unit/database/database_failure_classification_test.cpp`;
 - one minimal registration edit in `tests/unit/database/CMakeLists.txt`.
 
-The lifecycle PR changes exactly the active and archive task-record paths. The later finalizer changes only this archive path.
+Lifecycle PR #220 changed exactly the active and archive task-record paths. This finalizer changes only this archive path.
 
 ## Validation evidence
 
@@ -96,6 +96,14 @@ Exact feature head: `6f5254386a6bc55aeb8d2a0477a8b64c4d4355f5`.
 - feature PR comments, reviews, unresolved threads and requested reviewers: none;
 - issue #208 closed automatically as completed by the feature merge.
 
+Exact lifecycle head: `1f105a9083bfdb26d4a22caeefc11a1f5bf55a98`.
+
+- Required run `30492348066`: PASS;
+- exact changed-path audit: active record removed and archive record added only;
+- lifecycle pre-merge drift: `behind_by=0` against feature merge `4b186c77cee110bd2d6971916226e88f23fe2e5f`;
+- lifecycle PR comments, reviews, unresolved threads and requested reviewers: none;
+- lifecycle PR was mergeable immediately before expected-head squash merge.
+
 Earlier candidate `caaa8f039c1aa3fa2f96c8baabcb535ade34367f` also passed CI, Required and autofix, but was intentionally superseded when `main` advanced. Only the final exact head above was merged.
 
 ## Remaining separate work
@@ -107,27 +115,28 @@ Earlier candidate `caaa8f039c1aa3fa2f96c8baabcb535ade34367f` also passed CI, Req
 
 ## Rollback
 
-Revert feature merge `4b186c77cee110bd2d6971916226e88f23fe2e5f` to remove the classifier/publisher integration. No schema, data or deployment rollback is required. Revert the lifecycle merge only to restore active/archive record placement.
+Revert feature merge `4b186c77cee110bd2d6971916226e88f23fe2e5f` to remove the classifier/publisher integration. No schema, data or deployment rollback is required. Revert lifecycle merge `d81210d49f9e90ece3104f62ad9021af2b2ebb7e` only to restore active/archive record placement.
 
 ## Context checkpoint
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-29T23:30:00+02:00
-head: 4b186c77cee110bd2d6971916226e88f23fe2e5f
-head_scope: merged feature on main; lifecycle archive PR and terminal metadata are pending
+updated_at: 2026-07-29T23:38:00+02:00
+head: d81210d49f9e90ece3104f62ad9021af2b2ebb7e
+head_scope: merged feature and completed lifecycle archive; this one-path finalizer records exact terminal metadata
 status: completed
 feature_pr: 214
 feature_head: 6f5254386a6bc55aeb8d2a0477a8b64c4d4355f5
 feature_merge_sha: 4b186c77cee110bd2d6971916226e88f23fe2e5f
-lifecycle_pr: pending
-lifecycle_head: pending
-lifecycle_merge_sha: pending
+lifecycle_pr: 220
+lifecycle_head: 1f105a9083bfdb26d4a22caeefc11a1f5bf55a98
+lifecycle_merge_sha: d81210d49f9e90ece3104f62ad9021af2b2ebb7e
 issue: 208
 issue_state: closed_completed
 ci_run: 30489568822
 required_run: 30489568511
 autofix_run: 30489568509
+lifecycle_required_run: 30492348066
 context_routes:
   - production-resilience
   - database
@@ -146,16 +155,17 @@ proven:
   - PRS-003A is merged and terminally archived
   - PRS-003B feature PR 214 is merged from exact validated head
   - issue 208 is closed completed
+  - lifecycle PR 220 moved the task to archive after Required passed
+  - active task record is absent
   - fixed numeric and operation-phase classification is live in the database layer
   - caller-visible false/nullptr behavior, disabled reconnect and one-shot execution remain explicit
   - exact feature head passed CI, Required and autofix
   - feature changed exactly six declared paths
-  - feature PR had no comments, reviews, unresolved threads or requested reviewers
+  - feature and lifecycle PRs had no comments, reviews, unresolved threads or requested reviewers
   - later protocol, draining, recovery and durable-fencing work remains explicitly separate
 derived:
   - the narrow seam preserves caller semantics without message parsing, replay or connection redesign
-unknown:
-  - lifecycle PR number, exact lifecycle head, Required result and lifecycle merge SHA
+unknown: []
 conflicts: []
 first_failure: null
 rejected_hypotheses:
@@ -185,9 +195,12 @@ validation:
   - command: feature terminal scope and discussion audit
     result: PASS
     evidence: six owned paths and no comments, reviews, unresolved threads or requested reviewers
-  - command: lifecycle archive placement
-    result: NOT_RUN
-    evidence: dedicated lifecycle branch has been created and the lifecycle PR is pending
+  - command: lifecycle Required 30492348066
+    result: PASS
+    evidence: exact lifecycle head passed the repository required gate
+  - command: lifecycle terminal scope and discussion audit
+    result: PASS
+    evidence: two task-record paths, behind_by zero and no comments, reviews, unresolved threads or requested reviewers
 blockers: []
-next_action: Open and validate the two-path lifecycle PR, merge it from its exact head, then update this archive in a one-path terminal finalizer PR.
+next_action: none
 ```
