@@ -8,8 +8,8 @@ issue: "222"
 feature_pr: "228"
 feature_head_sha: 0dee1dbe0251d09abd38a10eb0aabf9ea1075826
 feature_merge_sha: ec14b683b04078aabca42cbe051fff3c5f0554a1
-lifecycle_pr: pending
-lifecycle_merge_sha: pending
+lifecycle_pr: "229"
+lifecycle_merge_sha: 7bef45b2f01d410d4890ffa0bef71ed088460dc5
 created: 2026-07-29
 updated: 2026-07-30
 owned_paths:
@@ -27,7 +27,7 @@ owned_paths:
 
 ## Terminal result
 
-PRS-003C-B is complete. Feature PR #228 merged into `main` as `ec14b683b04078aabca42cbe051fff3c5f0554a1`, and issue #222 closed as completed.
+PRS-003C-B is complete. Feature PR #228 merged into `main` as `ec14b683b04078aabca42cbe051fff3c5f0554a1`, issue #222 closed as completed, and lifecycle archive PR #229 merged as `7bef45b2f01d410d4890ffa0bef71ed088460dc5`.
 
 The implementation:
 
@@ -43,11 +43,13 @@ The implementation:
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-30T01:07:15+02:00
+updated_at: 2026-07-30T01:08:54+02:00
 status: terminal
 feature_pr: 228
 feature_head: 0dee1dbe0251d09abd38a10eb0aabf9ea1075826
 feature_merge: ec14b683b04078aabca42cbe051fff3c5f0554a1
+lifecycle_pr: 229
+lifecycle_merge: 7bef45b2f01d410d4890ffa0bef71ed088460dc5
 issue: 222
 issue_state: closed_completed
 proven:
@@ -58,7 +60,7 @@ proven:
   - no reconnect, retry, SQL replay, recovery probe, draining orchestration, schema, deployment, diagnostic route or durable PRS-004 fencing was added
   - final feature diff contains the nine declared paths
   - PR discussions, reviews and review threads were empty
-  - base remained fresh through feature merge
+  - base remained fresh through feature and lifecycle merges
 validation:
   - command: CI #638 on exact head 0dee1dbe0251d09abd38a10eb0aabf9ea1075826
     result: PASS
@@ -69,9 +71,12 @@ validation:
   - command: autofix #550
     result: PASS
     evidence: no corrective commit was produced
-  - command: issue and merge audit
+  - command: feature merge and issue audit
     result: PASS
     evidence: PR 228 merged as ec14b683b04078aabca42cbe051fff3c5f0554a1 and issue 222 closed completed
+  - command: lifecycle archive Required #698
+    result: PASS
+    evidence: PR 229 merged as 7bef45b2f01d410d4890ffa0bef71ed088460dc5 and removed the active record
 blockers: []
-next_action: merge this lifecycle archive PR, then record its PR number and merge SHA in one metadata-only finalizer
+next_action: none
 ```
