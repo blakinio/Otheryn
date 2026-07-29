@@ -216,7 +216,7 @@ Future implementation tests must prove:
 - runtime implementation in this discovery milestone;
 - implicit reconnect or arbitrary query replay;
 - connection pooling;
-- automatic process restart, database promotion or whole-world rollback;
+- automatic process restart, automatic database promotion or whole-world rollback;
 - schema, migration, credential or production deployment changes;
 - PRS-004 session/revision fencing;
 - PRS-005 operation idempotency or economic ledger/outbox;
