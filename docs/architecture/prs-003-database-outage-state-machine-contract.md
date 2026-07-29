@@ -2,9 +2,9 @@
 
 ## Disposition
 
-`PRS-003 database-outage handling → DISCOVERY CONTRACT`
+`PRS-003 database-outage handling → SLICE A IMPLEMENTED`
 
-This milestone records the live startup and runtime database-failure behavior and accepts one bounded fail-closed state-machine contract before runtime integration. It does not add database-health transitions, reconnect, query replay, gameplay gates, schema changes or production deployment.
+The discovery milestone records the live startup and runtime database-failure behavior and accepts one bounded fail-closed state-machine contract. PRS-003A now implements only the database-independent pure state object and deterministic tests. It does not add database-health event publication, reconnect, query replay, gameplay gates, draining orchestration, schema changes or production deployment.
 
 ## Proven current behavior
 
@@ -65,13 +65,13 @@ MAINTAIN
 
 After startup, one runtime persistence failure can be visible only to the immediate caller. Other sessions and gameplay paths can continue accepting work because there is no shared database-health admission policy. A later query succeeding does not establish whether an earlier write committed, and reconnecting or replaying that write could duplicate value. Continuing indefinitely can accumulate unpersistable RAM state; disconnecting everyone immediately on the first error can also discard state before bounded final checkpoint attempts are made.
 
-No runtime outage containment, degraded-time bound, drain guarantee or automatic recovery claim is accepted from the current implementation.
+PRS-003A provides deterministic policy state only. No runtime outage containment, admission gate, degraded-time production value, drain guarantee or automatic recovery claim is accepted from the current integration.
 
 ## Accepted PRS-003 target model
 
 ### State ownership
 
-Introduce one database-independent process-level state machine. It owns only database-outage policy state; it does not own the MySQL connection, player objects or game lifecycle enum.
+One database-independent process-level state machine owns only database-outage policy state; it does not own the MySQL connection, player objects or game lifecycle enum.
 
 ```text
 HEALTHY
@@ -80,7 +80,7 @@ DRAINING
 MAINTENANCE
 ```
 
-The implementation must expose immutable snapshots suitable for protocol, gameplay, persistence and metrics decisions. All transitions are serialized and deterministic.
+The implementation exposes immutable snapshots suitable for later protocol, gameplay, persistence and metrics decisions. All events are serialized and deterministic.
 
 ### Classified event inputs
 
@@ -94,7 +94,9 @@ Transitions may be driven only by fixed event types, not by parsing log messages
 - `operatorEnterMaintenance(now)`;
 - `operatorResume(now)`.
 
-Failure reasons must be low-cardinality classifications such as connection lost, server gone, transaction begin failed, transaction commit failed, query failed or recovery probe failed. Player names, SQL text, credentials, IDs and arbitrary exception strings are forbidden as labels.
+PRS-003A additionally requires one caller-supplied monotonic event sequence for stale and duplicate rejection. It acquires no clock itself.
+
+Failure reasons are low-cardinality classifications: connection lost, server gone, transaction begin failed, transaction commit failed, query failed or recovery probe failed. Player names, SQL text, credentials, IDs and arbitrary exception strings are forbidden as labels.
 
 Commit outcome is classified as:
 
@@ -103,7 +105,7 @@ KNOWN_NOT_COMMITTED
 UNKNOWN
 ```
 
-`UNKNOWN` means the application cannot prove whether a submitted write committed. It must never authorize replay.
+`UNKNOWN` means the application cannot prove whether a submitted write committed. It never authorizes replay.
 
 ### Transition invariants
 
@@ -114,13 +116,14 @@ UNKNOWN
 5. Expiry of the degraded deadline enters `DRAINING`.
 6. Entry to `DRAINING` records one finite drain deadline. It cannot return directly to `HEALTHY`.
 7. Drain completion or drain-deadline expiry enters `MAINTENANCE` with distinct fixed reasons.
-8. Operator maintenance may be entered from any non-shutdown state and never auto-resumes.
-9. Recovery evidence may make a degraded state eligible for explicit recovery, but one successful query is insufficient and does not itself change state.
+8. Operator maintenance may be entered explicitly and never auto-resumes.
+9. Recovery evidence may make a degraded or maintenance state eligible for explicit recovery, but one successful query is insufficient and does not itself change state.
 10. `operatorResume` may enter `HEALTHY` only after accepted recovery evidence and only from `DEGRADED` or `MAINTENANCE`.
-11. Returning to healthy clears the active failure interval only after emitting the transition snapshot; counters remain monotonic.
-12. Shutdown remains owned by the existing game lifecycle and dominates further outage transitions.
+11. Returning to healthy emits the transition snapshot before clearing the active failure interval; counters remain monotonic.
+12. Shutdown remains owned by the existing game lifecycle and dominates later integration.
+13. Sequence-zero, duplicate, older-sequence and regressing-time events are rejected without changing policy state.
 
-Durations are finite constructor/configuration inputs with deterministic test values. Production values remain unknown until controlled runtime evidence measures final-save and disconnect behavior.
+Durations are finite constructor inputs with deterministic test values. Production values remain unknown until controlled runtime evidence measures final-save and disconnect behavior.
 
 ## Admission contract
 
@@ -134,7 +137,7 @@ Durations are finite constructor/configuration inputs with deterministic test va
 | PRS-002 final player checkpoint | existing policy | allowed when requested | bounded attempt during drain | operator-directed only |
 | health/recovery probe | observe | bounded cadence | bounded cadence without auto-resume | operator-directed |
 
-Until a call site has an explicit operation classification, the fail-closed classification is persistence-relevant mutation.
+Until a call site has an explicit operation classification, the fail-closed classification is persistence-relevant mutation. PRS-003A does not enforce this table; Slice C and Slice D own that integration.
 
 ## Drain contract
 
@@ -144,7 +147,9 @@ Until a call site has an explicit operation classification, the fail-closed clas
 - final-save failure is logged and metered but never extends the finite drain deadline;
 - drain deadline expiry proceeds to maintenance even when some final saves failed or timed out;
 - no automatic whole-world rollback follows drain failure;
-- drain ordering and concurrency limits belong to a dedicated implementation slice and require deterministic tests.
+- drain ordering and concurrency limits belong to Slice D and require deterministic tests.
+
+PRS-003A records the drain deadline and terminal reason only. It does not disconnect players or orchestrate final saves.
 
 ## Recovery contract
 
@@ -158,13 +163,15 @@ A recovery candidate requires all of the following:
 
 A successful ordinary gameplay query is not a health probe. Recovery never retries an operation with unknown commit outcome. Maintenance never auto-resumes merely because probes succeed.
 
+PRS-003A accepts only the resulting evidence decision. It does not execute probes or reconnect a session. A later runtime failure invalidates previously accepted recovery evidence.
+
 ## Observability contract
 
 Expose low-cardinality current values and monotonic events for:
 
 - current outage state;
 - fixed transition reason;
-- first-failure Unix timestamp;
+- first-failure monotonic time or translated Unix timestamp at the integration boundary;
 - degraded deadline and drain deadline;
 - transition count by fixed from/to/reason;
 - qualifying failures by fixed reason and outcome;
@@ -172,15 +179,30 @@ Expose low-cardinality current values and monotonic events for:
 - drain starts, completions and deadline expiries;
 - final-save failures observed during draining.
 
-Logs must include state, fixed reason and transition time. They must not include credentials, full SQL statements, player-private payloads or unbounded labels.
+Logs must include state, fixed reason and transition time. They must not include credentials, full SQL statements, player-private payloads or unbounded labels. PRS-003A exposes immutable values but does not publish metrics or logs.
 
 ## Bounded implementation sequence
 
-### Slice A — pure state machine
+### Slice A — pure state machine — implemented
 
-Add one database-independent state object with injectable clock/durations and deterministic tests for every accepted transition, deadline, stale event and recovery-eligibility invariant. Do not wire it into `Database`, protocols or gameplay in the same slice.
+`src/database/database_outage_state.hpp` implements one header-only, database-independent and mutex-serialized state object. It uses finite injected durations, caller-supplied monotonic time and monotonic event sequence. Every event returns immutable before/after snapshots and a fixed disposition/reason. State-transition count changes only with state changes.
 
-### Slice B — failure classification and telemetry
+`tests/unit/database/database_outage_state_test.cpp` deterministically proves:
+
+- initial state and positive finite durations;
+- first known-not-committed degradation;
+- direct unknown-outcome draining;
+- repeated-failure and degraded-deadline draining without interval reset;
+- distinct drain-completion and drain-timeout maintenance reasons;
+- recovery evidence without automatic resume;
+- explicit resume eligibility and post-emission interval clearing;
+- operator maintenance and recovery-evidence invalidation;
+- stale sequence, duplicate sequence and regressing-time rejection;
+- concurrent duplicate serialization with exactly one transition.
+
+No `Database`, protocol, gameplay, metrics or scheduler path includes or owns this state object yet.
+
+### Slice B — failure classification and telemetry — next package
 
 Classify runtime database results into fixed reasons/outcomes and publish events to the state owner without reconnect or replay. Preserve all existing caller-visible `false`/`nullptr` behavior.
 
@@ -196,24 +218,30 @@ Introduce explicit bounded operation classes, reject unclassified durable mutati
 
 Add disposable-database failure injection for connection loss, unknown commit outcome, probe recovery, repeated failure, grace expiry, drain completion and drain timeout. Production RTO/RPO remains unknown until controlled deployment evidence exists.
 
-## Discovery failure-injection requirements
+## Failure-injection requirements
 
-Future implementation tests must prove:
+Current deterministic Slice A evidence proves:
 
-- startup connection and migration failure remain fail closed;
 - first known-not-committed failure enters degraded exactly once;
 - unknown commit outcome enters draining without replay;
 - repeated degraded failures do not reset the deadline;
 - degraded deadline expiry enters draining;
-- successful probes do not auto-resume;
+- accepted recovery evidence does not auto-resume;
 - drain completion and timeout enter maintenance with different reasons;
-- final-save failure cannot create an unbounded drain;
-- one stale or duplicate transition event cannot reverse state;
+- stale or duplicate transition events cannot reverse state;
 - no state transition depends on parsing a database error string.
+
+Future integration evidence must still prove:
+
+- startup connection and migration failure remain fail closed after wiring;
+- runtime database results publish the correct fixed event without changing caller-visible failure;
+- final-save failure cannot create an unbounded drain;
+- protocols and mutations enforce the admission table;
+- controlled recovery probes never replay an unknown-outcome operation.
 
 ## Explicit non-goals
 
-- runtime implementation in this discovery milestone;
+- runtime wiring beyond the pure Slice A state object;
 - implicit reconnect or arbitrary query replay;
 - connection pooling;
 - automatic process restart, automatic database promotion or whole-world rollback;
