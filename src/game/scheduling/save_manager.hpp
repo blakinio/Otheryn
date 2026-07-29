@@ -44,15 +44,11 @@ public:
 	/**
 	 * Marks a persistence-relevant mutation on the exact live Player object.
 	 *
-	 * This static marker advances the shared exact-owner dirty generation only.
-	 * It intentionally does not resolve the SaveManager DI graph, schedule a save,
-	 * create a timer or alter existing checkpoint ownership.
+	 * This static marker advances the shared exact-owner dirty generation and
+	 * publishes only bounded process-level dirty gauges when a new dirty interval
+	 * begins. It does not schedule a save or change checkpoint ownership.
 	 */
-	static void markPlayerDirty(const std::shared_ptr<Player> &player) {
-		if (player) {
-			persistenceStateFor(player)->markDirty(currentCheckpointTimestampSeconds());
-		}
-	}
+	static void markPlayerDirty(const std::shared_ptr<Player> &player);
 
 private:
 	bool saveMap();
@@ -70,6 +66,7 @@ private:
 	static std::shared_ptr<PlayerPersistenceState> persistenceStateFor(const std::shared_ptr<Player> &player);
 	static std::vector<std::shared_ptr<PlayerPersistenceState>> persistenceStatesSnapshot();
 	static int64_t currentCheckpointTimestampSeconds();
+	static void publishPlayerDirtyGauges();
 	void publishPlayerCheckpointGauges();
 
 	/**
