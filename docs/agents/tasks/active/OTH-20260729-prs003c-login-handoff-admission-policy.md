@@ -80,9 +80,9 @@ Revert the feature merge. Only the five declared paths belong to this package.
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-29T21:46:00+02:00
-head: 85a7e15644d19b06178cabf703ec3373ce07d8e4
-head_scope: branch after merging current main and before this PR-metadata checkpoint update
+updated_at: 2026-07-29T21:52:00+02:00
+head: ee190c5241c3bdf4576f1a2f94e56cd950f89543
+head_scope: PR head before correcting the checkpoint first_failure schema
 branch: dudantas/prs-003c-login-handoff-admission-policy
 pr: 213
 status: validating
@@ -110,7 +110,9 @@ derived:
 unknown:
   - exact-head CI, Required and autofix results
 conflicts: []
-first_failure: null
+first_failure:
+  marker: none
+  evidence: no failed validation has been observed
 rejected_hypotheses:
   - generic staff bypass
   - valid handoff implies outage safety
@@ -132,9 +134,12 @@ validation:
   - command: branch freshness and shared-path refresh
     result: PASS
     evidence: current main 97bd35040ca8551ed0a7a62e60525ba696bf6259 merged without feature-path conflict
+  - command: checkpoint schema audit
+    result: PASS
+    evidence: first_failure now supplies the required marker and evidence mapping
   - command: exact-head CI, Required and autofix
     result: NOT_RUN
-    evidence: replacement head created by this checkpoint update
+    evidence: this checkpoint correction creates a replacement PR head
 blockers: []
 next_action: Validate CI, Required and autofix on the exact PR 213 head; fix only confirmed bounded failures, then audit scope, drift and discussions before merge.
 ```
