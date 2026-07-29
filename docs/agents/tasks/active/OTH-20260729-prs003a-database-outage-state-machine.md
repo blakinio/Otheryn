@@ -1,6 +1,6 @@
 ---
 task_id: OTH-20260729-prs003a-database-outage-state-machine
-status: implementing
+status: validating
 branch: dudantas/prs-003a-database-outage-state-machine
 base_branch: main
 start_sha: 322264e69a64b0204c9ab98534b421046e6d5602
@@ -14,7 +14,6 @@ owned_paths:
   - src/database/database_outage_state.hpp
   - tests/unit/database/database_outage_state_test.cpp
   - tests/unit/database/CMakeLists.txt
-  - vcproj/canary.vcxproj
 required_reads:
   - AGENTS.md
   - docs/agents/CONTEXT_HANDOFF.md
@@ -57,6 +56,7 @@ Implement Slice A of the accepted PRS-003 contract as one thread-safe, database-
 - stale sequence numbers, duplicate sequence numbers and regressing event times are rejected without mutation;
 - deadline events before their recorded deadline are rejected;
 - events in an invalid source state are rejected and cannot reverse state;
+- runtime failure while already draining or in maintenance cannot reverse state and invalidates stale recovery evidence;
 - unknown commit outcome never authorizes replay;
 - recovery evidence does not itself change state;
 - resume emits the final failure-interval snapshot before clearing active interval fields.
@@ -65,16 +65,18 @@ Implement Slice A of the accepted PRS-003 contract as one thread-safe, database-
 
 - one header-only state object under `src/database/`, following the existing `PlayerPersistenceState` synchronization pattern;
 - one focused deterministic unit/concurrency test source;
-- test CMake registration and Visual Studio header registration;
+- unit-test CMake registration;
 - architecture contract status update for implemented Slice A.
+
+The server Visual Studio project is intentionally unchanged: no server runtime source includes this header in Slice A, and the repository precedent `PlayerPersistenceState` is likewise compiled through its consuming target rather than listed as a standalone server project header. The unit target compiles the new header on applicable CI platforms.
 
 ## Deterministic evidence
 
-Tests must cover initial state, finite-duration validation, known and unknown first failures, repeated failure, degraded expiry, drain completion, drain timeout, recovery eligibility, explicit resume, operator maintenance, stale sequence/time rejection and concurrent duplicate serialization.
+Tests cover initial state, finite-duration validation, known and unknown first failures, repeated failure, degraded expiry, drain completion, drain timeout, recovery eligibility, explicit resume, operator maintenance, stale sequence/time rejection and concurrent duplicate serialization.
 
 ## Rollback
 
-Revert the feature merge. The package changes only one database-independent header, deterministic tests, build registration, architecture documentation and this task record. It performs no database, schema, credential, deployment or production mutation.
+Revert the feature merge. The package changes only one database-independent header, deterministic tests, test registration, architecture documentation and this task record. It performs no database, schema, credential, deployment or production mutation.
 
 ## Explicit non-goals
 
@@ -87,24 +89,24 @@ Revert the feature merge. The package changes only one database-independent head
 
 ## Preflight
 
-- current `main`: `322264e69a64b0204c9ab98534b421046e6d5602`;
+- task-start `main`: `322264e69a64b0204c9ab98534b421046e6d5602`;
 - issue `#201` is the existing owner for this exact package;
-- no open PR or PRS-003 branch competes for the scope;
-- no other active task record is present on `main`;
+- no open PR or PRS-003 branch competed for the scope at task start;
+- no other active task record was present on `main`;
 - `docs/agents/REPOSITORY_MAP.md`, `docs/agents/CONTEXT_ROUTING.md` and `docs/agents/EXECUTION_MODE_ROUTING.md` are absent on current `main`;
 - repository search found no existing database-outage state-machine implementation;
-- the header-only implementation pattern avoids parallel infrastructure and does not require a new runtime `.cpp` registration.
+- the header-only implementation reuses the existing mutex-protected state-object pattern and creates no parallel runtime infrastructure.
 
 ## Context checkpoint
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-29T19:12:00+02:00
-head: 322264e69a64b0204c9ab98534b421046e6d5602
-head_scope: task-start main before the active-record commit
+updated_at: 2026-07-29T19:25:00+02:00
+head: 17833e07e103b477ef06d881631eb6a8b3ca1960
+head_scope: complete implementation head before this checkpoint-only task update
 branch: dudantas/prs-003a-database-outage-state-machine
 pr: null
-status: implementing
+status: validating
 context_routes:
   - production-resilience
   - database
@@ -118,16 +120,17 @@ owned_paths:
   - src/database/database_outage_state.hpp
   - tests/unit/database/database_outage_state_test.cpp
   - tests/unit/database/CMakeLists.txt
-  - vcproj/canary.vcxproj
 proven:
   - PRS-003 discovery contract is merged and terminally archived.
   - Issue 201 owns the pure database-independent Slice A package.
-  - Existing PlayerPersistenceState proves a repository-supported header-only mutex-protected state-object pattern.
-  - No existing outage state machine, competing PR, competing branch or active task owns these paths.
+  - DatabaseOutageStateMachine implements finite durations, fixed states/reasons/outcomes, monotonic sequence/time rejection, immutable snapshots and mutex serialization without runtime wiring.
+  - Deterministic tests cover every accepted Slice A transition, precondition and duplicate-concurrency boundary.
+  - Architecture documentation records Slice A as implemented and leaves Slice B as the next separate package.
+  - No Database, DatabaseTasks, protocol, gameplay, metrics, schema, credential or deployment path changed.
 derived:
-  - A header-only state object plus focused tests is the smallest independently provable Slice A.
+  - The five owned paths are sufficient for an independently compiled and tested header-only Slice A.
 unknown:
-  - Exact implementation head and validation results until code and tests are committed.
+  - Exact-head repository CI, Required and autofix results.
 conflicts: []
 first_failure:
   marker: null
@@ -137,15 +140,23 @@ rejected_hypotheses:
   - reuse GameState_t as an undocumented outage state
   - add reconnect, query replay or recovery probes
   - combine draining orchestration or PRS-004 fencing into this task
+  - list an otherwise unconsumed Slice A header in the server-only Visual Studio project
 changed_paths:
   - docs/agents/tasks/active/OTH-20260729-prs003a-database-outage-state-machine.md
+  - docs/architecture/prs-003-database-outage-state-machine-contract.md
+  - src/database/database_outage_state.hpp
+  - tests/unit/database/database_outage_state_test.cpp
+  - tests/unit/database/CMakeLists.txt
 validation:
   - command: governance, issue, branch, ownership and existing-implementation preflight
     result: PASS
     evidence: Exact main, issue 201, empty active ownership, no competing PR/branch and no existing outage implementation were confirmed.
-  - command: implementation and focused tests
+  - command: focused implementation and source/test registration audit
+    result: PASS
+    evidence: One independent header and one registered test source cover all accepted Slice A states, events, deadlines, recovery and concurrency invariants.
+  - command: exact-head repository CI, Required and autofix
     result: NOT_RUN
-    evidence: Pending implementation.
+    evidence: Pending pull request creation.
 blockers: []
-next_action: Implement the header-only state machine, deterministic tests and exact build/document registration within the six owned paths.
+next_action: Open the feature pull request for issue 201 and validate CI, Required and autofix on the live exact head.
 ```
