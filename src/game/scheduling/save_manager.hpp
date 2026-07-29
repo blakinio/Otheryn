@@ -13,9 +13,11 @@
 #include "game/scheduling/player_checkpoint_attempt.hpp"
 
 #ifndef USE_PRECOMPILED_HEADERS
+	#include <cstdint>
 	#include <map>
 	#include <memory>
 	#include <mutex>
+	#include <vector>
 #endif
 
 class KVStore;
@@ -48,7 +50,7 @@ public:
 	 */
 	static void markPlayerDirty(const std::shared_ptr<Player> &player) {
 		if (player) {
-			persistenceStateFor(player)->markDirty();
+			persistenceStateFor(player)->markDirty(currentCheckpointTimestampSeconds());
 		}
 	}
 
@@ -66,6 +68,9 @@ private:
 	bool schedulePlayer(std::weak_ptr<Player> player);
 	bool scheduleDirtyPlayer(std::weak_ptr<Player> player, std::shared_ptr<PlayerPersistenceState> state);
 	static std::shared_ptr<PlayerPersistenceState> persistenceStateFor(const std::shared_ptr<Player> &player);
+	static std::vector<std::shared_ptr<PlayerPersistenceState>> persistenceStatesSnapshot();
+	static int64_t currentCheckpointTimestampSeconds();
+	void publishPlayerCheckpointGauges();
 
 	/**
 	 * Saves a pinned player object.
@@ -78,6 +83,7 @@ private:
 	std::atomic<std::chrono::steady_clock::time_point> m_scheduledAt;
 	inline static std::mutex m_playerPersistenceMutex;
 	inline static std::map<std::weak_ptr<Player>, std::shared_ptr<PlayerPersistenceState>, std::owner_less<std::weak_ptr<Player>>> m_playerPersistenceStates;
+	inline static PlayerCheckpointTelemetry m_playerCheckpointTelemetry;
 	PlayerCheckpointQueueAdmission m_playerCheckpointQueueAdmission;
 
 	ThreadPool &threadPool;
