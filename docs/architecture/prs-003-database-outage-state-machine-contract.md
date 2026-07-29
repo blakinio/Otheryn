@@ -200,7 +200,7 @@ Logs must include state, fixed reason and transition time. They must not include
 - stale sequence, duplicate sequence and regressing-time rejection;
 - concurrent duplicate serialization with exactly one transition.
 
-No `Database`, protocol, gameplay, metrics or scheduler path includes or owns this state object yet.
+No `Database`, protocol, gameplay, metrics or scheduler path includes or owns this state object yet. Do not wire it into `Database`, protocols or gameplay in the same slice.
 
 ### Slice B — failure classification and telemetry — next package
 
