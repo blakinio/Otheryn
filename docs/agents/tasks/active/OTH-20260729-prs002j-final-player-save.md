@@ -1,6 +1,6 @@
 ---
 task_id: OTH-20260729-prs002j-final-player-save
-status: review
+status: ready
 branch: dudantas/prs-002j-final-player-save
 base_branch: main
 start_sha: 8fb339146897a3b9695f0788a63d6df199a253a4
@@ -87,12 +87,12 @@ Revert this bounded feature merge. No schema, database data, KV data, credential
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-29T09:26:00+02:00
-head: f4e06afd1825057383897bc668993bc84205d571
-head_scope: implementation plus pre-PR checkpoint
+updated_at: 2026-07-29T09:39:00+02:00
+head: f4183f01b887a49830f9541fe3057cc15a0ade6c
+head_scope: exact validated implementation head before final checkpoint-only commit
 branch: dudantas/prs-002j-final-player-save
 pr: 192
-status: validating
+status: ready
 context_routes:
   - production-resilience
   - player-persistence
@@ -114,19 +114,20 @@ proven:
   - Logout and forced shutdown removal converge on Player::onRemoveCreature with isLogout true.
   - Player::onRemoveCreature updates loginPosition and lastLogout before calling SaveManager::savePlayer.
   - Shutdown removes players before saveAll, so the removal callback is the per-player shutdown final-save boundary.
-  - PR 192 changes exactly seven declared paths and is behind main by zero.
+  - PR 192 changes exactly seven declared paths and was behind main by zero at validation.
   - Final ownership waits on a condition variable and never steals or acknowledges an older owner.
   - The final save is synchronous, exact-owner, limited to five seconds per claim and two attempts.
   - Deterministic tests cover generation handoff, timeout preservation and source wiring.
+  - Exact-head CI 30431700681, Required 30431700419 and autofix 30431700456 succeeded on f4183f01b887a49830f9541fe3057cc15a0ade6c.
+  - Linux debug passed Canary smoke, schema import and full CTest; Linux release, macOS, Windows Solution, Windows CMake and Docker passed applicable build and smoke gates.
 derived:
   - Recognizing finalized logout state inside SaveManager preserves the existing Player callback while preventing another detached logout checkpoint.
   - Two finite attempts can capture one mutation concurrent with the first final save without creating an automatic retry policy.
-unknown:
-  - Exact-head compile, focused runtime tests and full platform CI results.
+unknown: []
 conflicts: []
 first_failure:
-  marker: no failing validation observed before CI
-  evidence: Source and changed-path audits agree with the bounded contract; PR 192 exact-head CI is pending.
+  marker: initial autofix run 30431656868 detected two indentation changes
+  evidence: Autofix applied only the two-line clang-format correction; replacement head f4183f01b887a49830f9541fe3057cc15a0ade6c passed autofix 30431700456 and all exact-head validation.
 rejected_hypotheses:
   - detach another asynchronous logout save
   - wait without a fixed timeout
@@ -152,8 +153,11 @@ validation:
     result: PASS
     evidence: Bounded condition-variable ownership, two-attempt synchronous final path, exact-generation helper reuse and deterministic tests are present.
   - command: exact-head repository CI
-    result: NOT_RUN
-    evidence: PR 192 must complete full applicable CI, Required and autofix on its final head.
+    result: PASS
+    evidence: CI 30431700681 passed all applicable jobs on f4183f01b887a49830f9541fe3057cc15a0ade6c, including full Linux debug CTest.
+  - command: exact-head Required and autofix
+    result: PASS
+    evidence: Required 30431700419 and autofix 30431700456 succeeded on f4183f01b887a49830f9541fe3057cc15a0ade6c.
 blockers: []
-next_action: Inspect PR 192 exact-head CI and fix only concrete compile, test or formatting failures within the seven declared paths.
+next_action: Pass the repository checks generated for this checkpoint-only head, perform the final drift and discussion audit, then squash-merge PR 192 with expected-head protection.
 ```
