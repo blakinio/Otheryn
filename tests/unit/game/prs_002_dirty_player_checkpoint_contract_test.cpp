@@ -46,7 +46,7 @@ TEST(Prs002DirtyPlayerCheckpointContractTest, PinsScheduledSaveToRequestedPlayer
 	const auto source = readSource("src/game/scheduling/save_manager.cpp");
 	expectContains(source, "auto playerToSave = playerPtr.lock();");
 	expectContains(source, "auto state = persistenceStateFor(playerToSave);");
-	expectContains(source, "state->markDirty();");
+	expectContains(source, "state->markDirty(currentCheckpointTimestampSeconds())");
 	expectContains(source, "const auto generation = state->beginCheckpoint();");
 	EXPECT_EQ(source.find("m_playerMap"), std::string::npos);
 }
@@ -116,12 +116,16 @@ TEST(Prs002DirtyPlayerCheckpointContractTest, BoundsQueueAdmissionBeforeDetachAn
 
 TEST(Prs002DirtyPlayerCheckpointContractTest, MarksOnlyTrackedPlayerStorageMutations) {
 	const auto managerHeader = readSource("src/game/scheduling/save_manager.hpp");
-	const auto marker = functionBody(managerHeader, "static void markPlayerDirty", "private:");
-	expectContains(std::string(marker), "persistenceStateFor(player)->markDirty();");
+	expectContains(managerHeader, "static void markPlayerDirty(const std::shared_ptr<Player> &player);");
+	expectContains(managerHeader, "inline static std::mutex m_playerPersistenceMutex;");
+
+	const auto managerSource = readSource("src/game/scheduling/save_manager.cpp");
+	const auto marker = functionBody(managerSource, "void SaveManager::markPlayerDirty", "bool SaveManager::schedulePlayer");
+	expectContains(std::string(marker), "auto state = persistenceStateFor(player);");
+	expectContains(std::string(marker), "state->markDirty(currentCheckpointTimestampSeconds())");
 	EXPECT_EQ(marker.find("getInstance"), std::string_view::npos);
 	EXPECT_EQ(marker.find("savePlayer("), std::string_view::npos);
 	EXPECT_EQ(marker.find("schedulePlayer("), std::string_view::npos);
-	expectContains(managerHeader, "inline static std::mutex m_playerPersistenceMutex;");
 
 	const auto storage = readSource("src/creatures/players/components/player_storage.cpp");
 	const auto ingest = functionBody(storage, "void PlayerStorage::ingest", "void PlayerStorage::add");
@@ -138,6 +142,34 @@ TEST(Prs002DirtyPlayerCheckpointContractTest, MarksOnlyTrackedPlayerStorageMutat
 	expectContains(std::string(remove), "SaveManager::markPlayerDirty(m_player.getPlayer());");
 	EXPECT_EQ(remove.find("g_saveManager"), std::string_view::npos);
 	EXPECT_EQ(remove.find("savePlayer("), std::string_view::npos);
+}
+
+TEST(Prs002DirtyPlayerCheckpointContractTest, ExportsBoundedLowCardinalityCheckpointMetrics) {
+	const auto metricsHeader = readSource("src/lib/metrics/metrics.hpp");
+	expectContains(metricsHeader, "void setGauge(std::string_view name, int64_t value)");
+	expectContains(metricsHeader, "CreateInt64UpDownCounter");
+	expectContains(metricsHeader, "gaugeValues");
+
+	const auto source = readSource("src/game/scheduling/save_manager.cpp");
+	expectContains(source, "player_checkpoint_queue_capacity");
+	expectContains(source, "player_checkpoint_queue_outstanding");
+	expectContains(source, "player_checkpoint_dirty_owners");
+	expectContains(source, "player_checkpoint_oldest_dirty_timestamp_seconds");
+	expectContains(source, "player_checkpoint_requests");
+	expectContains(source, "player_checkpoint_attempts");
+	expectContains(source, "player_checkpoint_successes");
+	expectContains(source, "player_checkpoint_failures");
+	expectContains(source, "player_checkpoint_thrown_attempts");
+	expectContains(source, "player_checkpoint_queue_rejections");
+	expectContains(source, "player_checkpoint_submission_failures");
+	expectContains(source, "metrics::method_latency checkpointLatency(\"player_checkpoint_save\")");
+	EXPECT_EQ(source.find("{ { \"player\""), std::string::npos);
+	EXPECT_EQ(source.find("{ { \"guid\""), std::string::npos);
+	EXPECT_EQ(source.find("{ { \"generation\""), std::string::npos);
+
+	const auto state = readSource("src/game/scheduling/player_persistence_state.hpp");
+	expectContains(state, "dirtySinceTimestampSeconds_");
+	expectContains(state, "if (!isDirtyLocked())");
 }
 
 TEST(Prs002DirtyPlayerCheckpointContractTest, PreservesSaveOutcomeAndDomainBoundaries) {
@@ -172,4 +204,6 @@ TEST(Prs002DirtyPlayerCheckpointContractTest, RecordsGenerationSafeTargetAndBoun
 	expectContains(contract, "Slice C — bounded mutation coverage");
 	expectContains(contract, "bounded PRS-002D evidence");
 	expectContains(contract, "bounded PRS-002H behavior");
+	expectContains(contract, "bounded PRS-002I observability");
+	expectContains(contract, "time() - player_checkpoint_oldest_dirty_timestamp_seconds");
 }
