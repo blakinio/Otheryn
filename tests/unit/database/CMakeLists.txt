@@ -1,4 +1,4 @@
 target_sources(
     canary_ut
-    PRIVATE databasemanager_test.cpp
+    PRIVATE database_outage_state_test.cpp databasemanager_test.cpp
 )
