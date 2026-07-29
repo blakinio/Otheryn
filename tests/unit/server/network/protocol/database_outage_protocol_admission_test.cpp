@@ -75,6 +75,24 @@ TEST(DatabaseOutageProtocolAdmissionTest, GatesEveryLiveOperationForOutageStates
 	}
 }
 
+TEST(DatabaseOutageProtocolAdmissionTest, GameOutageGateCannotBeMaskedByClosingLifecycle) {
+	using enum DatabaseOutageAdmissionReason;
+
+	const auto degraded = DatabaseOutageProtocolAdmission::evaluateGameLoginOutage(makeSnapshot(DatabaseOutageState::Degraded));
+	const auto draining = DatabaseOutageProtocolAdmission::evaluateGameLoginOutage(makeSnapshot(DatabaseOutageState::Draining));
+	const auto maintenance = DatabaseOutageProtocolAdmission::evaluateGameLoginOutage(makeSnapshot(DatabaseOutageState::Maintenance));
+	const auto healthy = DatabaseOutageProtocolAdmission::evaluateGameLoginOutage(makeSnapshot(DatabaseOutageState::Healthy));
+
+	EXPECT_TRUE(degraded.rejected());
+	EXPECT_EQ(degraded.decision.reason, OutageDegraded);
+	EXPECT_TRUE(draining.rejected());
+	EXPECT_EQ(draining.decision.reason, OutageDraining);
+	EXPECT_TRUE(maintenance.rejected());
+	EXPECT_EQ(maintenance.decision.reason, OutageMaintenance);
+	EXPECT_TRUE(healthy.allowed());
+	EXPECT_EQ(healthy.decision.lifecycleState, GAME_STATE_NORMAL);
+}
+
 TEST(DatabaseOutageProtocolAdmissionTest, DefersOnlyExistingGameLoginClosingAndClosedChecks) {
 	using enum DatabaseOutageAdmissionOperation;
 	using enum DatabaseOutageAdmissionReason;
