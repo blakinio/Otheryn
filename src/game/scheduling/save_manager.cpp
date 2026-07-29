@@ -18,6 +18,7 @@
 #include "io/iologindata.hpp"
 #include "kv/kv.hpp"
 #include "lib/di/container.hpp"
+#include "lib/metrics/metrics.hpp"
 #include "creatures/players/player.hpp"
 
 SaveManager::SaveManager(ThreadPool &threadPool, KVStore &kvStore, Logger &logger, Game &game) :
@@ -136,6 +137,10 @@ void SaveManager::scheduleAll() {
 	});
 }
 
+int64_t SaveManager::currentCheckpointTimestampSeconds() {
+	return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+}
+
 std::shared_ptr<PlayerPersistenceState> SaveManager::persistenceStateFor(const std::shared_ptr<Player> &player) {
 	std::lock_guard lock(m_playerPersistenceMutex);
 	for (auto it = m_playerPersistenceStates.begin(); it != m_playerPersistenceStates.end();) {
@@ -156,6 +161,53 @@ std::shared_ptr<PlayerPersistenceState> SaveManager::persistenceStateFor(const s
 	return state;
 }
 
+std::vector<std::shared_ptr<PlayerPersistenceState>> SaveManager::persistenceStatesSnapshot() {
+	std::vector<std::shared_ptr<PlayerPersistenceState>> states;
+	std::lock_guard lock(m_playerPersistenceMutex);
+	states.reserve(m_playerPersistenceStates.size());
+	for (auto it = m_playerPersistenceStates.begin(); it != m_playerPersistenceStates.end();) {
+		if (it->first.expired()) {
+			it = m_playerPersistenceStates.erase(it);
+			continue;
+		}
+
+		states.emplace_back(it->second);
+		++it;
+	}
+	return states;
+}
+
+void SaveManager::publishPlayerDirtyGauges() {
+	const auto gauges = summarizePlayerCheckpointGauges(0, 0, persistenceStatesSnapshot());
+	g_metrics().setGauge("player_checkpoint_dirty_owners", static_cast<int64_t>(gauges.dirtyOwners));
+	g_metrics().setGauge("player_checkpoint_oldest_dirty_timestamp_seconds", gauges.oldestDirtyTimestampSeconds);
+}
+
+void SaveManager::publishPlayerCheckpointGauges() {
+	const auto gauges = summarizePlayerCheckpointGauges(
+		m_playerCheckpointQueueAdmission.capacity(),
+		m_playerCheckpointQueueAdmission.outstanding(),
+		persistenceStatesSnapshot()
+	);
+	g_metrics().setGauge("player_checkpoint_queue_capacity", static_cast<int64_t>(gauges.queueCapacity));
+	g_metrics().setGauge("player_checkpoint_queue_outstanding", static_cast<int64_t>(gauges.queueOutstanding));
+	g_metrics().setGauge("player_checkpoint_dirty_owners", static_cast<int64_t>(gauges.dirtyOwners));
+	g_metrics().setGauge("player_checkpoint_oldest_dirty_timestamp_seconds", gauges.oldestDirtyTimestampSeconds);
+}
+
+void SaveManager::markPlayerDirty(const std::shared_ptr<Player> &player) {
+	if (!player) {
+		return;
+	}
+
+	auto state = persistenceStateFor(player);
+	const bool hadDirtyTimestamp = state->dirtySinceTimestampSeconds().has_value();
+	(void)state->markDirty(currentCheckpointTimestampSeconds());
+	if (!hadDirtyTimestamp && state->dirtySinceTimestampSeconds().has_value()) {
+		publishPlayerDirtyGauges();
+	}
+}
+
 bool SaveManager::schedulePlayer(std::weak_ptr<Player> playerPtr) {
 	auto playerToSave = playerPtr.lock();
 	if (!playerToSave) {
@@ -173,11 +225,19 @@ bool SaveManager::schedulePlayer(std::weak_ptr<Player> playerPtr) {
 	}
 
 	auto state = persistenceStateFor(playerToSave);
-	state->markDirty();
+	const bool hadDirtyTimestamp = state->dirtySinceTimestampSeconds().has_value();
+	(void)state->markDirty(currentCheckpointTimestampSeconds());
+	if (!hadDirtyTimestamp && state->dirtySinceTimestampSeconds().has_value()) {
+		publishPlayerDirtyGauges();
+	}
 	return scheduleDirtyPlayer(playerPtr, std::move(state));
 }
 
 bool SaveManager::scheduleDirtyPlayer(std::weak_ptr<Player> playerPtr, std::shared_ptr<PlayerPersistenceState> state) {
+	m_playerCheckpointTelemetry.recordRequest();
+	g_metrics().addCounter("player_checkpoint_requests", 1);
+	publishPlayerCheckpointGauges();
+
 	const auto generation = state->beginCheckpoint();
 	if (!generation.has_value()) {
 		logger.debug("Coalescing player save because a checkpoint is already in flight or no dirty generation exists.");
@@ -186,13 +246,19 @@ bool SaveManager::scheduleDirtyPlayer(std::weak_ptr<Player> playerPtr, std::shar
 
 	auto playerToSave = playerPtr.lock();
 	if (!playerToSave) {
-		state->acknowledgeFailure(*generation);
+		(void)state->acknowledgeFailure(*generation);
+		m_playerCheckpointTelemetry.recordFailure();
+		g_metrics().addCounter("player_checkpoint_failures", 1, { { "reason", "owner_unavailable" } });
+		publishPlayerCheckpointGauges();
 		logger.debug("Skipping save for player because player is no longer online.");
 		return false;
 	}
 
 	const auto admission = tryAdmitPlayerCheckpoint(m_playerCheckpointQueueAdmission, *state, *generation);
 	if (admission.outcome == PlayerCheckpointQueueAdmissionOutcome::queueFull) {
+		m_playerCheckpointTelemetry.recordQueueRejection();
+		g_metrics().addCounter("player_checkpoint_queue_rejections", 1);
+		publishPlayerCheckpointGauges();
 		if (!admission.checkpointReleased) {
 			logger.error("Failed to release player {} generation {} after checkpoint queue rejection.", playerToSave->getName(), *generation);
 		}
@@ -206,27 +272,42 @@ bool SaveManager::scheduleDirtyPlayer(std::weak_ptr<Player> playerPtr, std::shar
 		return false;
 	}
 
+	publishPlayerCheckpointGauges();
 	logger.debug("Scheduling player {} generation {} for saving.", playerToSave->getName(), *generation);
 	try {
 		threadPool.detach_task([this, playerPtr, state, generation = *generation]() {
-			PlayerCheckpointQueueSlot queueSlot(m_playerCheckpointQueueAdmission);
+			PlayerCheckpointQueueSlot queueSlot(m_playerCheckpointQueueAdmission, [this] {
+				publishPlayerCheckpointGauges();
+			});
 			auto player = playerPtr.lock();
 			if (!player) {
-				state->acknowledgeFailure(generation);
+				(void)state->acknowledgeFailure(generation);
+				m_playerCheckpointTelemetry.recordFailure();
+				g_metrics().addCounter("player_checkpoint_failures", 1, { { "reason", "owner_unavailable" } });
+				publishPlayerCheckpointGauges();
 				logger.debug("Skipping save for player because player is no longer online.");
 				return;
 			}
 
+			m_playerCheckpointTelemetry.recordAttempt();
+			g_metrics().addCounter("player_checkpoint_attempts", 1);
+			metrics::method_latency checkpointLatency("player_checkpoint_save");
 			const auto attempt = executePlayerCheckpointAttempt(*state, generation, [this, &player] {
 				return doSavePlayer(player);
 			});
 
 			if (attempt.outcome == PlayerCheckpointAttemptOutcome::saved) {
 				if (!attempt.acknowledgementAccepted) {
+					m_playerCheckpointTelemetry.recordFailure();
+					g_metrics().addCounter("player_checkpoint_failures", 1, { { "reason", "acknowledgement_rejected" } });
+					publishPlayerCheckpointGauges();
 					logger.error("Failed to acknowledge player {} generation {} save success.", player->getName(), generation);
 					return;
 				}
 
+				m_playerCheckpointTelemetry.recordSuccess();
+				g_metrics().addCounter("player_checkpoint_successes", 1);
+				publishPlayerCheckpointGauges();
 				if (attempt.followUpRequired && player->isOnline() && game.getGameState() != GAME_STATE_SHUTDOWN) {
 					if (!queueSlot.release()) {
 						logger.error("Failed to release player {} generation {} checkpoint queue slot before follow-up.", player->getName(), generation);
@@ -236,6 +317,16 @@ bool SaveManager::scheduleDirtyPlayer(std::weak_ptr<Player> playerPtr, std::shar
 				}
 				return;
 			}
+
+			if (attempt.outcome == PlayerCheckpointAttemptOutcome::saveThrew) {
+				m_playerCheckpointTelemetry.recordThrownAttempt();
+				g_metrics().addCounter("player_checkpoint_failures", 1, { { "reason", "save_threw" } });
+				g_metrics().addCounter("player_checkpoint_thrown_attempts", 1);
+			} else {
+				m_playerCheckpointTelemetry.recordFailure();
+				g_metrics().addCounter("player_checkpoint_failures", 1, { { "reason", "save_failed" } });
+			}
+			publishPlayerCheckpointGauges();
 
 			if (!attempt.acknowledgementAccepted) {
 				logger.error("Failed to acknowledge player {} generation {} save failure.", player->getName(), generation);
@@ -255,6 +346,9 @@ bool SaveManager::scheduleDirtyPlayer(std::weak_ptr<Player> playerPtr, std::shar
 	} catch (const std::exception &e) {
 		const bool queueReleased = m_playerCheckpointQueueAdmission.release();
 		const bool checkpointReleased = state->abandonCheckpoint(*generation);
+		m_playerCheckpointTelemetry.recordSubmissionFailure();
+		g_metrics().addCounter("player_checkpoint_submission_failures", 1);
+		publishPlayerCheckpointGauges();
 		if (!queueReleased || !checkpointReleased) {
 			logger.error("Failed to fully roll back player {} generation {} checkpoint admission after scheduling exception.", playerToSave->getName(), *generation);
 		}
@@ -263,6 +357,9 @@ bool SaveManager::scheduleDirtyPlayer(std::weak_ptr<Player> playerPtr, std::shar
 	} catch (...) {
 		const bool queueReleased = m_playerCheckpointQueueAdmission.release();
 		const bool checkpointReleased = state->abandonCheckpoint(*generation);
+		m_playerCheckpointTelemetry.recordSubmissionFailure();
+		g_metrics().addCounter("player_checkpoint_submission_failures", 1);
+		publishPlayerCheckpointGauges();
 		if (!queueReleased || !checkpointReleased) {
 			logger.error("Failed to fully roll back player {} generation {} checkpoint admission after unknown scheduling exception.", playerToSave->getName(), *generation);
 		}
@@ -344,6 +441,6 @@ bool SaveManager::saveKV() {
 	}
 
 	auto duration = bm_saveKV.duration();
-	logger.debug("Key-value store saved in {} milliseconds.", duration);
+	logger.debug("Saving key-value store took {} milliseconds.", duration);
 	return saveSuccess;
 }
