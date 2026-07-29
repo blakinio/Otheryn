@@ -98,7 +98,28 @@ This proves the commit-before-ack process window and its ambiguity: durable SQL 
 
 The bounded PRS-002H package adds an atomic admission counter around asynchronous player checkpoint submissions, with a named default runtime capacity of `1024` and smaller injectable capacities for deterministic tests. `SaveManager` acquires one slot before detaching work to the shared thread pool. A full queue abandons only the matching in-flight generation, preserves dirty state, consumes no save-failure budget and requires a later explicit scheduling request. Every admitted task releases its slot on exit, and a successful attempt releases the current slot before scheduling a newer dirty generation so capacity `1` remains live.
 
-This bounds only asynchronous player-checkpoint admission; it does not bound unrelated users of the shared thread pool. The local capacity/outstanding accessors support deterministic proof, while Prometheus/ostream export, oldest-dirty-age tracking, attempt/failure counters, alerts, automatic retry and measured RPO remain separate work.
+This bounds only asynchronous player-checkpoint admission; it does not bound unrelated users of the shared thread pool. The local capacity/outstanding accessors support deterministic proof, while automatic retry and measured RPO remain separate work.
+
+### Implemented bounded PRS-002I observability
+
+The bounded PRS-002I package adds one caller-supplied Unix timestamp to each continuous exact-owner dirty interval. Newer mutations, queue rejection, save failure and thrown attempts preserve that timestamp; exact-generation success clears it only when no newer generation remains. Expired owners are removed from the process-level gauge snapshot.
+
+`SaveManager` exports these label-free current values through OpenTelemetry integer up/down counters:
+
+- `player_checkpoint_queue_capacity`;
+- `player_checkpoint_queue_outstanding`;
+- `player_checkpoint_dirty_owners`;
+- `player_checkpoint_oldest_dirty_timestamp_seconds`.
+
+It also exports monotonic event counters for requests, attempts, successes, failures, thrown attempts, queue rejections and task-submission failures. The failure counter uses only the fixed `reason` values `owner_unavailable`, `acknowledgement_rejected`, `save_failed` and `save_threw`; player names, GUIDs and generation numbers are never metric labels. Checkpoint save duration is recorded in the existing `method_latency` histogram with the fixed method value `player_checkpoint_save`.
+
+Prometheus derives the live age of the oldest tracked dirty owner without requiring a periodic game-thread timer:
+
+```promql
+clamp_min(time() - player_checkpoint_oldest_dirty_timestamp_seconds, 0)
+```
+
+Consumers should treat a zero timestamp as no measured dirty owner. This package exports evidence; it does not choose alert thresholds, provision dashboards, claim a checkpoint SLO/RPO or alter retry and queue policy.
 
 ## Explicit non-goals
 

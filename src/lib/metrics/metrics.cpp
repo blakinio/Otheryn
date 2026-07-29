@@ -23,6 +23,15 @@ void Metrics::init(Options opts) {
 		return;
 	}
 
+	{
+		std::scoped_lock lock(mutex_);
+		latencyHistograms.clear();
+		upDownCounters.clear();
+		counters.clear();
+		gauges.clear();
+		gaugeValues.clear();
+	}
+
 	auto provider = metrics_sdk::MeterProviderFactory::Create();
 	auto* p = static_cast<metrics_sdk::MeterProvider*>(provider.get());
 
@@ -84,6 +93,15 @@ void Metrics::initHistograms() {
 }
 
 void Metrics::shutdown() {
+	{
+		std::scoped_lock lock(mutex_);
+		latencyHistograms.clear();
+		upDownCounters.clear();
+		counters.clear();
+		gauges.clear();
+		gaugeValues.clear();
+	}
+
 	std::shared_ptr<metrics_api::MeterProvider> none;
 	metrics_api::Provider::SetMeterProvider(none);
 }

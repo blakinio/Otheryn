@@ -12,9 +12,9 @@
  * Tracks the persistence generation owned by one live Player object.
  *
  * This state object is intentionally independent from databases, schedulers and
- * wall-clock time. Callers mark persistence-relevant mutations, capture one
- * generation for an in-flight checkpoint, and acknowledge only that exact
- * generation when the save result is known.
+ * wall-clock acquisition. Callers may supply a Unix timestamp for one continuous
+ * dirty interval, while generation acknowledgement remains entirely
+ * deterministic and independent from a clock source.
  *
  * All operations are internally synchronized so a game-thread save request may
  * safely race with save-worker acknowledgement.
@@ -23,10 +23,13 @@ class PlayerPersistenceState final {
 public:
 	using Generation = uint64_t;
 
-	Generation markDirty() {
+	Generation markDirty(std::optional<int64_t> dirtyTimestampSeconds = std::nullopt) {
 		std::lock_guard lock(mutex_);
 		if (dirtyGeneration_ < std::numeric_limits<Generation>::max()) {
 			++dirtyGeneration_;
+		}
+		if (isDirtyLocked() && !dirtySinceTimestampSeconds_.has_value() && dirtyTimestampSeconds.has_value()) {
+			dirtySinceTimestampSeconds_ = dirtyTimestampSeconds;
 		}
 		return dirtyGeneration_;
 	}
@@ -75,6 +78,9 @@ public:
 		acknowledgedGeneration_ = std::max(acknowledgedGeneration_, generation);
 		inFlightGeneration_.reset();
 		consecutiveFailures_ = 0;
+		if (!isDirtyLocked()) {
+			dirtySinceTimestampSeconds_.reset();
+		}
 		return true;
 	}
 
@@ -111,6 +117,11 @@ public:
 		return consecutiveFailures_;
 	}
 
+	[[nodiscard]] std::optional<int64_t> dirtySinceTimestampSeconds() const {
+		std::lock_guard lock(mutex_);
+		return dirtySinceTimestampSeconds_;
+	}
+
 private:
 	[[nodiscard]] bool isDirtyLocked() const noexcept {
 		return dirtyGeneration_ > acknowledgedGeneration_;
@@ -130,5 +141,6 @@ private:
 	Generation dirtyGeneration_ = 0;
 	Generation acknowledgedGeneration_ = 0;
 	std::optional<Generation> inFlightGeneration_;
+	std::optional<int64_t> dirtySinceTimestampSeconds_;
 	uint32_t consecutiveFailures_ = 0;
 };

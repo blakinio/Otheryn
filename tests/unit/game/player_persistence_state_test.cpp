@@ -16,6 +16,7 @@ TEST(PlayerPersistenceStateTest, StartsCleanAndCannotBeginCheckpoint) {
 	EXPECT_EQ(state.dirtyGeneration(), 0U);
 	EXPECT_EQ(state.acknowledgedGeneration(), 0U);
 	EXPECT_EQ(state.consecutiveFailures(), 0U);
+	EXPECT_FALSE(state.dirtySinceTimestampSeconds().has_value());
 	EXPECT_FALSE(state.beginCheckpoint().has_value());
 }
 
@@ -153,6 +154,55 @@ TEST(PlayerPersistenceStateTest, NewMutationDoesNotSilentlyResetFailureBudget) {
 	EXPECT_EQ(state.consecutiveFailures(), 1U);
 	EXPECT_FALSE(state.canBeginCheckpoint(1));
 	EXPECT_TRUE(state.canBeginCheckpoint(2));
+}
+
+TEST(PlayerPersistenceStateTest, DirtyTimestampStartsOnceAndClearsOnlyWhenOwnerBecomesClean) {
+	PlayerPersistenceState state;
+
+	EXPECT_EQ(state.markDirty(100), 1U);
+	EXPECT_EQ(state.dirtySinceTimestampSeconds(), 100);
+	const auto first = state.beginCheckpoint();
+	ASSERT_EQ(first, 1U);
+
+	EXPECT_EQ(state.markDirty(200), 2U);
+	EXPECT_EQ(state.dirtySinceTimestampSeconds(), 100);
+	ASSERT_TRUE(state.acknowledgeSuccess(*first));
+	EXPECT_TRUE(state.isDirty());
+	EXPECT_EQ(state.dirtySinceTimestampSeconds(), 100);
+
+	const auto second = state.beginCheckpoint();
+	ASSERT_EQ(second, 2U);
+	ASSERT_TRUE(state.acknowledgeSuccess(*second));
+	EXPECT_FALSE(state.isDirty());
+	EXPECT_FALSE(state.dirtySinceTimestampSeconds().has_value());
+}
+
+TEST(PlayerPersistenceStateTest, FailureAndAbandonmentPreserveOriginalDirtyTimestamp) {
+	PlayerPersistenceState state;
+	(void)state.markDirty(300);
+
+	const auto rejected = state.beginCheckpoint();
+	ASSERT_EQ(rejected, 1U);
+	ASSERT_TRUE(state.abandonCheckpoint(*rejected));
+	EXPECT_EQ(state.dirtySinceTimestampSeconds(), 300);
+	EXPECT_EQ(state.consecutiveFailures(), 0U);
+
+	const auto failed = state.beginCheckpoint();
+	ASSERT_EQ(failed, 1U);
+	ASSERT_TRUE(state.acknowledgeFailure(*failed));
+	EXPECT_EQ(state.dirtySinceTimestampSeconds(), 300);
+	EXPECT_EQ(state.consecutiveFailures(), 1U);
+}
+
+TEST(PlayerPersistenceStateTest, FirstTimestampedObservationBackfillsAnUnmeasuredDirtyIntervalOnce) {
+	PlayerPersistenceState state;
+	(void)state.markDirty();
+	EXPECT_FALSE(state.dirtySinceTimestampSeconds().has_value());
+
+	(void)state.markDirty(400);
+	EXPECT_EQ(state.dirtySinceTimestampSeconds(), 400);
+	(void)state.markDirty(500);
+	EXPECT_EQ(state.dirtySinceTimestampSeconds(), 400);
 }
 
 TEST(PlayerPersistenceStateTest, ConcurrentDirtyMarksDoNotLoseGenerations) {

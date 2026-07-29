@@ -13,9 +13,11 @@
 #include "game/scheduling/player_checkpoint_attempt.hpp"
 
 #ifndef USE_PRECOMPILED_HEADERS
+	#include <cstdint>
 	#include <map>
 	#include <memory>
 	#include <mutex>
+	#include <vector>
 #endif
 
 class KVStore;
@@ -42,15 +44,11 @@ public:
 	/**
 	 * Marks a persistence-relevant mutation on the exact live Player object.
 	 *
-	 * This static marker advances the shared exact-owner dirty generation only.
-	 * It intentionally does not resolve the SaveManager DI graph, schedule a save,
-	 * create a timer or alter existing checkpoint ownership.
+	 * This static marker advances the shared exact-owner dirty generation and
+	 * publishes only bounded process-level dirty gauges when a new dirty interval
+	 * begins. It does not schedule a save or change checkpoint ownership.
 	 */
-	static void markPlayerDirty(const std::shared_ptr<Player> &player) {
-		if (player) {
-			persistenceStateFor(player)->markDirty();
-		}
-	}
+	static void markPlayerDirty(const std::shared_ptr<Player> &player);
 
 private:
 	bool saveMap();
@@ -66,6 +64,10 @@ private:
 	bool schedulePlayer(std::weak_ptr<Player> player);
 	bool scheduleDirtyPlayer(std::weak_ptr<Player> player, std::shared_ptr<PlayerPersistenceState> state);
 	static std::shared_ptr<PlayerPersistenceState> persistenceStateFor(const std::shared_ptr<Player> &player);
+	static std::vector<std::shared_ptr<PlayerPersistenceState>> persistenceStatesSnapshot();
+	static int64_t currentCheckpointTimestampSeconds();
+	static void publishPlayerDirtyGauges();
+	void publishPlayerCheckpointGauges();
 
 	/**
 	 * Saves a pinned player object.
@@ -78,6 +80,7 @@ private:
 	std::atomic<std::chrono::steady_clock::time_point> m_scheduledAt;
 	inline static std::mutex m_playerPersistenceMutex;
 	inline static std::map<std::weak_ptr<Player>, std::shared_ptr<PlayerPersistenceState>, std::owner_less<std::weak_ptr<Player>>> m_playerPersistenceStates;
+	inline static PlayerCheckpointTelemetry m_playerCheckpointTelemetry;
 	PlayerCheckpointQueueAdmission m_playerCheckpointQueueAdmission;
 
 	ThreadPool &threadPool;
