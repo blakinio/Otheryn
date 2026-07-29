@@ -7,7 +7,7 @@ start_sha: 6a6007667dfd82010b0240342180961cd553466f
 created: 2026-07-29
 updated: 2026-07-29
 related_issue: "205"
-related_pr: "pending"
+related_pr: "209"
 owned_paths:
   - docs/agents/tasks/active/OTH-20260729-prs-parallel-integration-coordination.md
 required_reads:
@@ -44,7 +44,8 @@ This task owns coordination state only. It does not authorize broad runtime, sch
 - no PRS-003A active task or open PR remains;
 - parent production-resilience tracker `#116` remains open;
 - no open Otheryn PR existed at the initial audit;
-- package issues `#206`, `#207` and `#208` now reserve the three parallel scopes.
+- package issues `#206`, `#207` and `#208` reserve the three parallel scopes;
+- coordination PR `#209` owns only this task record.
 
 ## Package status
 
@@ -120,11 +121,11 @@ Reject any package that introduces outside explicit scope:
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-29T21:23:00+02:00
-head: 6a6007667dfd82010b0240342180961cd553466f
-head_scope: exact task-start main before the coordinator task-record commit
+updated_at: 2026-07-29T21:25:00+02:00
+head: 0b76e0fc4622984f8575da720371f7f6e85c31b9
+head_scope: initial coordinator task-record head before recording PR 209 metadata
 branch: dudantas/prs-parallel-integration-coordination
-pr: pending
+pr: 209
 status: active
 context_routes:
   - production-resilience
@@ -138,13 +139,15 @@ owned_paths:
 proven:
   - PRS-003A feature, issue, archive and finalizer lifecycle are terminal on main 6a6007667dfd82010b0240342180961cd553466f.
   - No open Otheryn PR existed at initial audit.
-  - Issue 205 owns integration coordination only.
+  - Issue 205 and PR 209 own integration coordination only.
   - Issues 206, 207 and 208 reserve PRS-003C-A, PRS-004A and PRS-003B respectively.
   - Shared registration and primary PRS-003 architecture paths are serialized by the coordinator.
+  - Required run 30484222211 passed on initial task-record head 0b76e0fc4622984f8575da720371f7f6e85c31b9.
 derived:
   - The three packages can proceed in parallel only after each publishes exact owned paths and preserves the declared pure/runtime boundaries.
 unknown:
   - Package task paths, branches, exact owned paths, PRs and implementation heads.
+  - Replacement exact-head Required result after this PR-metadata update.
 conflicts: []
 first_failure: null
 rejected_hypotheses:
@@ -161,9 +164,12 @@ validation:
   - command: parallel package issue reservation
     result: PASS
     evidence: Issues 206, 207 and 208 reserve distinct package scopes under coordinator issue 205.
-  - command: checkpoint validation and exact-head Required
+  - command: Required 30484222211 on 0b76e0fc4622984f8575da720371f7f6e85c31b9
+    result: PASS
+    evidence: Repository Required completed successfully on the initial one-file task-record head.
+  - command: replacement exact-head Required
     result: NOT_RUN
-    evidence: Coordinator task record has just been created.
+    evidence: This PR-metadata update creates the replacement head.
 blockers: []
 next_action: Inspect each newly published active task record and branch, record exact owned paths in the conflict matrix, and stop any overlap before implementation review.
 ```
