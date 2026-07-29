@@ -6,7 +6,7 @@ base_branch: main
 start_sha: 6a6007667dfd82010b0240342180961cd553466f
 feature_head: 1571e338bb9f7fc5d7943d4b393c5b34e10ee34a
 feature_merge_sha: b00507ec22542b8cf284040bea57bc70941d0964
-lifecycle_pr: pending
+lifecycle_pr: "215"
 lifecycle_head: pending
 lifecycle_merge_sha: pending
 created: 2026-07-29
@@ -131,14 +131,14 @@ The following remain separate bounded packages:
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-29T21:55:00+02:00
+updated_at: 2026-07-29T21:58:00+02:00
 head: b00507ec22542b8cf284040bea57bc70941d0964
-head_scope: merged feature head on main; lifecycle archive metadata remains pending until archive and finalizer merges
+head_scope: merged feature head on main; lifecycle archive PR 215 is open and exact lifecycle metadata remains pending until archive and finalizer merges
 status: completed
 feature_pr: 212
 feature_head: 1571e338bb9f7fc5d7943d4b393c5b34e10ee34a
 feature_merge_sha: b00507ec22542b8cf284040bea57bc70941d0964
-lifecycle_pr: pending
+lifecycle_pr: 215
 lifecycle_head: pending
 lifecycle_merge_sha: pending
 issue: 207
@@ -150,7 +150,7 @@ first_failure:
   marker: formatting_diff
   evidence: Superseded head a53c6a6008b5d403ca3772b932f808485c386fbe required repository autofix for the CMake registration and test formatting; autofix commit 1571e338bb9f7fc5d7943d4b393c5b34e10ee34a passed all replacement checks.
 unknown:
-  - lifecycle PR number, exact lifecycle head and lifecycle merge SHA
+  - exact lifecycle head and lifecycle merge SHA
 blockers: []
-next_action: merge the docs-only archive PR after exact-head validation, then finalize this record with the lifecycle metadata
+next_action: validate and merge lifecycle PR 215, then finalize this record with exact lifecycle metadata
 ```
