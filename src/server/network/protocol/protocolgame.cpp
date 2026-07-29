@@ -10,6 +10,9 @@
 #include "server/network/protocol/protocolgame.hpp"
 #include "game/functions/forge_transfer_policy.hpp"
 
+#include "database/database_failure_classification.hpp"
+#include "server/network/protocol/database_outage_admission_gate.hpp"
+
 #include "account/account.hpp"
 #include "config/configmanager.hpp"
 #include "core.hpp"
@@ -910,7 +913,7 @@ void ProtocolGame::release() {
 	Protocol::release();
 }
 
-void ProtocolGame::login(const std::string &name, uint32_t accountId, OperatingSystem_t operatingSystem) {
+void ProtocolGame::login(const std::string &name, uint32_t accountId, OperatingSystem_t operatingSystem, DatabaseOutageSnapshot outageSnapshot) {
 	sendClientLoginPreamble(operatingSystem);
 
 	g_logger().debug("Player logging in in version '{}' and oldProtocol '{}'", getVersion(), oldProtocol);
@@ -925,6 +928,35 @@ void ProtocolGame::login(const std::string &name, uint32_t accountId, OperatingS
 
 		if (!IOLoginDataLoad::preLoadPlayer(player, name)) {
 			disconnectClient("Your character could not be loaded.");
+			return;
+		}
+
+		const auto outageAdmission = DatabaseOutageAdmissionGate::evaluate(
+			outageSnapshot,
+			DatabaseOutageAdmissionOperation::GameLogin,
+			{ .canAlwaysLogin = player->hasFlag(PlayerFlags_t::CanAlwaysLogin) },
+			g_game().getGameState()
+		);
+		if (!outageAdmission.allowed()) {
+			switch (outageAdmission.reason) {
+				case DatabaseOutageAdmissionReason::LifecycleShutdown:
+					disconnect();
+					break;
+				case DatabaseOutageAdmissionReason::LifecycleStartup:
+					disconnectClient("Gameworld is starting up. Please wait.");
+					break;
+				case DatabaseOutageAdmissionReason::LifecycleClosing:
+					disconnectClient("The game is just going down.\nPlease try again later.");
+					break;
+				case DatabaseOutageAdmissionReason::LifecycleClosed: {
+					auto maintainMessage = g_configManager().getString(MAINTAIN_MODE_MESSAGE);
+					disconnectClient(maintainMessage.empty() ? "Server is currently closed.\nPlease try again later." : maintainMessage);
+					break;
+				}
+				default:
+					disconnectClient("Gameworld is under maintenance. Please re-connect in a while.");
+					break;
+			}
 			return;
 		}
 
@@ -1079,6 +1111,35 @@ void ProtocolGame::connect(const std::string &playerName, OperatingSystem_t oper
 	if (isConnectionExpired()) {
 		// ProtocolGame::release() has been called at this point and the Connection object
 		// no longer exists, so we return to prevent leakage of the Player.
+		return;
+	}
+
+	const auto outageAdmission = DatabaseOutageAdmissionGate::evaluateLive(
+		getDatabaseOutageSnapshot,
+		DatabaseOutageAdmissionOperation::ChannelHandoff,
+		{ .canAlwaysLogin = foundPlayer->hasFlag(PlayerFlags_t::CanAlwaysLogin) },
+		g_game().getGameState()
+	);
+	if (!outageAdmission.allowed()) {
+		switch (outageAdmission.reason) {
+			case DatabaseOutageAdmissionReason::LifecycleShutdown:
+				disconnect();
+				break;
+			case DatabaseOutageAdmissionReason::LifecycleStartup:
+				disconnectClient("Gameworld is starting up. Please wait.");
+				break;
+			case DatabaseOutageAdmissionReason::LifecycleClosing:
+				disconnectClient("The game is just going down.\nPlease try again later.");
+				break;
+			case DatabaseOutageAdmissionReason::LifecycleClosed: {
+				auto maintainMessage = g_configManager().getString(MAINTAIN_MODE_MESSAGE);
+				disconnectClient(maintainMessage.empty() ? "Server is currently closed.\nPlease try again later." : maintainMessage);
+				break;
+			}
+			default:
+				disconnectClient("Gameworld is under maintenance. Please re-connect in a while.");
+				break;
+		}
 		return;
 	}
 
@@ -1367,6 +1428,18 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage &msg) {
 		return;
 	}
 
+	const auto outageSnapshot = DatabaseOutageAdmissionGate::capture(getDatabaseOutageSnapshot);
+	const auto outageAdmission = DatabaseOutageAdmissionGate::evaluate(
+		outageSnapshot,
+		DatabaseOutageAdmissionOperation::GameLogin,
+		{},
+		GAME_STATE_NORMAL
+	);
+	if (!outageAdmission.allowed()) {
+		disconnectClient("Gameworld is under maintenance. Please re-connect in a while.");
+		return;
+	}
+
 	BanInfo banInfo;
 	if (IOBan::isIpBanned(getIP(), banInfo)) {
 		if (banInfo.reason.empty()) {
@@ -1408,7 +1481,12 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage &msg) {
 		return;
 	}
 
-	dispatchProtocolTask([self = getThis(), characterName, accountId, operatingSystem] { self->login(characterName, accountId, operatingSystem); }, __FUNCTION__);
+	dispatchProtocolTask(
+		[self = getThis(), characterName, accountId, operatingSystem, outageSnapshot] {
+			self->login(characterName, accountId, operatingSystem, outageSnapshot);
+		},
+		__FUNCTION__
+	);
 }
 
 void ProtocolGame::sendLoginChallenge() {

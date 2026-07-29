@@ -100,14 +100,16 @@ TEST(Prs003DatabaseOutageContractTest, DistinguishesExistingGameLifecycleFromOut
 	EXPECT_EQ(setGameState.find("DRAINING"), std::string_view::npos);
 }
 
-TEST(Prs003DatabaseOutageContractTest, RecordsLifecycleOnlyLoginGates) {
+TEST(Prs003DatabaseOutageContractTest, RecordsLifecycleAndOutageAdmissionLoginGates) {
 	const auto login = readSource("src/server/network/protocol/protocollogin.cpp");
 	expectContains(login, "GAME_STATE_SHUTDOWN");
 	expectContains(login, "GAME_STATE_STARTUP");
 	expectContains(login, "GAME_STATE_MAINTAIN");
-	EXPECT_EQ(login.find("DatabaseOutage"), std::string::npos);
-	EXPECT_EQ(login.find("DEGRADED"), std::string::npos);
-	EXPECT_EQ(login.find("DRAINING"), std::string::npos);
+	expectContains(login, "DatabaseOutageAdmissionGate::evaluateLive");
+	expectContains(login, "DatabaseOutageAdmissionOperation::AccountLogin");
+	expectContains(login, "getDatabaseOutageSnapshot");
+	EXPECT_EQ(login.find("GAME_STATE_DEGRADED"), std::string::npos);
+	EXPECT_EQ(login.find("GAME_STATE_DRAINING"), std::string::npos);
 
 	const auto game = readSource("src/server/network/protocol/protocolgame.cpp");
 	expectContains(game, "GAME_STATE_SHUTDOWN");
@@ -115,9 +117,12 @@ TEST(Prs003DatabaseOutageContractTest, RecordsLifecycleOnlyLoginGates) {
 	expectContains(game, "GAME_STATE_MAINTAIN");
 	expectContains(game, "GAME_STATE_CLOSING");
 	expectContains(game, "GAME_STATE_CLOSED");
-	EXPECT_EQ(game.find("DatabaseOutage"), std::string::npos);
-	EXPECT_EQ(game.find("DEGRADED"), std::string::npos);
-	EXPECT_EQ(game.find("DRAINING"), std::string::npos);
+	expectContains(game, "DatabaseOutageAdmissionGate::capture");
+	expectContains(game, "DatabaseOutageAdmissionOperation::GameLogin");
+	expectContains(game, "DatabaseOutageAdmissionOperation::ChannelHandoff");
+	expectContains(game, "getDatabaseOutageSnapshot");
+	EXPECT_EQ(game.find("GAME_STATE_DEGRADED"), std::string::npos);
+	EXPECT_EQ(game.find("GAME_STATE_DRAINING"), std::string::npos);
 }
 
 TEST(Prs003DatabaseOutageContractTest, RecordsBoundedFailClosedTargetAndImplementationSequence) {
