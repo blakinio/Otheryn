@@ -4,6 +4,7 @@
 
 #ifndef USE_PRECOMPILED_HEADERS
 	#include <atomic>
+	#include <chrono>
 	#include <thread>
 	#include <vector>
 #endif
@@ -203,6 +204,47 @@ TEST(PlayerPersistenceStateTest, FirstTimestampedObservationBackfillsAnUnmeasure
 	EXPECT_EQ(state.dirtySinceTimestampSeconds(), 400);
 	(void)state.markDirty(500);
 	EXPECT_EQ(state.dirtySinceTimestampSeconds(), 400);
+}
+
+TEST(PlayerPersistenceStateTest, FinalCheckpointWaitsForOlderOwnerAndClaimsNewestGeneration) {
+	PlayerPersistenceState state;
+	(void)state.markDirty(600);
+	const auto first = state.beginCheckpoint();
+	ASSERT_EQ(first, 1U);
+	EXPECT_EQ(state.markDirty(700), 2U);
+
+	std::atomic_bool waiting = false;
+	std::optional<PlayerPersistenceState::Generation> finalGeneration;
+	std::thread finalOwner([&] {
+		waiting.store(true, std::memory_order_release);
+		finalGeneration = state.beginFinalCheckpoint(std::chrono::milliseconds(500));
+	});
+	while (!waiting.load(std::memory_order_acquire)) {
+		std::this_thread::yield();
+	}
+
+	EXPECT_TRUE(state.acknowledgeSuccess(*first));
+	finalOwner.join();
+	ASSERT_EQ(finalGeneration, 2U);
+	EXPECT_EQ(state.inFlightGeneration(), 2U);
+	EXPECT_TRUE(state.acknowledgeSuccess(*finalGeneration));
+	EXPECT_FALSE(state.isDirty());
+}
+
+TEST(PlayerPersistenceStateTest, FinalCheckpointTimeoutPreservesExistingOwnerAndDirtyState) {
+	PlayerPersistenceState state;
+	(void)state.markDirty(800);
+	const auto first = state.beginCheckpoint();
+	ASSERT_EQ(first, 1U);
+	EXPECT_EQ(state.markDirty(900), 2U);
+
+	const auto finalGeneration = state.beginFinalCheckpoint(std::chrono::milliseconds(1));
+	EXPECT_FALSE(finalGeneration.has_value());
+	EXPECT_EQ(state.inFlightGeneration(), first);
+	EXPECT_EQ(state.acknowledgedGeneration(), 0U);
+	EXPECT_EQ(state.dirtyGeneration(), 2U);
+	EXPECT_TRUE(state.isDirty());
+	EXPECT_TRUE(state.acknowledgeFailure(*first));
 }
 
 TEST(PlayerPersistenceStateTest, ConcurrentDirtyMarksDoNotLoseGenerations) {
