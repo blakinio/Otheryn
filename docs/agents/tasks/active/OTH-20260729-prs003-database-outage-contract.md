@@ -1,6 +1,6 @@
 ---
 task_id: OTH-20260729-prs003-database-outage-contract
-status: validating
+status: ready
 branch: dudantas/prs-003-database-outage-contract
 base_branch: main
 start_sha: d09b4f04887a74e31f9e47a82c1c96ab91d33325
@@ -90,12 +90,12 @@ Revert this discovery-contract merge. It changes only documentation, one source-
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-29T17:12:00+02:00
-head: eacd6b609fedd3572626a25e26b084c5d21a76e9
-head_scope: implementation head before this checkpoint-only update; all four owned paths are present in PR 196
+updated_at: 2026-07-29T17:55:00+02:00
+head: 995b2984e472305d814198644d79a5bcbf676518
+head_scope: fully validated implementation head before this checkpoint-only evidence update
 branch: dudantas/prs-003-database-outage-contract
 pr: 196
-status: validating
+status: ready
 context_routes:
   - production-resilience
   - database
@@ -119,15 +119,18 @@ proven:
   - Issue 195 and PR 196 own exactly the bounded PRS-003 discovery milestone.
   - The architecture contract defines classified events, finite deadlines, fail-closed admission, bounded draining, explicit recovery and low-cardinality observability.
   - The focused source-contract test covers startup, runtime Database, DatabaseTasks, lifecycle states, login gates and the accepted target sequence.
+  - Exact-head CI 30465133877 passed on 995b2984e472305d814198644d79a5bcbf676518 after one concurrency-cancelled attempt was rerun.
+  - Linux debug passed database schema import and full CTest; Linux release, Windows Solution, Windows CMake and macOS passed applicable build and smoke gates.
+  - Exact-head Required 30465140184 passed on rerun after CI succeeded; autofix 30465140129 passed.
 derived:
   - Runtime persistence failure can leave the server accepting additional work because no central database-health admission policy exists.
   - The first implementation should be a pure database-independent state machine before wiring Database, protocols or gameplay call sites.
 unknown:
-  - Exact-head repository CI, Required and autofix results for the live PR head after this checkpoint update.
+  - Exact-head checks for this checkpoint-only commit, plus the final main-drift and discussion audit.
 conflicts: []
 first_failure:
-  marker: null
-  evidence: No implementation or validation failure has occurred.
+  marker: pre-validation contract/test wording mismatch for automatic database promotion
+  evidence: The source-contract test required an explicit automatic-database-promotion prohibition; commit 995b2984e472305d814198644d79a5bcbf676518 clarified the contract, and the replacement exact-head CI, Required and autofix all passed.
 rejected_hypotheses:
   - reconnect and replay arbitrary SQL after connection loss
   - reuse GAME_STATE_CLOSED as an undocumented database-health state
@@ -148,10 +151,16 @@ validation:
     evidence: Startup is fail closed; runtime failures have no central outage transition; current states and login gates are lifecycle-only.
   - command: focused source-contract and CMake registration audit
     result: PASS
-    evidence: One PRS003 source-root definition and one registered test source cover the four intended source boundaries and accepted contract.
-  - command: checkpoint validator and exact-head repository CI
+    evidence: One PRS003 source-root definition and one registered test source cover the intended source boundaries and accepted contract.
+  - command: exact-head repository CI
+    result: PASS
+    evidence: CI 30465133877 succeeded on 995b2984e472305d814198644d79a5bcbf676518, including full Linux debug CTest and all applicable platform builds and smoke gates.
+  - command: exact-head Required and autofix
+    result: PASS
+    evidence: Required 30465140184 and autofix 30465140129 succeeded on 995b2984e472305d814198644d79a5bcbf676518.
+  - command: checkpoint-only exact-head checks and final repository audit
     result: NOT_RUN
-    evidence: PR 196 is open and checks are expected on the checkpoint-updated head.
+    evidence: This evidence update creates the final checkpoint-only head.
 blockers: []
-next_action: Verify the live PR 196 head and exact-head CI, Required and autofix; fix only bounded contract/test failures, then perform the final path, discussion and main-drift audit before merge.
+next_action: Verify exact-head checks for this checkpoint-only head, then perform the final path, discussion and main-drift audit and squash-merge PR 196 with expected-head protection.
 ```
