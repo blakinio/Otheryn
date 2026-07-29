@@ -7,7 +7,7 @@ start_sha: 322264e69a64b0204c9ab98534b421046e6d5602
 created: 2026-07-29
 updated: 2026-07-29
 related_issue: "201"
-related_pr: null
+related_pr: "202"
 owned_paths:
   - docs/agents/tasks/active/OTH-20260729-prs003a-database-outage-state-machine.md
   - docs/architecture/prs-003-database-outage-state-machine-contract.md
@@ -101,11 +101,11 @@ Revert the feature merge. The package changes only one database-independent head
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-29T19:25:00+02:00
-head: 17833e07e103b477ef06d881631eb6a8b3ca1960
-head_scope: complete implementation head before this checkpoint-only task update
+updated_at: 2026-07-29T19:28:00+02:00
+head: df65b3e752ae21d9dc74c85ebe684d67421ceea4
+head_scope: complete implementation and task checkpoint before this PR-number-only update
 branch: dudantas/prs-003a-database-outage-state-machine
-pr: null
+pr: 202
 status: validating
 context_routes:
   - production-resilience
@@ -123,6 +123,7 @@ owned_paths:
 proven:
   - PRS-003 discovery contract is merged and terminally archived.
   - Issue 201 owns the pure database-independent Slice A package.
+  - PR 202 owns exactly the five declared paths.
   - DatabaseOutageStateMachine implements finite durations, fixed states/reasons/outcomes, monotonic sequence/time rejection, immutable snapshots and mutex serialization without runtime wiring.
   - Deterministic tests cover every accepted Slice A transition, precondition and duplicate-concurrency boundary.
   - Architecture documentation records Slice A as implemented and leaves Slice B as the next separate package.
@@ -130,7 +131,7 @@ proven:
 derived:
   - The five owned paths are sufficient for an independently compiled and tested header-only Slice A.
 unknown:
-  - Exact-head repository CI, Required and autofix results.
+  - Exact-head repository CI, Required and autofix results for the live PR head after this checkpoint update.
 conflicts: []
 first_failure:
   marker: null
@@ -156,7 +157,7 @@ validation:
     evidence: One independent header and one registered test source cover all accepted Slice A states, events, deadlines, recovery and concurrency invariants.
   - command: exact-head repository CI, Required and autofix
     result: NOT_RUN
-    evidence: Pending pull request creation.
+    evidence: PR 202 is open and checks are expected on the live checkpoint-updated head.
 blockers: []
-next_action: Open the feature pull request for issue 201 and validate CI, Required and autofix on the live exact head.
+next_action: Validate CI, Required and autofix on the live exact PR 202 head; fix only confirmed bounded failures.
 ```
