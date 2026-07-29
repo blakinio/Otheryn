@@ -7,8 +7,8 @@ start_sha: 6a6007667dfd82010b0240342180961cd553466f
 feature_head: 1571e338bb9f7fc5d7943d4b393c5b34e10ee34a
 feature_merge_sha: b00507ec22542b8cf284040bea57bc70941d0964
 lifecycle_pr: "215"
-lifecycle_head: pending
-lifecycle_merge_sha: pending
+lifecycle_head: 552d8fd5369481cda29a060ec29e75b83a922ff5
+lifecycle_merge_sha: 87bc63889839960cc9dd7d4502cfb4e25a5eaadb
 created: 2026-07-29
 updated: 2026-07-29
 completed: 2026-07-29
@@ -28,7 +28,7 @@ owned_paths:
 
 PRS-004 Slice A is complete. The repository now contains one database-independent, header-only and mutex-serialized session/revision fencing state object with stable subject identity, monotonic ownership generation, an explicit current writer token, strict persistence revisions, caller-supplied event sequence, immutable snapshots and fixed decision reasons.
 
-Feature PR #212 was squash-merged into `main` as `b00507ec22542b8cf284040bea57bc70941d0964`. Exact feature head `1571e338bb9f7fc5d7943d4b393c5b34e10ee34a` passed all required checks. Issue #207 is closed as completed.
+Feature PR #212 was squash-merged into `main` as `b00507ec22542b8cf284040bea57bc70941d0964`. Lifecycle PR #215 was squash-merged as `87bc63889839960cc9dd7d4502cfb4e25a5eaadb`. Exact feature head `1571e338bb9f7fc5d7943d4b393c5b34e10ee34a` passed all required checks. Issue #207 is closed as completed.
 
 This package proves only the deterministic process-local contract. It does not establish durable stale-writer safety across process restart, database failover or writers in separate processes.
 
@@ -89,7 +89,12 @@ Exact feature head: `1571e338bb9f7fc5d7943d4b393c5b34e10ee34a`.
 - feature base-drift audit: `behind_by=2`, limited to coordinator task documentation commits; no shared implementation or `tests/unit/database/CMakeLists.txt` conflict;
 - PR was mergeable immediately before merge;
 - feature PR reviews and unresolved review threads: none;
-- feature PR discussion contained only the final exact-head validation evidence comment.
+- feature PR discussion contained only the final exact-head validation evidence comment;
+- lifecycle Required run `30486677175`: PASS on exact lifecycle head `552d8fd5369481cda29a060ec29e75b83a922ff5`;
+- lifecycle changed-path audit: active record removed and matching archive record added only;
+- lifecycle drift audit: `behind_by=0` immediately before lifecycle merge;
+- lifecycle PR was mergeable immediately before merge;
+- lifecycle PR comments, reviews and unresolved threads: none.
 
 The first superseded feature head failed only the formatting-diff gate. Repository autofix formatted `tests/unit/database/CMakeLists.txt` and `tests/unit/database/session_revision_fence_test.cpp` without changing logic. Replacement exact-head CI, Required and autofix all passed.
 
@@ -110,7 +115,7 @@ The first superseded feature head failed only the formatting-diff gate. Reposito
 
 ## Rollback
 
-Revert feature merge `b00507ec22542b8cf284040bea57bc70941d0964`. The package changes only one isolated pure header, deterministic tests, one minimal unit-test registration entry, architecture documentation and its task record. Revert the lifecycle merge only to restore the active/archive record placement.
+Revert feature merge `b00507ec22542b8cf284040bea57bc70941d0964`. The package changes only one isolated pure header, deterministic tests, one minimal unit-test registration entry, architecture documentation and its task record. Revert lifecycle merge `87bc63889839960cc9dd7d4502cfb4e25a5eaadb` only to restore the active/archive record placement.
 
 ## Remaining durable/runtime fencing gaps
 
@@ -131,16 +136,17 @@ The following remain separate bounded packages:
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-29T21:58:00+02:00
-head: b00507ec22542b8cf284040bea57bc70941d0964
-head_scope: merged feature head on main; lifecycle archive PR 215 is open and exact lifecycle metadata remains pending until archive and finalizer merges
+updated_at: 2026-07-29T22:03:00+02:00
+head: 87bc63889839960cc9dd7d4502cfb4e25a5eaadb
+head_scope: terminal lifecycle merge on main; this record-only correction adds known lifecycle merge metadata
 status: completed
 feature_pr: 212
 feature_head: 1571e338bb9f7fc5d7943d4b393c5b34e10ee34a
 feature_merge_sha: b00507ec22542b8cf284040bea57bc70941d0964
 lifecycle_pr: 215
-lifecycle_head: pending
-lifecycle_merge_sha: pending
+lifecycle_head: 552d8fd5369481cda29a060ec29e75b83a922ff5
+lifecycle_merge_sha: 87bc63889839960cc9dd7d4502cfb4e25a5eaadb
+lifecycle_required_run: 30486677175
 issue: 207
 issue_state: closed_completed
 ci_run: 30485079235
@@ -149,8 +155,7 @@ autofix_run: 30485078997
 first_failure:
   marker: formatting_diff
   evidence: Superseded head a53c6a6008b5d403ca3772b932f808485c386fbe required repository autofix for the CMake registration and test formatting; autofix commit 1571e338bb9f7fc5d7943d4b393c5b34e10ee34a passed all replacement checks.
-unknown:
-  - exact lifecycle head and lifecycle merge SHA
+unknown: []
 blockers: []
-next_action: validate and merge lifecycle PR 215, then finalize this record with exact lifecycle metadata
+next_action: none; no further action is required for this completed package
 ```
