@@ -6,6 +6,9 @@ base_branch: main
 start_sha: d36ad9a5bfd8970ab1a108e6017945b91a4683e6
 feature_head: 0522fca08eb1a96add75ff1dbb3f586c8615cb06
 feature_merge_sha: ebef902691882f9a3678f29a5273d05bc6369bed
+lifecycle_pr: "189"
+lifecycle_head: 47a913b133817b5620e2042b0f13bd47ca39a3ec
+lifecycle_merge_sha: 208526f89518b20b90c9302cbe1a254ffb01484e
 created: 2026-07-29
 updated: 2026-07-29
 completed: 2026-07-29
@@ -35,7 +38,7 @@ required_reads:
 
 ## Result
 
-Completed and merged through feature PR #188. Issue #187 closed automatically by the protected squash merge.
+Completed and merged through feature PR #188. Issue #187 closed automatically by the protected squash merge, and lifecycle PR #189 moved the durable task record from `active` to `archive`.
 
 ## Proven behavior
 
@@ -94,7 +97,15 @@ A zero timestamp means no measured dirty owner.
 - final feature drift audit: `behind_by=0`, exactly eleven owned paths;
 - final feature discussion audit: no comments, reviews, review threads or requested reviewers;
 - feature squash merge: `ebef902691882f9a3678f29a5273d05bc6369bed`;
-- issue #187: closed as completed.
+- lifecycle head: `47a913b133817b5620e2042b0f13bd47ca39a3ec`;
+- lifecycle Required #606, run `30429953751`: PASS;
+- lifecycle scope: exactly the active/archive task pair;
+- lifecycle drift audit: `behind_by=0`;
+- lifecycle discussion audit: no comments, reviews or review threads;
+- lifecycle squash merge: `208526f89518b20b90c9302cbe1a254ffb01484e`;
+- issue #187: closed as completed;
+- active task record: absent from `main`;
+- archive task record: present on `main`.
 
 ## Safety boundaries preserved
 
@@ -122,11 +133,11 @@ Revert feature merge `ebef902691882f9a3678f29a5273d05bc6369bed`. No persistent d
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-29T09:00:00+02:00
-head: ebef902691882f9a3678f29a5273d05bc6369bed
-head_scope: feature squash merge on main
+updated_at: 2026-07-29T09:04:00+02:00
+head: 208526f89518b20b90c9302cbe1a254ffb01484e
+head_scope: final lifecycle archive merge on main; later record-only corrections do not alter PRS-002I implementation or validation evidence
 branch: main
-pr: 188
+pr: 189
 status: ready
 context_routes:
   - production-resilience
@@ -145,15 +156,17 @@ proven:
   - Windows, macOS, Linux release, Docker and runtime-smoke validation passed.
   - Final feature audit found behind_by zero and no comments, reviews or review threads.
   - Issue 187 closed as completed after the feature merge.
+  - Lifecycle PR 189 changed exactly the active/archive task pair, passed Required 30429953751 and merged as 208526f89518b20b90c9302cbe1a254ffb01484e.
+  - The active task record is absent from main and this archive record is present.
 derived:
   - PRS-002 checkpoint state is operationally observable without adding a scheduler timer or high-cardinality identity labels.
-  - Alerting and production RPO measurement remain separate policy/evidence work.
+  - PRS-002I requires no further implementation, validation, merge or archive action.
 unknown:
   - Production alert thresholds and measured production RPO remain parent-program gaps outside PRS-002I.
 conflicts: []
 first_failure:
   marker: no failing exact-head validation
-  evidence: CI, Required and autofix all completed successfully on the final feature head.
+  evidence: Feature CI, Required, autofix and lifecycle Required all completed successfully on their exact heads.
 rejected_hypotheses:
   - add player names, GUIDs or generations as labels
   - add an observable-gauge callback with process-lifetime ownership complexity
@@ -170,6 +183,12 @@ validation:
   - command: feature final audit and expected-head merge
     result: PASS
     evidence: Exactly eleven owned paths, behind_by zero, no discussion or review items, and squash merge ebef902691882f9a3678f29a5273d05bc6369bed.
+  - command: lifecycle archive PR 189
+    result: PASS
+    evidence: Exactly the active/archive task pair changed; Required 30429953751 succeeded and squash merge produced 208526f89518b20b90c9302cbe1a254ffb01484e.
+  - command: final repository-state audit
+    result: PASS
+    evidence: Issue closed, feature and lifecycle PRs merged, active record absent and archive record present.
 blockers: []
-next_action: Merge the docs-only lifecycle archive after its exact-head Required check passes.
+next_action: No further action is required for PRS-002I; alerting, dashboards and production RPO measurement require separate fresh tasks.
 ```
