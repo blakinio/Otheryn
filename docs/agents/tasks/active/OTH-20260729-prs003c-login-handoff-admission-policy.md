@@ -80,9 +80,9 @@ Revert the feature merge. Only the five declared paths belong to this package.
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-29T21:52:00+02:00
-head: ee190c5241c3bdf4576f1a2f94e56cd950f89543
-head_scope: PR head before correcting the checkpoint first_failure schema
+updated_at: 2026-07-29T22:00:00+02:00
+head: 332d482a31ed5c01bc02e2d1c206117197654fa2
+head_scope: code-fix head before recording the confirmed compile failure and its correction
 branch: dudantas/prs-003c-login-handoff-admission-policy
 pr: 213
 status: validating
@@ -105,15 +105,17 @@ proven:
   - The branch is refreshed onto main 97bd35040ca8551ed0a7a62e60525ba696bf6259.
   - One isolated constexpr policy, dedicated document and table-driven tests are implemented.
   - No live protocol, database, player, session or channel path was edited.
+  - Linux Release compiled and completed Canary and Global smoke tests on the pre-fix head.
 derived:
   - The supplied immutable values fully determine every policy decision.
 unknown:
-  - exact-head CI, Required and autofix results
+  - replacement exact-head CI, Required and autofix results after the bounded test-helper correction
 conflicts: []
 first_failure:
-  marker: none
-  evidence: no failed validation has been observed
+  marker: linux-debug static_assert noexcept at database_outage_admission_policy_test.cpp line 44
+  evidence: the noexcept expression included makeSnapshot, whose test-helper declaration lacked noexcept
 rejected_hypotheses:
+  - policy evaluate is not noexcept
   - generic staff bypass
   - valid handoff implies outage safety
   - mutable global outage lookup
@@ -136,10 +138,19 @@ validation:
     evidence: current main 97bd35040ca8551ed0a7a62e60525ba696bf6259 merged without feature-path conflict
   - command: checkpoint schema audit
     result: PASS
-    evidence: first_failure now supplies the required marker and evidence mapping
-  - command: exact-head CI, Required and autofix
+    evidence: required first_failure marker and evidence mapping are present
+  - command: CI 30485660238 linux-release
+    result: PASS
+    evidence: build, generated-doc check, Canary smoke and Global smoke succeeded
+  - command: CI 30485660238 linux-debug
+    result: FAIL
+    evidence: static_assert evaluated the non-noexcept makeSnapshot helper before calling the noexcept policy
+  - command: bounded compile correction
+    result: PASS
+    evidence: makeSnapshot is now explicitly constexpr noexcept; production policy code is unchanged
+  - command: replacement exact-head CI, Required and autofix
     result: NOT_RUN
-    evidence: this checkpoint correction creates a replacement PR head
+    evidence: this checkpoint update creates the final validation head
 blockers: []
-next_action: Validate CI, Required and autofix on the exact PR 213 head; fix only confirmed bounded failures, then audit scope, drift and discussions before merge.
+next_action: Validate CI, Required and autofix on the exact PR 213 head, then audit current-main drift, scope and discussions before expected-head squash merge.
 ```
