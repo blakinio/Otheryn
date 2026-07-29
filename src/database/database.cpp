@@ -8,6 +8,7 @@
  */
 
 #include "database/database.hpp"
+#include "database/database_failure_classification.hpp"
 
 #include "config/configmanager.hpp"
 #include "lib/di/container.hpp"
@@ -17,6 +18,7 @@
 #include <iterator>
 
 #ifndef USE_PRECOMPILED_HEADERS
+	#include <chrono>
 	#include <fmt/format.h>
 	#include <string_view>
 #endif
@@ -30,6 +32,61 @@ namespace {
 		}
 	}
 
+	DatabaseOutageStateMachine &databaseOutageStateOwner() {
+		static DatabaseOutageStateMachine owner({ std::chrono::milliseconds { 60'000 }, std::chrono::milliseconds { 60'000 } });
+		return owner;
+	}
+
+	DatabaseOutageEventPublisher &databaseOutageEventPublisher() {
+		static DatabaseOutageEventPublisher publisher(databaseOutageStateOwner());
+		return publisher;
+	}
+
+	DatabaseOutageTimePoint databaseOutageNow() noexcept {
+		return std::chrono::duration_cast<DatabaseOutageTimePoint>(std::chrono::steady_clock::now().time_since_epoch());
+	}
+
+	DatabaseNativeErrorKind classifyDatabaseNativeError(unsigned int error) noexcept {
+		if (error == 0) {
+			return DatabaseNativeErrorKind::None;
+		}
+		if (error == CR_SERVER_LOST || error == CR_CONN_HOST_ERROR || error == CR_CONNECTION_ERROR) {
+			return DatabaseNativeErrorKind::ConnectionLost;
+		}
+		if (error == CR_SERVER_GONE_ERROR || error == 1053 /* ER_SERVER_SHUTDOWN */) {
+			return DatabaseNativeErrorKind::ServerGone;
+		}
+		return DatabaseNativeErrorKind::Other;
+	}
+
+	void publishDatabaseRuntimeResult(DatabaseRuntimeOperation operation, bool succeeded, unsigned int error) {
+		const auto classification = classifyDatabaseRuntimeResult(operation, succeeded, classifyDatabaseNativeError(error));
+		if (classification.succeeded()) {
+			return;
+		}
+		(void)databaseOutageEventPublisher().publish(classification, databaseOutageNow());
+	}
+
+	bool executeRuntimeQueryOnce(MYSQL* handle, std::string_view query, DatabaseRuntimeOperation operation) {
+		if (!handle) {
+			g_logger().error("Database not initialized!");
+			publishDatabaseRuntimeResult(operation, false, 0);
+			return false;
+		}
+		if (mysql_query(handle, query.data()) != 0) {
+			const auto error = mysql_errno(handle);
+			g_logger().error("Query: {}", query.substr(0, 256));
+			g_logger().error("MySQL error [{}]: {}", error, mysql_error(handle));
+			publishDatabaseRuntimeResult(operation, false, error);
+			return false;
+		}
+		return true;
+	}
+
+}
+
+DatabaseOutageSnapshot getDatabaseOutageSnapshot() {
+	return databaseOutageEventPublisher().snapshot();
 }
 
 Database::~Database() {
@@ -183,10 +240,14 @@ bool Database::beginTransaction() {
 	databaseLock.lock();
 	measureLock.stop();
 
-	if (!executeQuery("BEGIN")) {
+	g_logger().trace("Executing Query: BEGIN");
+	metrics::query_latency measure("BEGIN");
+	const bool success = executeRuntimeQueryOnce(handle, "BEGIN", DatabaseRuntimeOperation::TransactionBegin);
+	if (!success) {
 		databaseLock.unlock();
 		return false;
 	}
+	mysql_free_result(mysql_store_result(handle));
 
 	return true;
 }
@@ -194,11 +255,14 @@ bool Database::beginTransaction() {
 bool Database::rollback() {
 	if (!handle) {
 		g_logger().error("Database not initialized!");
+		publishDatabaseRuntimeResult(DatabaseRuntimeOperation::TransactionRollback, false, 0);
 		return false;
 	}
 
 	if (mysql_rollback(handle) != 0) {
+		const auto error = mysql_errno(handle);
 		g_logger().error("Message: {}", mysql_error(handle));
+		publishDatabaseRuntimeResult(DatabaseRuntimeOperation::TransactionRollback, false, error);
 		databaseLock.unlock();
 		return false;
 	}
@@ -210,10 +274,13 @@ bool Database::rollback() {
 bool Database::commit() {
 	if (!handle) {
 		g_logger().error("Database not initialized!");
+		publishDatabaseRuntimeResult(DatabaseRuntimeOperation::TransactionCommit, false, 0);
 		return false;
 	}
 	if (mysql_commit(handle) != 0) {
+		const auto error = mysql_errno(handle);
 		g_logger().error("Message: {}", mysql_error(handle));
+		publishDatabaseRuntimeResult(DatabaseRuntimeOperation::TransactionCommit, false, error);
 		databaseLock.unlock();
 		return false;
 	}
@@ -232,8 +299,10 @@ bool Database::retryQuery(std::string_view query, int retries) {
 	// execution state may be unknown and an implicit reconnect destroys transaction state.
 	(void)retries;
 	if (mysql_query(handle, query.data()) != 0) {
+		const auto error = mysql_errno(handle);
 		g_logger().error("Query: {}", query.substr(0, 256));
-		g_logger().error("MySQL error [{}]: {}", mysql_errno(handle), mysql_error(handle));
+		g_logger().error("MySQL error [{}]: {}", error, mysql_error(handle));
+		publishDatabaseRuntimeResult(DatabaseRuntimeOperation::Query, false, error);
 		return false;
 	}
 	return true;
@@ -242,6 +311,7 @@ bool Database::retryQuery(std::string_view query, int retries) {
 bool Database::executeQuery(std::string_view query) {
 	if (!handle) {
 		g_logger().error("Database not initialized!");
+		publishDatabaseRuntimeResult(DatabaseRuntimeOperation::Query, false, 0);
 		return false;
 	}
 
@@ -261,6 +331,7 @@ bool Database::executeQuery(std::string_view query) {
 DBResult_ptr Database::storeQuery(std::string_view query) {
 	if (!handle) {
 		g_logger().error("Database not initialized!");
+		publishDatabaseRuntimeResult(DatabaseRuntimeOperation::StoreQuery, false, 0);
 		return nullptr;
 	}
 	g_logger().trace("Storing Query: {}", query);
@@ -271,8 +342,10 @@ DBResult_ptr Database::storeQuery(std::string_view query) {
 
 	metrics::query_latency measure(query.substr(0, 50));
 	if (mysql_query(handle, query.data()) != 0) {
+		const auto error = mysql_errno(handle);
 		g_logger().error("Query: {}", query);
-		g_logger().error("MySQL error [{}]: {}", mysql_errno(handle), mysql_error(handle));
+		g_logger().error("MySQL error [{}]: {}", error, mysql_error(handle));
+		publishDatabaseRuntimeResult(DatabaseRuntimeOperation::StoreQuery, false, error);
 		return nullptr;
 	}
 
@@ -284,6 +357,12 @@ DBResult_ptr Database::storeQuery(std::string_view query) {
 			return nullptr;
 		}
 		return result;
+	}
+
+	if (mysql_field_count(handle) != 0 && mysql_errno(handle) != 0) {
+		const auto error = mysql_errno(handle);
+		g_logger().error("MySQL error [{}]: {}", error, mysql_error(handle));
+		publishDatabaseRuntimeResult(DatabaseRuntimeOperation::StoreQuery, false, error);
 	}
 	return nullptr;
 }
@@ -355,7 +434,6 @@ const char* DBResult::getStream(const std::string &s, unsigned long &size) const
 		size = 0;
 		return nullptr;
 	}
-
 	if (row[it->second] == nullptr) {
 		size = 0;
 		return nullptr;
