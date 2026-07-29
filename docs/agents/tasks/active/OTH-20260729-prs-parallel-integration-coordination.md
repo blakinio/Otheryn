@@ -7,7 +7,7 @@ start_sha: 6a6007667dfd82010b0240342180961cd553466f
 created: 2026-07-29
 updated: 2026-07-29
 related_issue: "205"
-related_pr: "pending"
+related_pr: "211"
 owned_paths:
   - docs/agents/tasks/active/OTH-20260729-prs-parallel-integration-coordination.md
 required_reads:
@@ -45,6 +45,7 @@ This task owns coordination state only. It does not authorize broad runtime, sch
 - no PRS-003A active task or open PR remains;
 - parent production-resilience tracker `#116` remains open;
 - package issues `#206`, `#207` and `#208` reserve the three parallel scopes;
+- duplicate PRS-003B issue `#210` was closed as duplicate of `#208` before implementation ownership was declared;
 - no package feature PR or exact owned-path declaration is published yet.
 
 ## Package status
@@ -121,11 +122,11 @@ Reject any package that introduces outside explicit scope:
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-29T21:29:00+02:00
-head: beea2231a0ea66fd783260a3fdbfb71afec5d566
-head_scope: merged coordinator baseline before this checkpoint-only update
+updated_at: 2026-07-29T21:31:00+02:00
+head: 75f7d8c5b4bbead28e5564d22e47d410ac5e892f
+head_scope: checkpoint content head before recording PR 211 and duplicate issue 210 disposition
 branch: dudantas/prs-parallel-integration-checkpoint-1
-pr: pending
+pr: 211
 status: active
 context_routes:
   - production-resilience
@@ -141,13 +142,16 @@ proven:
   - Issue 205 owns integration coordination only.
   - Coordination PR 209 exact head b78286053df9b977f03c712f02f52d8de86efc66 passed Required 30484314153 and merged as beea2231a0ea66fd783260a3fdbfb71afec5d566.
   - Issues 206, 207 and 208 reserve PRS-003C-A, PRS-004A and PRS-003B respectively.
+  - Duplicate PRS-003B issue 210 is closed as duplicate of 208 and owns no implementation.
   - Shared registration and primary PRS-003 architecture paths are serialized by the coordinator.
   - No package feature PR or exact owned-path declaration is currently published.
 derived:
   - The three packages can proceed in parallel only after each publishes exact owned paths and preserves the declared pure/runtime boundaries.
 unknown:
   - Package task paths, branches, exact owned paths, PRs and implementation heads.
-conflicts: []
+  - Exact-head Required result for PR 211.
+conflicts:
+  - duplicate issue 210 was resolved by keeping issue 208 as the definitive PRS-003B owner
 first_failure: null
 rejected_hypotheses:
   - combine all three packages into one PR
@@ -166,9 +170,12 @@ validation:
   - command: coordination PR 209 squash merge
     result: PASS
     evidence: Expected-head protected merge created beea2231a0ea66fd783260a3fdbfb71afec5d566.
-  - command: checkpoint-only exact-head Required
+  - command: duplicate ownership audit
+    result: PASS
+    evidence: Issue 210 is closed as duplicate; issue 208 remains the sole PRS-003B scope owner.
+  - command: PR 211 exact-head Required
     result: NOT_RUN
-    evidence: This checkpoint update creates the new head.
+    evidence: This metadata update creates the replacement PR head.
 blockers:
   - All three executing agents must publish exact task records, branches and owned_paths before coordinator implementation review can begin.
 next_action: Inspect each newly published active task record and branch, record exact owned paths in the conflict matrix, and stop any overlap before implementation review.
