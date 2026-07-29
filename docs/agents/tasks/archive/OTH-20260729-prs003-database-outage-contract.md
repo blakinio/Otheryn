@@ -6,8 +6,8 @@ base_branch: main
 start_sha: d09b4f04887a74e31f9e47a82c1c96ab91d33325
 feature_head: 18bf7d6856577033d23f2b2c3ee2a3c2fd84a0a3
 feature_merge_sha: 7c437707288a4004af47752863c26751e35c3b72
-lifecycle_pr: pending
-lifecycle_head: pending
+lifecycle_pr: "197"
+lifecycle_head: 677b213a9a5fe50776dc8cbd121febdd202e263c
 lifecycle_merge_sha: pending
 created: 2026-07-29
 updated: 2026-07-29
@@ -82,20 +82,23 @@ The following remain separate future packages and are not implied complete by th
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-29T18:20:00+02:00
-head: 7c437707288a4004af47752863c26751e35c3b72
-head_scope: feature merge on main before the lifecycle-only archive move
+updated_at: 2026-07-29T18:25:00+02:00
+head: 677b213a9a5fe50776dc8cbd121febdd202e263c
+head_scope: lifecycle move before this metadata-only update; archive added and active record removed in PR 197
 status: completed
 feature_pr: 196
 feature_head: 18bf7d6856577033d23f2b2c3ee2a3c2fd84a0a3
 feature_merge_sha: 7c437707288a4004af47752863c26751e35c3b72
+lifecycle_pr: 197
+lifecycle_head: 677b213a9a5fe50776dc8cbd121febdd202e263c
+lifecycle_merge_sha: pending
 issue: 195
 issue_state: closed_completed
 ci_run: 30467582765
 required_run: 30467582613
 autofix_run: 30467582325
 unknown:
-  - lifecycle PR number, final lifecycle head and lifecycle merge SHA until the lifecycle PR is created and merged
+  - lifecycle merge SHA until PR 197 is merged
 blockers: []
-next_action: Complete the lifecycle-only archive PR, record its terminal metadata, and verify the active record is absent and archive record present on main.
+next_action: Validate and merge lifecycle PR 197 with expected-head protection, then record its merge SHA and verify terminal repository state.
 ```
