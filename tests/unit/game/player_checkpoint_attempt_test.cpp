@@ -237,3 +237,106 @@ TEST(PlayerCheckpointQueueAdmissionTest, ReleasingCurrentSlotBeforeFollowUpAllow
 	EXPECT_EQ(admission.outstanding(), 0U);
 	EXPECT_FALSE(state.isDirty());
 }
+
+TEST(PlayerCheckpointQueueAdmissionTest, ReleaseObserverRunsExactlyOnceForEarlyAndScopedRelease) {
+	PlayerCheckpointQueueAdmission admission(1);
+	uint32_t observations = 0;
+
+	ASSERT_TRUE(admission.tryAcquire());
+	{
+		PlayerCheckpointQueueSlot slot(admission, [&observations] {
+			++observations;
+		});
+		EXPECT_TRUE(slot.release());
+		EXPECT_FALSE(slot.release());
+	}
+	EXPECT_EQ(observations, 1U);
+	EXPECT_EQ(admission.outstanding(), 0U);
+
+	ASSERT_TRUE(admission.tryAcquire());
+	{
+		PlayerCheckpointQueueSlot slot(admission, [&observations] {
+			++observations;
+		});
+	}
+	EXPECT_EQ(observations, 2U);
+	EXPECT_EQ(admission.outstanding(), 0U);
+}
+
+TEST(PlayerCheckpointTelemetryTest, GaugeSummaryReportsBoundedQueueAndOldestDirtyOwner) {
+	auto newer = std::make_shared<PlayerPersistenceState>();
+	auto older = std::make_shared<PlayerPersistenceState>();
+	auto clean = std::make_shared<PlayerPersistenceState>();
+	(void)newer->markDirty(200);
+	(void)older->markDirty(100);
+
+	const auto initial = summarizePlayerCheckpointGauges(7, 2, { newer, older, clean });
+	EXPECT_EQ(initial.queueCapacity, 7U);
+	EXPECT_EQ(initial.queueOutstanding, 2U);
+	EXPECT_EQ(initial.dirtyOwners, 2U);
+	EXPECT_EQ(initial.oldestDirtyTimestampSeconds, 100);
+
+	const auto olderGeneration = older->beginCheckpoint();
+	ASSERT_EQ(olderGeneration, 1U);
+	ASSERT_TRUE(older->acknowledgeSuccess(*olderGeneration));
+	const auto afterSuccess = summarizePlayerCheckpointGauges(7, 1, { newer, older, clean });
+	EXPECT_EQ(afterSuccess.dirtyOwners, 1U);
+	EXPECT_EQ(afterSuccess.oldestDirtyTimestampSeconds, 200);
+}
+
+TEST(PlayerCheckpointTelemetryTest, UnmeasuredDirtyOwnerDoesNotInventATimestamp) {
+	auto state = std::make_shared<PlayerPersistenceState>();
+	(void)state->markDirty();
+
+	const auto snapshot = summarizePlayerCheckpointGauges(1, 0, { state });
+	EXPECT_EQ(snapshot.dirtyOwners, 1U);
+	EXPECT_EQ(snapshot.oldestDirtyTimestampSeconds, 0);
+}
+
+TEST(PlayerCheckpointTelemetryTest, DistinguishesFailuresExceptionsRejectionsAndSubmissionFailures) {
+	PlayerCheckpointTelemetry telemetry;
+	telemetry.recordRequest();
+	telemetry.recordAttempt();
+	telemetry.recordSuccess();
+	telemetry.recordFailure();
+	telemetry.recordThrownAttempt();
+	telemetry.recordQueueRejection();
+	telemetry.recordSubmissionFailure();
+
+	const auto snapshot = telemetry.snapshot();
+	EXPECT_EQ(snapshot.requests, 1U);
+	EXPECT_EQ(snapshot.attempts, 1U);
+	EXPECT_EQ(snapshot.successes, 1U);
+	EXPECT_EQ(snapshot.failures, 2U);
+	EXPECT_EQ(snapshot.thrownAttempts, 1U);
+	EXPECT_EQ(snapshot.queueRejections, 1U);
+	EXPECT_EQ(snapshot.submissionFailures, 1U);
+}
+
+TEST(PlayerCheckpointTelemetryTest, ConcurrentCountersDoNotLoseEvents) {
+	PlayerCheckpointTelemetry telemetry;
+	constexpr uint32_t threadCount = 16;
+	constexpr uint32_t eventsPerThread = 500;
+	std::vector<std::thread> workers;
+	workers.reserve(threadCount);
+
+	for (uint32_t index = 0; index < threadCount; ++index) {
+		workers.emplace_back([&telemetry] {
+			for (uint32_t event = 0; event < eventsPerThread; ++event) {
+				telemetry.recordRequest();
+				telemetry.recordAttempt();
+				telemetry.recordSuccess();
+			}
+		});
+	}
+	for (auto &worker : workers) {
+		worker.join();
+	}
+
+	const auto snapshot = telemetry.snapshot();
+	const auto expected = static_cast<uint64_t>(threadCount) * eventsPerThread;
+	EXPECT_EQ(snapshot.requests, expected);
+	EXPECT_EQ(snapshot.attempts, expected);
+	EXPECT_EQ(snapshot.successes, expected);
+	EXPECT_EQ(snapshot.failures, 0U);
+}
