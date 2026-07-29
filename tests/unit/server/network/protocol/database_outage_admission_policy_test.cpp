@@ -9,7 +9,7 @@
 #endif
 
 namespace {
-	constexpr DatabaseOutageSnapshot makeSnapshot(DatabaseOutageState state) {
+	constexpr DatabaseOutageSnapshot makeSnapshot(DatabaseOutageState state) noexcept {
 		DatabaseOutageSnapshot snapshot;
 		snapshot.state = state;
 		return snapshot;
