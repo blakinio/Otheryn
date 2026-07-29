@@ -129,6 +129,34 @@ namespace metrics {
 			upDownCounters[name]->Add(value, attrskv);
 		}
 
+		/**
+		 * Publishes one process-wide current value without registering a callback.
+		 *
+		 * OpenTelemetry UpDownCounter instruments retain the cumulative delta, so
+		 * this wrapper remembers the last published value and emits only the
+		 * difference. It is intentionally label-free to keep operational gauges
+		 * bounded and avoid per-entity state in the metrics registry.
+		 */
+		void setGauge(std::string_view name, int64_t value) {
+			std::scoped_lock lock(mutex_);
+			if (!getMeter()) {
+				return;
+			}
+
+			if (gauges.find(name) == gauges.end()) {
+				std::string nameStr(name);
+				gauges[name] = getMeter()->CreateInt64UpDownCounter(nameStr);
+			}
+
+			const auto previous = gaugeValues.find(name);
+			const int64_t previousValue = previous == gaugeValues.end() ? 0 : previous->second;
+			const int64_t delta = value - previousValue;
+			if (delta != 0) {
+				gauges[name]->Add(delta);
+			}
+			gaugeValues[name] = value;
+		}
+
 		friend class ScopedLatency;
 
 	protected:
@@ -136,6 +164,8 @@ namespace metrics {
 		phmap::parallel_flat_hash_map<std::string, Histogram<double>> latencyHistograms;
 		phmap::flat_hash_map<std::string, UpDownCounter<int64_t>> upDownCounters;
 		phmap::flat_hash_map<std::string, Counter<double>> counters;
+		phmap::flat_hash_map<std::string, UpDownCounter<int64_t>> gauges;
+		phmap::flat_hash_map<std::string, int64_t> gaugeValues;
 
 		Meter getMeter() {
 			auto provider = metrics_api::Provider::GetMeterProvider();
@@ -214,6 +244,8 @@ namespace metrics {
 		void addCounter([[maybe_unused]] std::string_view name, [[maybe_unused]] double value, [[maybe_unused]] const std::map<std::string, std::string> &attrs = {}) const { }
 
 		void addUpDownCounter([[maybe_unused]] std::string_view name, [[maybe_unused]] int value, [[maybe_unused]] const std::map<std::string, std::string> &attrs = {}) const { }
+
+		void setGauge([[maybe_unused]] std::string_view name, [[maybe_unused]] int64_t value) const { }
 
 		friend class ScopedLatency;
 	};
