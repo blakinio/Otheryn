@@ -4,11 +4,11 @@ status: validating
 branch: dudantas/prs-003c-login-handoff-admission-policy
 base_branch: main
 start_sha: 6a6007667dfd82010b0240342180961cd553466f
-rebased_onto_sha: beea2231a0ea66fd783260a3fdbfb71afec5d566
+rebased_onto_sha: 97bd35040ca8551ed0a7a62e60525ba696bf6259
 created: 2026-07-29
 updated: 2026-07-29
 related_issue: "206"
-related_pr: pending
+related_pr: "213"
 owned_paths:
   - docs/agents/tasks/active/OTH-20260729-prs003c-login-handoff-admission-policy.md
   - docs/architecture/prs-003c-login-handoff-admission-policy.md
@@ -53,7 +53,7 @@ Add one deterministic pure decision component using an immutable database-outage
 
 ## Shared path
 
-`tests/unit/server/CMakeLists.txt` is shared. The package adds one source registration line without reordering unrelated entries. The branch was refreshed onto `beea2231a0ea66fd783260a3fdbfb71afec5d566` before validation.
+`tests/unit/server/CMakeLists.txt` is shared. The package adds one source registration line without reordering unrelated entries. The branch was refreshed onto `97bd35040ca8551ed0a7a62e60525ba696bf6259` before exact-head validation.
 
 ## Validation plan
 
@@ -80,11 +80,11 @@ Revert the feature merge. Only the five declared paths belong to this package.
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-29T21:42:00+02:00
-head: 6941639ac1e0a9c93f7082e4e10adb23315ea0c7
-head_scope: implementation and shared test registration before this task-record commit
+updated_at: 2026-07-29T21:46:00+02:00
+head: 85a7e15644d19b06178cabf703ec3373ce07d8e4
+head_scope: branch after merging current main and before this PR-metadata checkpoint update
 branch: dudantas/prs-003c-login-handoff-admission-policy
-pr: null
+pr: 213
 status: validating
 context_routes:
   - production-resilience
@@ -100,9 +100,9 @@ owned_paths:
   - tests/unit/server/CMakeLists.txt
 proven:
   - PRS-003A and immutable outage snapshots are merged.
-  - Issue 206 owns this pure-policy package.
+  - Issue 206 and PR 213 own this pure-policy package.
   - No competing PRS-003C implementation was found.
-  - The branch is refreshed onto current main beea2231a0ea66fd783260a3fdbfb71afec5d566.
+  - The branch is refreshed onto main 97bd35040ca8551ed0a7a62e60525ba696bf6259.
   - One isolated constexpr policy, dedicated document and table-driven tests are implemented.
   - No live protocol, database, player, session or channel path was edited.
 derived:
@@ -129,9 +129,12 @@ validation:
   - command: focused source and test matrix review
     result: PASS
     evidence: all outage states, supported operations, lifecycle values, capabilities and unknown values are covered
+  - command: branch freshness and shared-path refresh
+    result: PASS
+    evidence: current main 97bd35040ca8551ed0a7a62e60525ba696bf6259 merged without feature-path conflict
   - command: exact-head CI, Required and autofix
     result: NOT_RUN
-    evidence: PR not yet opened
+    evidence: replacement head created by this checkpoint update
 blockers: []
-next_action: Open the feature PR, record its number, then validate exact final head CI and repository-required gates.
+next_action: Validate CI, Required and autofix on the exact PR 213 head; fix only confirmed bounded failures, then audit scope, drift and discussions before merge.
 ```
