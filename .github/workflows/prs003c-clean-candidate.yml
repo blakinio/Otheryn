@@ -1,0 +1,45 @@
+name: PRS-003C clean candidate
+
+on:
+  push:
+    branches:
+      - dudantas/prs-003c-live-protocol-wiring
+
+permissions:
+  contents: write
+
+jobs:
+  collapse:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: dudantas/prs-003c-live-protocol-wiring
+          fetch-depth: 0
+
+      - name: Collapse final tree onto current main
+        run: |
+          git fetch origin main
+          rm .github/workflows/prs003c-clean-candidate.yml
+          git reset --soft origin/main
+          git add -A
+
+          cat > /tmp/expected-paths <<'EOF'
+          docs/agents/tasks/active/OTH-20260729-prs003c-live-protocol-wiring.md
+          docs/architecture/prs-003-database-outage-state-machine-contract.md
+          src/server/network/protocol/database_outage_protocol_admission.hpp
+          src/server/network/protocol/protocolgame.cpp
+          src/server/network/protocol/protocollogin.cpp
+          tests/unit/server/CMakeLists.txt
+          tests/unit/server/network/protocol/database_outage_protocol_admission_test.cpp
+          EOF
+          git diff --cached --name-only | sort > /tmp/actual-paths
+          sort -o /tmp/expected-paths /tmp/expected-paths
+          diff -u /tmp/expected-paths /tmp/actual-paths
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "feat(resilience): wire PRS-003C live protocol admission"
+          git push --force-with-lease origin HEAD:dudantas/prs-003c-live-protocol-wiring
