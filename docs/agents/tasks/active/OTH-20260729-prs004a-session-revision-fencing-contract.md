@@ -1,13 +1,13 @@
 ---
 task_id: OTH-20260729-prs004a-session-revision-fencing-contract
-status: active
+status: validating
 branch: feat/OTH-20260729-prs004a-session-revision-fencing-contract
 base_branch: main
 start_sha: 6a6007667dfd82010b0240342180961cd553466f
 created: 2026-07-29
 updated: 2026-07-29
 related_issue: "207"
-related_pr: pending
+related_pr: "212"
 owned_paths:
   - docs/agents/tasks/active/OTH-20260729-prs004a-session-revision-fencing-contract.md
   - docs/architecture/prs-004-session-revision-fencing-contract.md
@@ -88,6 +88,58 @@ Implement one database-independent deterministic state object defining whether o
 - verify all deterministic transition, malformed-context and concurrency tests;
 - confirm no runtime, schema, migration, protocol or production persistence path changed;
 - verify comments, reviews, unresolved threads and base freshness before merge.
+
+## Preflight result
+
+- task-start `main`: `6a6007667dfd82010b0240342180961cd553466f`;
+- existing coordinator-reserved issue: `#207`;
+- feature PR: `#212`;
+- branch ownership declaration published on issue `#207`;
+- exact owned paths: five, with one minimal shared CMake registration;
+- no existing PRS-004 implementation or competing PR was found;
+- no runtime, schema, migration, SQL save or protocol path is changed;
+- current `main` drift is coordination/task metadata outside this package's shared implementation paths.
+
+## Context checkpoint
+
+```yaml
+checkpoint_version: 1
+updated_at: 2026-07-29T21:32:00+02:00
+head: e65f2172492302f6944378b6fdc19d06b91e53fd
+head_scope: implementation head before this PR-metadata task update
+branch: feat/OTH-20260729-prs004a-session-revision-fencing-contract
+pr: 212
+status: validating
+owned_paths:
+  - docs/agents/tasks/active/OTH-20260729-prs004a-session-revision-fencing-contract.md
+  - docs/architecture/prs-004-session-revision-fencing-contract.md
+  - src/database/session_revision_fence.hpp
+  - tests/unit/database/session_revision_fence_test.cpp
+  - tests/unit/database/CMakeLists.txt
+proven:
+  - The implementation is database-independent and touches exactly five declared paths.
+  - Subject, generation, writer token, revision and event sequence are explicit non-zero fencing inputs.
+  - Acquire, transfer, release and persist transitions are mutex-serialized and return immutable snapshots.
+  - Missing, malformed, stale and mismatched fencing context fails closed.
+  - Architecture documentation leaves durable schema, SQL CAS, player-save and channel-handoff wiring to separate packages.
+unknown:
+  - Exact-head CI, Required and autofix results.
+  - Final branch freshness after parallel packages update shared registration paths.
+conflicts: []
+first_failure: null
+validation:
+  - command: governance, issue, branch, ownership and existing-implementation preflight
+    result: PASS
+    evidence: Issue 207, task record, branch and five exact owned paths were verified against current repository state.
+  - command: implementation and changed-path audit
+    result: PASS
+    evidence: One header, one unit test, one architecture contract, one task record and one minimal CMake entry only.
+  - command: exact-head CI, Required and autofix
+    result: NOT_RUN
+    evidence: PR 212 is open and this metadata update creates the validation head.
+blockers: []
+next_action: Verify exact-head checks; fix only a confirmed bounded failure, then audit full diff, comments, reviews, threads and base drift before merge.
+```
 
 ## Rollback
 
