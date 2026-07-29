@@ -102,6 +102,16 @@ namespace DatabaseOutageProtocolAdmission {
 		};
 	}
 
+	[[nodiscard]] constexpr DatabaseOutageProtocolAdmissionResult evaluateGameLoginOutage(
+		const DatabaseOutageSnapshot &snapshot
+	) noexcept {
+		// The early live game-login gate owns outage admission only. Existing
+		// protocol code still owns startup/maintenance and the later player-aware
+		// closing/closed CanAlwaysLogin checks. Evaluating with NORMAL prevents a
+		// lifecycle rejection from masking a simultaneous fail-closed outage.
+		return evaluate(snapshot, DatabaseOutageAdmissionOperation::GameLogin, {}, GAME_STATE_NORMAL);
+	}
+
 	[[nodiscard]] inline DatabaseOutageProtocolAdmissionResult evaluateRuntime(
 		DatabaseOutageAdmissionOperation operation,
 		DatabaseOutageAdmissionCallerContext caller,
@@ -116,7 +126,8 @@ namespace DatabaseOutageProtocolAdmission {
 	}
 
 	[[nodiscard]] inline DatabaseOutageProtocolAdmissionResult evaluateGameLogin(GameState_t lifecycleState) {
-		return evaluateRuntime(DatabaseOutageAdmissionOperation::GameLogin, {}, lifecycleState, true);
+		(void)lifecycleState;
+		return evaluateGameLoginOutage(getDatabaseOutageSnapshot());
 	}
 
 	[[nodiscard]] inline DatabaseOutageProtocolAdmissionResult evaluateChannelHandoff(
