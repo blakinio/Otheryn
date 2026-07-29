@@ -146,7 +146,7 @@ TEST(Prs003DatabaseOutageContractTest, RecordsLiveLoginAndHandoffGatesWithoutLif
 	expectOrdered(dispatchedLogin, "DatabaseOutageProtocolAdmission::evaluateGameLogin", "IOLoginData::preloadPlayer");
 	expectOrdered(dispatchedLogin, "DatabaseOutageProtocolAdmission::evaluateChannelHandoff", "foundPlayer->disconnect()");
 
-	const auto connect = functionBody(game, "void ProtocolGame::connect", "void ProtocolGame::onConnect");
+	const auto connect = functionBody(game, "void ProtocolGame::connect", "void ProtocolGame::logout");
 	expectOrdered(connect, "DatabaseOutageProtocolAdmission::evaluateChannelHandoff", "player = foundPlayer");
 }
 
