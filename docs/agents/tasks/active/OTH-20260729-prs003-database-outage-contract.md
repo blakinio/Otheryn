@@ -1,13 +1,13 @@
 ---
 task_id: OTH-20260729-prs003-database-outage-contract
-status: active
+status: validating
 branch: dudantas/prs-003-database-outage-contract
 base_branch: main
 start_sha: d09b4f04887a74e31f9e47a82c1c96ab91d33325
 created: 2026-07-29
 updated: 2026-07-29
 related_issue: "195"
-related_pr: null
+related_pr: "196"
 owned_paths:
   - docs/agents/tasks/active/OTH-20260729-prs003-database-outage-contract.md
   - docs/architecture/prs-003-database-outage-state-machine-contract.md
@@ -90,12 +90,12 @@ Revert this discovery-contract merge. It changes only documentation, one source-
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-29T17:06:00+02:00
-head: d09b4f04887a74e31f9e47a82c1c96ab91d33325
-head_scope: task-start main and newly created branch before discovery files
+updated_at: 2026-07-29T17:12:00+02:00
+head: eacd6b609fedd3572626a25e26b084c5d21a76e9
+head_scope: implementation head before this checkpoint-only update; all four owned paths are present in PR 196
 branch: dudantas/prs-003-database-outage-contract
-pr: null
-status: implementing
+pr: 196
+status: validating
 context_routes:
   - production-resilience
   - database
@@ -116,12 +116,14 @@ proven:
   - Implicit reconnect and arbitrary statement replay are disabled.
   - Current GameState_t has no degraded or draining state.
   - Existing login gates are based on game lifecycle state, not database health.
-  - Issue 195 owns the bounded PRS-003 discovery milestone.
+  - Issue 195 and PR 196 own exactly the bounded PRS-003 discovery milestone.
+  - The architecture contract defines classified events, finite deadlines, fail-closed admission, bounded draining, explicit recovery and low-cardinality observability.
+  - The focused source-contract test covers startup, runtime Database, DatabaseTasks, lifecycle states, login gates and the accepted target sequence.
 derived:
   - Runtime persistence failure can leave the server accepting additional work because no central database-health admission policy exists.
   - The first implementation should be a pure database-independent state machine before wiring Database, protocols or gameplay call sites.
 unknown:
-  - Exact implementation-owned event classification, grace duration and recovery-probe API until the discovery contract is reviewed by repository CI.
+  - Exact-head repository CI, Required and autofix results for the live PR head after this checkpoint update.
 conflicts: []
 first_failure:
   marker: null
@@ -134,6 +136,9 @@ rejected_hypotheses:
   - combine PRS-003 with fencing, idempotency, reconciliation or failover
 changed_paths:
   - docs/agents/tasks/active/OTH-20260729-prs003-database-outage-contract.md
+  - docs/architecture/prs-003-database-outage-state-machine-contract.md
+  - tests/unit/game/CMakeLists.txt
+  - tests/unit/game/prs_003_database_outage_contract_test.cpp
 validation:
   - command: governance and ownership preflight
     result: PASS
@@ -141,9 +146,12 @@ validation:
   - command: live startup, database, game-state and login source audit
     result: PASS
     evidence: Startup is fail closed; runtime failures have no central outage transition; current states and login gates are lifecycle-only.
-  - command: focused source-contract test and checkpoint validation
+  - command: focused source-contract and CMake registration audit
+    result: PASS
+    evidence: One PRS003 source-root definition and one registered test source cover the four intended source boundaries and accepted contract.
+  - command: checkpoint validator and exact-head repository CI
     result: NOT_RUN
-    evidence: Discovery files are being created.
+    evidence: PR 196 is open and checks are expected on the checkpoint-updated head.
 blockers: []
-next_action: Add the PRS-003 architecture contract, focused source-contract test and CMake registration, then validate the checkpoint and open the bounded discovery pull request.
+next_action: Verify the live PR 196 head and exact-head CI, Required and autofix; fix only bounded contract/test failures, then perform the final path, discussion and main-drift audit before merge.
 ```
