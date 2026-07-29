@@ -33,6 +33,16 @@ namespace {
 
 		return std::string_view(source).substr(beginPosition, endPosition - beginPosition);
 	}
+
+	void expectOrdered(std::string_view source, std::string_view first, std::string_view second) {
+		const auto firstPosition = source.find(first);
+		const auto secondPosition = source.find(second);
+		EXPECT_NE(firstPosition, std::string_view::npos) << first;
+		EXPECT_NE(secondPosition, std::string_view::npos) << second;
+		if (firstPosition != std::string_view::npos && secondPosition != std::string_view::npos) {
+			EXPECT_LT(firstPosition, secondPosition) << first << " must precede " << second;
+		}
+	}
 } // namespace
 
 TEST(Prs003DatabaseOutageContractTest, PreservesFailClosedDatabaseStartup) {
@@ -100,14 +110,16 @@ TEST(Prs003DatabaseOutageContractTest, DistinguishesExistingGameLifecycleFromOut
 	EXPECT_EQ(setGameState.find("DRAINING"), std::string_view::npos);
 }
 
-TEST(Prs003DatabaseOutageContractTest, RecordsLifecycleOnlyLoginGates) {
+TEST(Prs003DatabaseOutageContractTest, RecordsLiveLoginAndHandoffGatesWithoutLifecycleOverload) {
 	const auto login = readSource("src/server/network/protocol/protocollogin.cpp");
 	expectContains(login, "GAME_STATE_SHUTDOWN");
 	expectContains(login, "GAME_STATE_STARTUP");
 	expectContains(login, "GAME_STATE_MAINTAIN");
-	EXPECT_EQ(login.find("DatabaseOutage"), std::string::npos);
-	EXPECT_EQ(login.find("DEGRADED"), std::string::npos);
-	EXPECT_EQ(login.find("DRAINING"), std::string::npos);
+	expectContains(login, "DatabaseOutageProtocolAdmission::evaluateAccountLogin");
+	EXPECT_EQ(login.find("GAME_STATE_DEGRADED"), std::string::npos);
+	EXPECT_EQ(login.find("GAME_STATE_DRAINING"), std::string::npos);
+	expectOrdered(login, "DatabaseOutageProtocolAdmission::evaluateAccountLogin", "IOBan::isIpBanned");
+	expectOrdered(login, "DatabaseOutageProtocolAdmission::evaluateAccountLogin", "IOLoginData::authenticateAccount");
 
 	const auto game = readSource("src/server/network/protocol/protocolgame.cpp");
 	expectContains(game, "GAME_STATE_SHUTDOWN");
@@ -115,9 +127,21 @@ TEST(Prs003DatabaseOutageContractTest, RecordsLifecycleOnlyLoginGates) {
 	expectContains(game, "GAME_STATE_MAINTAIN");
 	expectContains(game, "GAME_STATE_CLOSING");
 	expectContains(game, "GAME_STATE_CLOSED");
-	EXPECT_EQ(game.find("DatabaseOutage"), std::string::npos);
-	EXPECT_EQ(game.find("DEGRADED"), std::string::npos);
-	EXPECT_EQ(game.find("DRAINING"), std::string::npos);
+	expectContains(game, "DatabaseOutageProtocolAdmission::evaluateGameLogin");
+	expectContains(game, "DatabaseOutageProtocolAdmission::evaluateChannelHandoff");
+	EXPECT_EQ(game.find("GAME_STATE_DEGRADED"), std::string::npos);
+	EXPECT_EQ(game.find("GAME_STATE_DRAINING"), std::string::npos);
+
+	const auto firstMessage = functionBody(game, "void ProtocolGame::onRecvFirstMessage", "void ProtocolGame::sendLoginChallenge");
+	expectOrdered(firstMessage, "DatabaseOutageProtocolAdmission::evaluateGameLogin", "IOBan::isIpBanned");
+	expectOrdered(firstMessage, "DatabaseOutageProtocolAdmission::evaluateGameLogin", "IOLoginData::gameWorldAuthentication");
+
+	const auto dispatchedLogin = functionBody(game, "void ProtocolGame::login", "void ProtocolGame::connect");
+	expectOrdered(dispatchedLogin, "DatabaseOutageProtocolAdmission::evaluateGameLogin", "IOLoginData::preloadPlayer");
+	expectOrdered(dispatchedLogin, "DatabaseOutageProtocolAdmission::evaluateChannelHandoff", "foundPlayer->disconnect()");
+
+	const auto connect = functionBody(game, "void ProtocolGame::connect", "void ProtocolGame::onConnect");
+	expectOrdered(connect, "DatabaseOutageProtocolAdmission::evaluateChannelHandoff", "player = foundPlayer");
 }
 
 TEST(Prs003DatabaseOutageContractTest, RecordsBoundedFailClosedTargetAndImplementationSequence) {
