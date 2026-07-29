@@ -101,9 +101,9 @@ Revert the feature merge. The package changes only one database-independent head
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-29T19:28:00+02:00
-head: df65b3e752ae21d9dc74c85ebe684d67421ceea4
-head_scope: complete implementation and task checkpoint before this PR-number-only update
+updated_at: 2026-07-29T20:03:00+02:00
+head: d0fe68995eef5ec1559a2c7f3ae47439182ba753
+head_scope: contract-literal fix head before this checkpoint-only task update
 branch: dudantas/prs-003a-database-outage-state-machine
 pr: 202
 status: validating
@@ -122,21 +122,24 @@ owned_paths:
   - tests/unit/database/CMakeLists.txt
 proven:
   - PRS-003 discovery contract is merged and terminally archived.
-  - Issue 201 owns the pure database-independent Slice A package.
-  - PR 202 owns exactly the five declared paths.
+  - Issue 201 and PR 202 own exactly the pure database-independent Slice A package and five declared paths.
   - DatabaseOutageStateMachine implements finite durations, fixed states/reasons/outcomes, monotonic sequence/time rejection, immutable snapshots and mutex serialization without runtime wiring.
   - Deterministic tests cover every accepted Slice A transition, precondition and duplicate-concurrency boundary.
   - Architecture documentation records Slice A as implemented and leaves Slice B as the next separate package.
   - No Database, DatabaseTasks, protocol, gameplay, metrics, schema, credential or deployment path changed.
+  - Autofix 30475562364 passed on formatted head 9fe27eea43bb89a35f36996bcceaf848920aef95.
+  - CI 30475562855 compiled and passed all applicable platform/smoke jobs; Linux debug passed 591 of 592 CTest cases before one source-contract literal check failed.
 derived:
   - The five owned paths are sufficient for an independently compiled and tested header-only Slice A.
+  - The CI failure was documentation-contract drift, not a state-machine compile, unit, smoke or platform failure.
 unknown:
-  - Exact-head repository CI, Required and autofix results for the live PR head after this checkpoint update.
+  - Exact-head replacement CI, Required and autofix results after restoring the required contract sentence.
 conflicts: []
 first_failure:
-  marker: null
-  evidence: No implementation or validation failure has occurred.
+  marker: Prs003DatabaseOutageContractTest.RecordsBoundedFailClosedTargetAndImplementationSequence
+  evidence: CI 30475562855 failed because the architecture update omitted the exact preserved sentence `Do not wire it into Database, protocols or gameplay in the same slice.`; commit d0fe68995eef5ec1559a2c7f3ae47439182ba753 restored the literal without changing runtime code.
 rejected_hypotheses:
+  - state-machine compile or transition failure
   - wire the first slice directly into Database or protocols
   - reuse GameState_t as an undocumented outage state
   - add reconnect, query replay or recovery probes
@@ -155,9 +158,12 @@ validation:
   - command: focused implementation and source/test registration audit
     result: PASS
     evidence: One independent header and one registered test source cover all accepted Slice A states, events, deadlines, recovery and concurrency invariants.
-  - command: exact-head repository CI, Required and autofix
+  - command: exact-head CI 30475562855 on 9fe27eea43bb89a35f36996bcceaf848920aef95
+    result: FAIL
+    evidence: 591 of 592 Linux debug CTest cases passed; only the preserved PRS-003 architecture sentence was absent. All applicable compile and smoke jobs passed.
+  - command: exact-head replacement CI, Required and autofix
     result: NOT_RUN
-    evidence: PR 202 is open and checks are expected on the live checkpoint-updated head.
+    evidence: This checkpoint update creates the final replacement-validation head.
 blockers: []
-next_action: Validate CI, Required and autofix on the live exact PR 202 head; fix only confirmed bounded failures.
+next_action: Validate CI, Required and autofix on the new exact PR 202 head; fix only a confirmed bounded failure, then perform final path, drift and discussion audits before merge.
 ```
