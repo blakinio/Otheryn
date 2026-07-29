@@ -98,7 +98,8 @@ public:
 		DatabaseOutageTimePoint drain;
 	};
 
-	explicit DatabaseOutageStateMachine(Durations durations) : durations_(durations) {
+	explicit DatabaseOutageStateMachine(Durations durations) :
+		durations_(durations) {
 		if (durations_.degradedGrace.count() <= 0 || durations_.drain.count() <= 0) {
 			throw std::invalid_argument("database outage durations must be positive");
 		}
