@@ -71,8 +71,8 @@ public:
 	[[nodiscard]] std::optional<Generation> beginFinalCheckpoint(std::chrono::milliseconds waitTimeout) {
 		std::unique_lock lock(mutex_);
 		if (!checkpointSettled_.wait_for(lock, waitTimeout, [this] {
-			    return !inFlightGeneration_.has_value();
-		    })) {
+				return !inFlightGeneration_.has_value();
+			})) {
 			return std::nullopt;
 		}
 		if (!isDirtyLocked()) {
