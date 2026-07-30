@@ -4,6 +4,7 @@ status: active
 branch: dudantas/prs-003d-a
 base_branch: main
 start_sha: 30ad4f41987481219faf43fdab51596a0bec4732
+refreshed_base_sha: 35b1a3f5ffe775d2973df6f996f2a966e7d4d761
 issue: "231"
 feature_pr: "236"
 created: 2026-07-30
@@ -30,14 +31,14 @@ required_reads:
 ## Current behavior inventory
 
 - PRS-003A exposes immutable `DatabaseOutageSnapshot` values with `Healthy`, `Degraded`, `Draining` and `Maintenance` states.
-- PRS-003B publishes classified runtime database failures to the process-level state owner without gating gameplay mutations.
-- PRS-003C-B gates live login and handoff only; it explicitly excludes mutation admission and draining.
+- PRS-003B publishes classified runtime database failures without gating gameplay mutations.
+- PRS-003C-B gates live login and handoff only; it excludes mutation admission and draining.
 - PRS-002J provides the accepted bounded synchronous final-player-save boundary, but this slice does not invoke it.
-- No existing pure mutation admission policy classifies critical durable, ordinary durable or ephemeral/non-durable mutation operations.
+- No prior pure mutation admission policy classified critical durable, ordinary durable or ephemeral/non-durable mutation operations.
 
 ## Accepted target contract
 
-Add one header-only, database-independent policy that evaluates an immutable outage snapshot, an explicit mutation operation class and the current `GameState_t`. It returns a deterministic allow/reject disposition, a fixed reason and the evaluated input classes.
+The header-only, database-independent policy evaluates one immutable outage snapshot, one explicit mutation operation class and the current `GameState_t`. It returns a deterministic allow/reject disposition, a fixed reason and the evaluated inputs.
 
 Assuming lifecycle `GAME_STATE_NORMAL`:
 
@@ -47,24 +48,20 @@ Assuming lifecycle `GAME_STATE_NORMAL`:
 - `Maintenance`: reject every mutation class;
 - unknown operation or outage state: reject fail closed.
 
-Lifecycle rules:
-
-- allow mutation evaluation only in `INIT` and `NORMAL`;
-- reject `STARTUP`, `CLOSING`, `CLOSED`, `SHUTDOWN` and `MAINTAIN` with fixed reasons;
-- reject unknown lifecycle values fail closed.
+Lifecycle permits mutation evaluation only in `INIT` and `NORMAL`; all other and unknown lifecycle values reject fail closed.
 
 ## Explicit non-goals
 
-- no runtime gameplay or economy call-site wiring;
+- no runtime gameplay/economy call-site wiring;
 - no global outage lookup inside the policy;
 - no scheduler, deadline execution, disconnect, player removal, checkpoint or final-save invocation;
 - no recovery probe, reconnect, ping, SQL retry or replay;
 - no schema, migration, PRS-004 durable fencing, PRS-005 idempotency/ledger, deployment or production mutation;
-- no caller-visible error framework and no broad economy gating.
+- no caller-visible error framework or broad economy gating.
 
 ## Failure-injection plan
 
-Database failure injection is not applicable to this pure slice. Deterministic unit tests inject every known and unknown operation, lifecycle and outage enum value, verify immutable input preservation and repeat identical evaluations.
+Database failure injection is not applicable. Deterministic unit tests inject every known and unknown operation, lifecycle and outage enum value, verify immutable input preservation and repeat identical evaluations.
 
 ## Rollback plan
 
@@ -74,11 +71,12 @@ Revert the feature merge. The package creates no persistent data, schema, runtim
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-30T08:41:00+02:00
-head: dc735160ae9b0dfa42bde8abbf0aabe35e163203
+updated_at: 2026-07-30T09:27:00+02:00
+head: 2a7bb9ea5d5e86aa4473e3ba2a6bff0343e7062e
+head_scope: exact validated implementation head before this governance-only evidence commit
 branch: dudantas/prs-003d-a
 pr: 236
-status: validating
+status: merge-ready-pending-replacement-checks
 context_routes:
   - production-resilience
   - database-outage
@@ -92,24 +90,32 @@ owned_paths:
   - tests/unit/game/database_outage_mutation_admission_policy_test.cpp
   - tests/unit/game/CMakeLists.txt
 proven:
-  - main baseline 30ad4f41987481219faf43fdab51596a0bec4732 contains terminal PRS-003C-B archive metadata
-  - issue 231 is the only discovered PRS-003D-A issue
-  - no open pull request or dudantas/prs-003d branch existed at task start
-  - active task directory was absent on main and no owned-path overlap was discovered
-  - feature diff contains exactly the five declared paths and was behind_by zero at PR creation
+  - terminal PRS-003C-B and PRS-002J dependencies were read and satisfied before implementation
+  - issue 231 and PR 236 are the unique PRS-003D-A records
+  - current main 35b1a3f5ffe775d2973df6f996f2a966e7d4d761 differs from task-start main only by the disjoint coordinator-owned record
+  - coordinator ownership is disjoint and its record was not modified
+  - exact implementation head 2a7bb9ea5d5e86aa4473e3ba2a6bff0343e7062e passed CI 30521707135, Required 30521706962 and autofix 30521706932
+  - full CI included fast checks, Lua tests, Linux release, Linux debug with CTest, Windows CMake, macOS and Docker
+  - final feature diff contains exactly the five declared owned paths and was behind_by zero
+  - PR 236 is open, mergeable and has no comments or review discussion
   - isolated C++20 syntax, constexpr, noexcept and trivially-copyable checks passed
-  - PR 236 is open from dudantas/prs-003d-a to main
+  - no runtime, draining, checkpoint, recovery, schema, fencing, ledger or deployment integration is present
 derived:
-  - the pure policy is ready for repository exact-head validation
-unknown:
-  - exact runtime mutation call sites remain intentionally unowned until PRS-003D-B
+  - this governance-only evidence commit requires a complete replacement exact-head check set before merge
+  - exact runtime mutation call sites remain intentionally unowned until terminal PRS-003D-A permits PRS-003D-B
+unknown: []
 conflicts: []
-first_failure: null
+first_failure:
+  marker: refreshed-head-autofix-replacement
+  result: CONTAINED
+  evidence: superseded runs were cancelled only because autofix replaced the head; replacement head 2a7bb9ea5d5e86aa4473e3ba2a6bff0343e7062e passed all gates
 rejected_hypotheses:
   - runtime gameplay gating in D-A
   - allowing unknown operation or enum values
   - allowing durable mutations during degraded grace
   - invoking PRS-002 final save in the pure policy
+  - editing the coordinator record
+  - treating cancelled superseded runs as a code failure
 changed_paths:
   - docs/agents/tasks/active/OTH-20260730-prs003d-mutation-admission-policy.md
   - docs/architecture/prs-003d-mutation-admission-policy.md
@@ -119,13 +125,25 @@ changed_paths:
 validation:
   - command: live dependency and ownership preflight
     result: PASS
-    evidence: terminal PRS-003C-B and PRS-002J archives read; no open PR or PRS-003D branch found
-  - command: isolated C++20 syntax and constexpr/noexcept compile check
+    evidence: no duplicate PRS-003D package or owned-path overlap existed at task start
+  - command: isolated C++20 syntax and contract compile check
     result: PASS
-    evidence: policy compiled and executed against minimal accepted enum contracts
-  - command: repository CI, Required and autofix on exact final head
-    result: NOT_RUN
-    evidence: PR 236 opened and checks are pending
+    evidence: policy compiled as constexpr/noexcept and decision remained trivially copyable
+  - command: exact implementation-head CI
+    result: PASS
+    evidence: CI 30521707135 succeeded on 2a7bb9ea5d5e86aa4473e3ba2a6bff0343e7062e
+  - command: exact implementation-head Required
+    result: PASS
+    evidence: Required 30521706962 succeeded after CI completion on the same head
+  - command: exact implementation-head autofix
+    result: PASS
+    evidence: autofix 30521706932 succeeded on the same head
+  - command: final scope, freshness and discussion audit
+    result: PASS
+    evidence: five exact paths, behind_by zero, mergeable PR and empty discussion timeline
+  - command: replacement checks for this governance-only commit
+    result: PENDING
+    evidence: any checkpoint-only commit is a new final head and must pass all applicable exact-head gates
 blockers: []
-next_action: inspect PR 236 exact-head CI, Required and autofix results; fix only confirmed failures inside the declared five paths
+next_action: require exact-head CI, Required and autofix for this governance-only commit, then repeat scope/freshness/discussion audit and expected-head squash merge PR 236
 ```
