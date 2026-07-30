@@ -5,6 +5,10 @@
 #ifndef USE_PRECOMPILED_HEADERS
 	#include <array>
 	#include <chrono>
+	#include <fstream>
+	#include <sstream>
+	#include <string>
+	#include <string_view>
 #endif
 
 namespace {
@@ -12,6 +16,29 @@ namespace {
 		DatabaseOutageSnapshot snapshot;
 		snapshot.state = state;
 		return snapshot;
+	}
+
+	std::string readSource(const std::string &relativePath) {
+		std::ifstream input(std::string(PRS003_SOURCE_DIR) + "/" + relativePath);
+		EXPECT_TRUE(input.is_open()) << relativePath;
+		std::ostringstream buffer;
+		buffer << input.rdbuf();
+		return buffer.str();
+	}
+
+	std::string_view functionBody(const std::string &source, std::string_view begin, std::string_view end) {
+		const auto beginPosition = source.find(begin);
+		EXPECT_NE(beginPosition, std::string::npos) << begin;
+		if (beginPosition == std::string::npos) {
+			return {};
+		}
+
+		const auto endPosition = source.find(end, beginPosition + begin.size());
+		EXPECT_NE(endPosition, std::string::npos) << end;
+		if (endPosition == std::string::npos) {
+			return {};
+		}
+		return std::string_view(source).substr(beginPosition, endPosition - beginPosition);
 	}
 } // namespace
 
@@ -150,4 +177,19 @@ TEST(DatabaseOutageMutationGateTest, ProducesDeterministicDecisionsForIdenticalI
 	EXPECT_EQ(first.executed, second.executed);
 	EXPECT_EQ(first.mutationResult, second.mutationResult);
 	EXPECT_EQ(mutations, 0);
+}
+
+TEST(DatabaseOutageMutationGateTest, WiresTheLiveBankSetterBehindTheCriticalDurableGate) {
+	const auto source = readSource("src/game/bank/bank.cpp");
+	const auto balance = functionBody(source, "bool Bank::balance(uint64_t amount) const", "uint64_t Bank::balance()");
+
+	const auto gatePosition = balance.find("DatabaseOutageMutationGate::executeLive");
+	const auto setterPosition = balance.find("bankable->setBankBalance(amount)");
+	EXPECT_NE(gatePosition, std::string_view::npos);
+	EXPECT_NE(setterPosition, std::string_view::npos);
+	EXPECT_LT(gatePosition, setterPosition);
+	EXPECT_NE(balance.find("getDatabaseOutageSnapshot"), std::string_view::npos);
+	EXPECT_NE(balance.find("DatabaseOutageMutationOperation::CriticalDurable"), std::string_view::npos);
+	EXPECT_NE(balance.find("g_game().getGameState()"), std::string_view::npos);
+	EXPECT_NE(balance.find("return result.mutationResult;"), std::string_view::npos);
 }
