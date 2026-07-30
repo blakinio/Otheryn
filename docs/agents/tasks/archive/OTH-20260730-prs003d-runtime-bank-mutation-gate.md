@@ -11,7 +11,8 @@ feature_merge_sha: e18467d1f79e5388ec3bb824815dd8ecd0103c06
 lifecycle_pr: "250"
 lifecycle_head_sha: 49fe7e7b00ddfb5f3bcebd6409deea6932cf823f
 lifecycle_merge_sha: a1e6181605d02049a9542d5b8352de2ff6266d0e
-finalizer_pr: pending
+finalizer_pr: "251"
+finalizer_initial_head_sha: 64c5a85d72ffb54f75b5f152e3c6477462916be3
 finalizer_merge_sha: pending
 created: 2026-07-30
 updated: 2026-07-30
@@ -45,7 +46,7 @@ This package intentionally does not add broad economy, market, player-storage or
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-30T11:45:00+02:00
+updated_at: 2026-07-30T11:47:00+02:00
 status: terminal
 feature_pr: 249
 feature_head: c963aef818ff2fcf034cf9f979b2d2f415b26a15
@@ -53,7 +54,8 @@ feature_merge: e18467d1f79e5388ec3bb824815dd8ecd0103c06
 lifecycle_pr: 250
 lifecycle_head: 49fe7e7b00ddfb5f3bcebd6409deea6932cf823f
 lifecycle_merge: a1e6181605d02049a9542d5b8352de2ff6266d0e
-finalizer_pr: pending
+finalizer_pr: 251
+finalizer_initial_head: 64c5a85d72ffb54f75b5f152e3c6477462916be3
 finalizer_merge: pending
 issue: 248
 issue_state: closed_completed
@@ -67,6 +69,7 @@ proven:
   - lifecycle base audit reported behind_by zero
   - lifecycle PR comments, reviews and review threads were empty
   - active task record is absent from main after lifecycle merge
+  - finalizer PR 251 changes only this archive record
   - coordinator PR 239 and PRS-003E-A PR 238 remain on disjoint owned paths
   - no broad economy, draining, checkpoint, recovery, schema, fencing, ledger or deployment behavior was added
 unknown: []
@@ -96,6 +99,9 @@ validation:
   - command: lifecycle merge and active-record audit
     result: PASS
     evidence: PR 250 merged as a1e6181605d02049a9542d5b8352de2ff6266d0e and the active record is absent from main
+  - command: finalizer exact-head Required
+    result: PENDING
+    evidence: PR 251 must pass Required on the unchanged final head
 blockers: []
-next_action: merge the one-file archive finalizer, then record its historical PR, Required and merge evidence
+next_action: validate and merge finalizer PR 251, then record its historical exact-head, Required and merge evidence in one archive-only metadata repair
 ```
