@@ -11,6 +11,8 @@
 
 #include "config/configmanager.hpp"
 #include "creatures/players/player.hpp"
+#include "database/database_failure_classification.hpp"
+#include "game/database_outage_mutation_gate.hpp"
 #include "game/game.hpp"
 #include "game/scheduling/save_manager.hpp"
 #include "lib/metrics/metrics.hpp"
@@ -54,8 +56,17 @@ bool Bank::balance(uint64_t amount) const {
 	if (!bankable) {
 		return false;
 	}
-	bankable->setBankBalance(amount);
-	return true;
+
+	const auto result = DatabaseOutageMutationGate::executeLive(
+		[] { return getDatabaseOutageSnapshot(); },
+		DatabaseOutageMutationOperation::CriticalDurable,
+		g_game().getGameState(),
+		[&] {
+			bankable->setBankBalance(amount);
+			return true;
+		}
+	);
+	return result.mutationResult;
 }
 
 uint64_t Bank::balance() {
