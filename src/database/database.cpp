@@ -11,6 +11,11 @@
 #include "database/database_failure_classification.hpp"
 
 #include "config/configmanager.hpp"
+#include "creatures/players/player.hpp"
+#include "game/database_outage_drain_orchestrator.hpp"
+#include "game/game.hpp"
+#include "game/scheduling/dispatcher.hpp"
+#include "game/scheduling/save_manager.hpp"
 #include "lib/di/container.hpp"
 #include "lib/metrics/metrics.hpp"
 #include "utils/tools.hpp"
@@ -18,12 +23,22 @@
 #include <iterator>
 
 #ifndef USE_PRECOMPILED_HEADERS
+	#include <algorithm>
 	#include <chrono>
 	#include <fmt/format.h>
+	#include <limits>
+	#include <mutex>
+	#include <string>
 	#include <string_view>
+	#include <vector>
 #endif
 
 namespace {
+	constexpr uint32_t DATABASE_OUTAGE_DRAIN_TICK_DELAY_MS = SCHEDULER_MINTICKS;
+
+	std::mutex databaseOutageDrainScheduleMutex;
+	bool databaseOutageDrainTickScheduled = false;
+	DatabaseOutageDrainOrchestrator databaseOutageDrainOrchestrator;
 
 	void appendInsertBaseQuery(std::string &sql, std::string_view baseQuery, bool baseHasSpace) {
 		sql += baseQuery;
@@ -46,6 +61,246 @@ namespace {
 		return std::chrono::duration_cast<DatabaseOutageTimePoint>(std::chrono::steady_clock::now().time_since_epoch());
 	}
 
+	void enterDatabaseOutageGameMaintenance(std::string_view reason) {
+		const std::string reasonCopy(reason);
+		g_dispatcher().safeCall([reasonCopy] {
+			if (g_game().getGameState() != GAME_STATE_SHUTDOWN && g_game().getGameState() != GAME_STATE_MAINTAIN) {
+				g_game().setGameState(GAME_STATE_MAINTAIN);
+			}
+			g_logger().warn("Database outage runtime entered game maintenance: {}", reasonCopy);
+		});
+	}
+
+	uint32_t databaseOutageDelayUntil(DatabaseOutageTimePoint deadline, DatabaseOutageTimePoint now) noexcept {
+		if (deadline <= now) {
+			return DATABASE_OUTAGE_DRAIN_TICK_DELAY_MS;
+		}
+		const auto remaining = static_cast<uint64_t>((deadline - now).count());
+		return static_cast<uint32_t>(std::clamp<uint64_t>(
+			remaining,
+			DATABASE_OUTAGE_DRAIN_TICK_DELAY_MS,
+			std::numeric_limits<uint32_t>::max()
+		));
+	}
+
+	std::vector<uint32_t> captureDatabaseOutageDrainPlayerIds() {
+		std::vector<uint32_t> playerIds;
+		const auto &players = g_game().getPlayers();
+		playerIds.reserve(players.size());
+		for (const auto &[playerId, player] : players) {
+			if (player && !player->isRemoved()) {
+				playerIds.emplace_back(playerId);
+			}
+		}
+		std::ranges::sort(playerIds);
+		playerIds.erase(std::unique(playerIds.begin(), playerIds.end()), playerIds.end());
+		return playerIds;
+	}
+
+	void observeDatabaseOutageDrainFailure(std::string_view reason) {
+		g_metrics().addCounter("database_outage_drain_failures", 1, { { "reason", std::string(reason) } });
+	}
+
+	DatabaseOutageDrainPlayerAttemptResult attemptDatabaseOutageDrainPlayer(uint32_t playerId) {
+		g_metrics().addCounter("database_outage_drain_player_attempts", 1);
+		const auto &player = g_game().getPlayerByID(playerId);
+		if (!player || player->isRemoved()) {
+			observeDatabaseOutageDrainFailure("player_missing");
+			g_logger().error("Database outage drain player {} is no longer available.", playerId);
+			return {};
+		}
+
+		const auto removal = g_saveManager().removePlayerForDatabaseOutageDrain(player);
+		DatabaseOutageDrainPlayerAttemptResult result {
+			.playerFound = true,
+			.removed = removal.removed,
+			.finalSaveObserved = removal.finalSaveObserved,
+			.finalSaveSucceeded = removal.finalSaveSucceeded,
+		};
+		if (!result.removed) {
+			observeDatabaseOutageDrainFailure("removal_failed");
+		}
+		if (!result.finalSaveObserved) {
+			observeDatabaseOutageDrainFailure("final_save_not_observed");
+		} else if (!result.finalSaveSucceeded) {
+			observeDatabaseOutageDrainFailure("final_save_failed");
+		}
+		return result;
+	}
+
+	void logDatabaseOutageDrainSummary(std::string_view disposition) {
+		const auto summary = databaseOutageDrainOrchestrator.summary();
+		g_logger().warn(
+			"Database outage drain {}: transition={}, captured={}, attempts={}/{}, missing={}, removal_failures={}, final_save_not_observed={}, final_save_failures={}, deadline_expired={}, fail_closed={}",
+			disposition,
+			summary.transitionCount,
+			summary.capturedPlayers,
+			summary.attempts,
+			summary.attemptLimit,
+			summary.missingPlayers,
+			summary.removalFailures,
+			summary.finalSaveNotObserved,
+			summary.finalSaveFailures,
+			summary.deadlineExpired,
+			summary.failClosed
+		);
+	}
+
+	void runDatabaseOutageDrainTick();
+
+	void scheduleDatabaseOutageDrainTick(uint32_t delay = DATABASE_OUTAGE_DRAIN_TICK_DELAY_MS) {
+		{
+			std::lock_guard lock(databaseOutageDrainScheduleMutex);
+			if (databaseOutageDrainTickScheduled) {
+				return;
+			}
+			databaseOutageDrainTickScheduled = true;
+		}
+
+		const auto eventId = g_dispatcher().scheduleEvent(
+			std::max(delay, DATABASE_OUTAGE_DRAIN_TICK_DELAY_MS),
+			[] {
+				{
+					std::lock_guard lock(databaseOutageDrainScheduleMutex);
+					databaseOutageDrainTickScheduled = false;
+				}
+				runDatabaseOutageDrainTick();
+			},
+			"DatabaseOutageDrain",
+			DispatcherLane::Maintenance
+		);
+		if (eventId != 0) {
+			return;
+		}
+
+		{
+			std::lock_guard lock(databaseOutageDrainScheduleMutex);
+			databaseOutageDrainTickScheduled = false;
+		}
+		observeDatabaseOutageDrainFailure("schedule_rejected");
+		g_logger().error("Database outage drain scheduling was rejected; failing closed to game maintenance.");
+		enterDatabaseOutageGameMaintenance("drain scheduler rejected");
+	}
+
+	void handleDatabaseOutageDrainDecision(
+		const DatabaseOutageDrainDecision &decision,
+		DatabaseOutageTimePoint now
+	) {
+		switch (decision.action) {
+			case DatabaseOutageDrainAction::AttemptPlayer: {
+				if (!decision.playerId.has_value()) {
+					observeDatabaseOutageDrainFailure("missing_attempt_id");
+					enterDatabaseOutageGameMaintenance("drain decision omitted player ID");
+					return;
+				}
+				const auto result = attemptDatabaseOutageDrainPlayer(*decision.playerId);
+				if (!databaseOutageDrainOrchestrator.recordAttempt(*decision.playerId, result)) {
+					observeDatabaseOutageDrainFailure("attempt_result_rejected");
+					enterDatabaseOutageGameMaintenance("drain attempt result rejected");
+					return;
+				}
+				scheduleDatabaseOutageDrainTick();
+				return;
+			}
+			case DatabaseOutageDrainAction::CompleteDrain: {
+				const auto event = databaseOutageEventPublisher().drainCompleted(now);
+				if (event.disposition != DatabaseOutageEventDisposition::Applied || event.after.state != DatabaseOutageState::Maintenance) {
+					observeDatabaseOutageDrainFailure("completion_event_rejected");
+					enterDatabaseOutageGameMaintenance("drain completion event rejected");
+					return;
+				}
+				enterDatabaseOutageGameMaintenance("drain completed");
+				logDatabaseOutageDrainSummary("completed");
+				return;
+			}
+			case DatabaseOutageDrainAction::ExpireDrain: {
+				const auto event = databaseOutageEventPublisher().drainDeadlineExpired(now);
+				if (event.disposition != DatabaseOutageEventDisposition::Applied || event.after.state != DatabaseOutageState::Maintenance) {
+					observeDatabaseOutageDrainFailure("deadline_event_rejected");
+					enterDatabaseOutageGameMaintenance("drain deadline event rejected");
+					return;
+				}
+				enterDatabaseOutageGameMaintenance("drain deadline expired");
+				logDatabaseOutageDrainSummary("deadline expired; finite cleanup continues");
+				scheduleDatabaseOutageDrainTick();
+				return;
+			}
+			case DatabaseOutageDrainAction::CleanupComplete:
+				enterDatabaseOutageGameMaintenance("post-deadline cleanup completed");
+				logDatabaseOutageDrainSummary("cleanup completed");
+				return;
+			case DatabaseOutageDrainAction::FailClosedMaintenance:
+				observeDatabaseOutageDrainFailure("orchestrator_fail_closed");
+				enterDatabaseOutageGameMaintenance("orchestrator failed closed");
+				logDatabaseOutageDrainSummary("failed closed");
+				return;
+			case DatabaseOutageDrainAction::None:
+				observeDatabaseOutageDrainFailure("unexpected_empty_decision");
+				enterDatabaseOutageGameMaintenance("orchestrator returned no bounded action");
+				return;
+		}
+
+		observeDatabaseOutageDrainFailure("unknown_decision");
+		enterDatabaseOutageGameMaintenance("unknown drain decision");
+	}
+
+	void runDatabaseOutageDrainTick() {
+		const auto now = databaseOutageNow();
+		const auto snapshot = databaseOutageEventPublisher().snapshot();
+		switch (snapshot.state) {
+			case DatabaseOutageState::Healthy:
+				databaseOutageDrainOrchestrator.reset();
+				return;
+			case DatabaseOutageState::Degraded: {
+				if (!snapshot.degradedDeadline.has_value()) {
+					observeDatabaseOutageDrainFailure("missing_degraded_deadline");
+					enterDatabaseOutageGameMaintenance("degraded snapshot omitted deadline");
+					return;
+				}
+				if (now < *snapshot.degradedDeadline) {
+					scheduleDatabaseOutageDrainTick(databaseOutageDelayUntil(*snapshot.degradedDeadline, now));
+					return;
+				}
+				const auto event = databaseOutageEventPublisher().degradedDeadlineExpired(now);
+				if (event.disposition != DatabaseOutageEventDisposition::Applied || event.after.state != DatabaseOutageState::Draining) {
+					observeDatabaseOutageDrainFailure("degraded_deadline_event_rejected");
+					enterDatabaseOutageGameMaintenance("degraded deadline event rejected");
+					return;
+				}
+				scheduleDatabaseOutageDrainTick();
+				return;
+			}
+			case DatabaseOutageState::Draining: {
+				if (!databaseOutageDrainOrchestrator.matches(snapshot)) {
+					const auto playerIds = captureDatabaseOutageDrainPlayerIds();
+					if (!databaseOutageDrainOrchestrator.begin(snapshot, playerIds)) {
+						observeDatabaseOutageDrainFailure("generation_rejected");
+						enterDatabaseOutageGameMaintenance("drain generation rejected outage snapshot");
+						return;
+					}
+					g_logger().warn(
+						"Database outage drain captured {} players for transition {} with a finite deadline.",
+						playerIds.size(),
+						snapshot.transitionCount
+					);
+				}
+				handleDatabaseOutageDrainDecision(databaseOutageDrainOrchestrator.next(snapshot, now), now);
+				return;
+			}
+			case DatabaseOutageState::Maintenance: {
+				enterDatabaseOutageGameMaintenance("outage state is maintenance");
+				if (!databaseOutageDrainOrchestrator.hasPendingCleanup()) {
+					return;
+				}
+				handleDatabaseOutageDrainDecision(databaseOutageDrainOrchestrator.next(snapshot, now), now);
+				return;
+			}
+		}
+
+		observeDatabaseOutageDrainFailure("unknown_outage_state");
+		enterDatabaseOutageGameMaintenance("unknown outage state");
+	}
+
 	DatabaseNativeErrorKind classifyDatabaseNativeError(unsigned int error) noexcept {
 		if (error == 0) {
 			return DatabaseNativeErrorKind::None;
@@ -65,6 +320,7 @@ namespace {
 			return;
 		}
 		(void)databaseOutageEventPublisher().publish(classification, databaseOutageNow());
+		scheduleDatabaseOutageDrainTick();
 	}
 
 	bool executeRuntimeQueryOnce(MYSQL* handle, std::string_view query, DatabaseRuntimeOperation operation) {
@@ -87,6 +343,18 @@ namespace {
 
 DatabaseOutageSnapshot getDatabaseOutageSnapshot() {
 	return databaseOutageEventPublisher().snapshot();
+}
+
+DatabaseOutageEventResult publishDatabaseOutageDegradedDeadlineExpired(DatabaseOutageTimePoint now) {
+	return databaseOutageEventPublisher().degradedDeadlineExpired(now);
+}
+
+DatabaseOutageEventResult publishDatabaseOutageDrainCompleted(DatabaseOutageTimePoint now) {
+	return databaseOutageEventPublisher().drainCompleted(now);
+}
+
+DatabaseOutageEventResult publishDatabaseOutageDrainDeadlineExpired(DatabaseOutageTimePoint now) {
+	return databaseOutageEventPublisher().drainDeadlineExpired(now);
 }
 
 Database::~Database() {
@@ -167,7 +435,7 @@ void Database::createDatabaseBackup(bool compress) const {
 		return;
 	}
 
-	// Execute mysqldump command to create backup file
+	// Execute mysqldump command to create backup
 	std::string command = fmt::format(
 		"mysqldump --defaults-extra-file={} {} > {}",
 		tempConfigFile, g_configManager().getString(MYSQL_DB), backupFileName
