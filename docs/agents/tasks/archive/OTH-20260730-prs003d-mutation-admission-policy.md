@@ -11,6 +11,10 @@ feature_head_sha: 24b8bd872382b48f81c717ed98a8d0e3266dbe5d
 feature_merge_sha: 7e7f3b65751a2348146286018454e428f7732c53
 lifecycle_pr: "244"
 lifecycle_merge_sha: 1ecffdb1c1dfbffabf2bded78de7f8b0f09774c9
+finalizer_pr: "245"
+finalizer_head_sha: abbea76ea068860623be985dbf9ff892b6f11322
+finalizer_required_run: 30525175665
+finalizer_merge_sha: caaa8099ba985966c4a4cc80c898c63c81fc3d27
 created: 2026-07-30
 updated: 2026-07-30
 owned_paths:
@@ -24,7 +28,9 @@ owned_paths:
 
 ## Terminal result
 
-PRS-003D-A is complete. Feature PR #236 merged into `main` as `7e7f3b65751a2348146286018454e428f7732c53`, issue #231 closed as completed, and lifecycle archive PR #244 merged as `1ecffdb1c1dfbffabf2bded78de7f8b0f09774c9`.
+PRS-003D-A is complete. Feature PR #236 merged into `main` as `7e7f3b65751a2348146286018454e428f7732c53`, issue #231 closed as completed, lifecycle archive PR #244 merged as `1ecffdb1c1dfbffabf2bded78de7f8b0f09774c9`, and archive finalizer PR #245 merged as `caaa8099ba985966c4a4cc80c898c63c81fc3d27`.
+
+This archive-only correction repairs incomplete terminal metadata only. It does not alter the accepted feature, lifecycle behavior, runtime code, tests, schema, deployment or coordinator-owned state.
 
 The implementation:
 
@@ -43,7 +49,7 @@ The package intentionally does not wire live gameplay/economy mutation gates, sc
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-30T10:05:00+02:00
+updated_at: 2026-07-30T10:12:00+02:00
 status: terminal
 feature_pr: 236
 feature_head: 24b8bd872382b48f81c717ed98a8d0e3266dbe5d
@@ -51,6 +57,10 @@ feature_merge: 7e7f3b65751a2348146286018454e428f7732c53
 lifecycle_pr: 244
 lifecycle_head: 5e245f453235508e198656123a4a88c8d34959a3
 lifecycle_merge: 1ecffdb1c1dfbffabf2bded78de7f8b0f09774c9
+finalizer_pr: 245
+finalizer_head: abbea76ea068860623be985dbf9ff892b6f11322
+finalizer_required: 30525175665
+finalizer_merge: caaa8099ba985966c4a4cc80c898c63c81fc3d27
 issue: 231
 issue_state: closed_completed
 proven:
@@ -62,10 +72,16 @@ proven:
   - lifecycle PR changed only the active-record deletion and archive-record addition
   - lifecycle base audit reported behind_by zero
   - lifecycle PR comments, reviews and review threads were empty
+  - finalizer PR changed only the archive record
+  - finalizer base audit reported behind_by zero
+  - finalizer PR comments, reviews and review threads were empty
   - active task record is absent from main after lifecycle merge
   - open PRS-003E-A and coordinator work remain on disjoint owned paths
   - coordinator record was not modified by Agent 1
+  - this archive-only correction repairs incomplete terminal metadata only
   - no runtime mutation wiring, draining, checkpoint invocation, recovery, schema, fencing, ledger or deployment change was added
+unknown: []
+conflicts: []
 validation:
   - command: isolated C++20 syntax and pure-contract compile check
     result: PASS
@@ -94,6 +110,15 @@ validation:
   - command: lifecycle merge and active-record audit
     result: PASS
     evidence: PR 244 merged as 1ecffdb1c1dfbffabf2bded78de7f8b0f09774c9 and the active record is absent from main
+  - command: finalizer Required #729 on exact head abbea76ea068860623be985dbf9ff892b6f11322
+    result: PASS
+    evidence: no CI workflow was applicable to the one archive-only path
+  - command: finalizer scope, freshness and discussion audit
+    result: PASS
+    evidence: exactly one archive path, behind_by zero and empty comments/reviews/threads
+  - command: expected-head finalizer merge
+    result: PASS
+    evidence: PR 245 merged as caaa8099ba985966c4a4cc80c898c63c81fc3d27
 blockers: []
 next_action: none
 ```

@@ -217,6 +217,78 @@ TEST(DatabaseFailureClassificationTest, DuplicateStaleAndRegressingEventsCannotT
 	EXPECT_EQ(state.snapshot().state, DatabaseOutageState::Degraded);
 }
 
+TEST(DatabaseFailureClassificationTest, SerializedControlEventsAdvanceOneMonotonicSequence) {
+	DatabaseOutageStateMachine state({ 100ms, 50ms });
+	DatabaseOutageEventPublisher publisher(state);
+	const auto classification = classifyDatabaseRuntimeResult(
+		DatabaseRuntimeOperation::Query,
+		false,
+		DatabaseNativeErrorKind::Other
+	);
+
+	const auto failure = publisher.publish(classification, 100ms);
+	ASSERT_TRUE(failure.event.has_value());
+	ASSERT_EQ(failure.event->eventSequence, 1U);
+	ASSERT_EQ(failure.event->after.state, DatabaseOutageState::Degraded);
+
+	const auto degradedExpired = publisher.degradedDeadlineExpired(200ms);
+	EXPECT_EQ(degradedExpired.eventSequence, 2U);
+	EXPECT_EQ(degradedExpired.eventTime, 200ms);
+	EXPECT_EQ(degradedExpired.disposition, DatabaseOutageEventDisposition::Applied);
+	EXPECT_EQ(degradedExpired.reason, DatabaseOutageEventReason::DegradedDeadlineExpired);
+	EXPECT_EQ(degradedExpired.after.state, DatabaseOutageState::Draining);
+	ASSERT_TRUE(degradedExpired.after.drainDeadline.has_value());
+
+	const auto drainExpired = publisher.drainDeadlineExpired(*degradedExpired.after.drainDeadline);
+	EXPECT_EQ(drainExpired.eventSequence, 3U);
+	EXPECT_EQ(drainExpired.disposition, DatabaseOutageEventDisposition::Applied);
+	EXPECT_EQ(drainExpired.reason, DatabaseOutageEventReason::DrainDeadlineExpired);
+	EXPECT_EQ(drainExpired.after.state, DatabaseOutageState::Maintenance);
+	EXPECT_EQ(state.snapshot().lastEventSequence, 3U);
+}
+
+TEST(DatabaseFailureClassificationTest, ControlEventsClampRegressingCallerTime) {
+	DatabaseOutageStateMachine state({ 100ms, 50ms });
+	DatabaseOutageEventPublisher publisher(state);
+	const auto publication = publisher.publish(
+		classifyDatabaseRuntimeResult(DatabaseRuntimeOperation::Query, false, DatabaseNativeErrorKind::Other),
+		100ms
+	);
+	ASSERT_TRUE(publication.event.has_value());
+
+	const auto earlyControl = publisher.degradedDeadlineExpired(50ms);
+	EXPECT_EQ(earlyControl.eventSequence, 2U);
+	EXPECT_EQ(earlyControl.eventTime, 100ms);
+	EXPECT_EQ(earlyControl.disposition, DatabaseOutageEventDisposition::RejectedPrecondition);
+	EXPECT_EQ(earlyControl.after.state, DatabaseOutageState::Degraded);
+	EXPECT_EQ(state.snapshot().lastEventSequence, 2U);
+}
+
+TEST(DatabaseFailureClassificationTest, DrainCompletionIsDistinctFromDeadlineExpiry) {
+	DatabaseOutageStateMachine completionState({ 100ms, 50ms });
+	DatabaseOutageEventPublisher completionPublisher(completionState);
+	const auto directDrain = classifyDatabaseRuntimeResult(
+		DatabaseRuntimeOperation::TransactionCommit,
+		false,
+		DatabaseNativeErrorKind::ConnectionLost
+	);
+	ASSERT_TRUE(completionPublisher.publish(directDrain, 10ms).event.has_value());
+	const auto completed = completionPublisher.drainCompleted(20ms);
+	EXPECT_EQ(completed.reason, DatabaseOutageEventReason::DrainCompleted);
+	EXPECT_EQ(completed.disposition, DatabaseOutageEventDisposition::Applied);
+	EXPECT_EQ(completed.after.state, DatabaseOutageState::Maintenance);
+
+	DatabaseOutageStateMachine expiryState({ 100ms, 50ms });
+	DatabaseOutageEventPublisher expiryPublisher(expiryState);
+	const auto drainPublication = expiryPublisher.publish(directDrain, 10ms);
+	ASSERT_TRUE(drainPublication.event.has_value());
+	ASSERT_TRUE(drainPublication.event->after.drainDeadline.has_value());
+	const auto expired = expiryPublisher.drainDeadlineExpired(*drainPublication.event->after.drainDeadline);
+	EXPECT_EQ(expired.reason, DatabaseOutageEventReason::DrainDeadlineExpired);
+	EXPECT_EQ(expired.disposition, DatabaseOutageEventDisposition::Applied);
+	EXPECT_EQ(expired.after.state, DatabaseOutageState::Maintenance);
+}
+
 TEST(DatabaseFailureClassificationTest, ClassificationDoesNotParseHumanReadableErrors) {
 	const auto classification = classifyDatabaseRuntimeResult(
 		DatabaseRuntimeOperation::Query,
@@ -248,6 +320,22 @@ TEST(DatabaseFailureClassificationTest, PublicationAddsNoReconnectReplayOrRetryL
 	EXPECT_EQ(publisher.find("mysql_query"), std::string_view::npos);
 	EXPECT_EQ(publisher.find("connect("), std::string_view::npos);
 	EXPECT_EQ(publisher.find("mysql_ping"), std::string_view::npos);
+}
+
+TEST(DatabaseFailureClassificationTest, RuntimeControlWrappersDelegateWithoutDatabaseWork) {
+	const auto source = readSource("src/database/database.cpp");
+	const auto wrappers = functionBody(
+		source,
+		"DatabaseOutageEventResult publishDatabaseOutageDegradedDeadlineExpired",
+		"Database::~Database"
+	);
+	EXPECT_EQ(countOccurrences(wrappers, "degradedDeadlineExpired(now)"), 1U);
+	EXPECT_EQ(countOccurrences(wrappers, "drainCompleted(now)"), 1U);
+	EXPECT_EQ(countOccurrences(wrappers, "drainDeadlineExpired(now)"), 1U);
+	EXPECT_EQ(wrappers.find("mysql_"), std::string_view::npos);
+	EXPECT_EQ(wrappers.find("connect("), std::string_view::npos);
+	EXPECT_EQ(wrappers.find("while ("), std::string_view::npos);
+	EXPECT_EQ(wrappers.find("for ("), std::string_view::npos);
 }
 
 TEST(DatabaseFailureClassificationTest, ConcurrentDuplicatePublicationIsSerialized) {
