@@ -6,20 +6,20 @@ base_branch: main
 start_sha: 30ad4f41987481219faf43fdab51596a0bec4732
 feature_head: 91f90c9325cbabcfd67d16e09317daa4aea1b47b
 feature_merge_sha: 09297920ffa15feea2a05b24909d58b8e2a33e2a
-created: 2026-07-30
-updated: 2026-07-30
-completed: 2026-07-30
-related_issue: "232"
-related_pr: "238"
+feature_pr: "238"
 lifecycle_pr: "258"
 lifecycle_head: 4f00a739166e306ece09f76bde5148b9bc119bc1
 lifecycle_required_run: 30580880580
 lifecycle_merge_sha: c308f175d4988ac30cfc296c0de16d3389f5a18f
 finalizer_pr: "259"
+finalizer_head: 04ca821c031eb8b15c0c567441789a2cd66f4740
+finalizer_required_run: 30581120699
+finalizer_merge_sha: 1fecde7768deeef4fa8af763fd4c56e41eb3363c
+issue: "232"
+created: 2026-07-30
+updated: 2026-07-30
+completed: 2026-07-30
 owned_paths:
-  - .github/workflows/prs-003e-database-outage.yml
-  - tests/integration/prs_003e/database_outage_injector.cpp
-  - tests/integration/prs_003e/run_disposable_mariadb_outage.sh
   - docs/agents/tasks/archive/OTH-20260730-prs003e-a-disposable-mariadb-outage-injector.md
 ---
 
@@ -27,7 +27,7 @@ owned_paths:
 
 ## Terminal result
 
-PRS-003E-A is complete. Feature PR #238 merged exact head `91f90c9325cbabcfd67d16e09317daa4aea1b47b` as `09297920ffa15feea2a05b24909d58b8e2a33e2a`; issue #232 closed completed. Lifecycle PR #258 passed Required run `30580880580` and merged as `c308f175d4988ac30cfc296c0de16d3389f5a18f`, removing the active record and creating this archive. Finalizer PR #259 owns only this archive record.
+PRS-003E-A is terminal. Feature PR #238 merged exact validated head `91f90c9325cbabcfd67d16e09317daa4aea1b47b` as `09297920ffa15feea2a05b24909d58b8e2a33e2a`; issue #232 closed completed. Lifecycle PR #258 passed Required `30580880580` and merged exact head `4f00a739166e306ece09f76bde5148b9bc119bc1` as `c308f175d4988ac30cfc296c0de16d3389f5a18f`, removing the active record and creating this archive. Finalizer PR #259 passed Required `30581120699` and merged exact head `04ca821c031eb8b15c0c567441789a2cd66f4740` as `1fecde7768deeef4fa8af763fd4c56e41eb3363c`.
 
 ## Proven evidence
 
@@ -41,11 +41,43 @@ PRS-003E-A is complete. Feature PR #238 merged exact head `91f90c9325cbabcfd67d1
 - every operation is attempted once, no failed write is replayed and no evidence row remains committed;
 - no reconnect API, `MYSQL_OPT_RECONNECT`, `mysql_ping`, retry loop or automatic resume exists in the harness.
 
-## Validation
+## Feature validation
 
-Feature head `91f90c9325cbabcfd67d16e09317daa4aea1b47b` passed disposable MariaDB run `30578360334`, full CI `30578360728`, Required `30578360313` and autofix `30578360325`. Final feature audit proved `behind_by=0`, exactly four owned paths and no discussion items. Lifecycle PR #258 changed exactly the active/archive task pair, passed Required `30580880580`, remained fresh and discussion-free, and merged expected-head.
+- exact feature head: `91f90c9325cbabcfd67d16e09317daa4aea1b47b`;
+- disposable MariaDB run `30578360334`: PASS;
+- CI #675 / `30578360728`: PASS;
+- Required #760 / `30578360313`: PASS;
+- autofix #583 / `30578360325`: PASS with no replacement commit;
+- Linux, macOS, Windows, Docker, smoke, schema-import and test jobs: PASS;
+- scope: exactly four declared paths;
+- freshness: `behind_by=0`;
+- discussion: no comments, reviews, review threads or requested reviewers;
+- expected-head squash merge: `09297920ffa15feea2a05b24909d58b8e2a33e2a`.
 
-## Safety boundaries
+## Lifecycle validation
+
+- lifecycle PR #258, exact head `4f00a739166e306ece09f76bde5148b9bc119bc1`;
+- Required #762 / `30580880580`: PASS;
+- scope: exactly the active-record deletion and archive-record addition;
+- freshness: `behind_by=0`;
+- discussion: no comments, reviews or review threads;
+- expected-head squash merge: `c308f175d4988ac30cfc296c0de16d3389f5a18f`.
+
+## Finalizer validation
+
+- finalizer PR #259, exact head `04ca821c031eb8b15c0c567441789a2cd66f4740`;
+- Required #764 / `30581120699`: PASS;
+- scope: exactly one archive file;
+- freshness: `behind_by=0`;
+- discussion: no comments, reviews or review threads;
+- expected-head squash merge: `1fecde7768deeef4fa8af763fd4c56e41eb3363c`;
+- this archive-only correction records historical finalizer evidence and changes no runtime behavior.
+
+## First-failure chain
+
+Superseded heads exposed an incorrect rollback-reason expectation and direct reconnect-option use. The final implementation removed every reconnect option, reused the same dead handle for one server-gone observation, accepted the native connection-scoped rollback reason and passed the complete replacement validation set.
+
+## Safety boundaries preserved
 
 - no production source or production fault injection;
 - no `src/database/database.cpp`, state-machine contract or existing test CMake registration change;
@@ -56,24 +88,23 @@ Feature head `91f90c9325cbabcfd67d16e09317daa4aea1b47b` passed disposable MariaD
 
 ## Program order
 
-- PRS-003E-B opens after this terminal PRS-003E-A;
+- PRS-003E-B may open after a fresh live dependency and ownership audit;
 - PRS-003E-C opens after terminal PRS-003E-B;
-- terminal PRS-003D plus terminal PRS-003E open durable PRS-004;
-- an additional PRS-003E slice is allowed only if controlled evidence proves a real gap.
+- terminal PRS-003D plus terminal PRS-003E open durable PRS-004.
 
 ## Rollback
 
-Revert feature merge `09297920ffa15feea2a05b24909d58b8e2a33e2a`. No persistent data, schema, credentials or deployment state requires reversal.
+Revert feature merge `09297920ffa15feea2a05b24909d58b8e2a33e2a`. Archive-only lifecycle and metadata commits require no runtime rollback.
 
 ## Context checkpoint
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-30T22:58:00+02:00
-head: pending-finalizer-validation-head
-head_scope: one-file terminal archive finalizer PR 259 after lifecycle merge c308f175
-branch: dudantas/prs-003e-a-finalizer
-pr: 259
+updated_at: 2026-07-30T23:00:00+02:00
+head: 1fecde7768deeef4fa8af763fd4c56e41eb3363c
+head_scope: terminal feature, lifecycle and finalizer merges on main; this correction records historical evidence only
+branch: dudantas/prs-003e-a-terminal-evidence
+pr: null
 status: terminal
 context_routes:
   - production-resilience
@@ -86,21 +117,20 @@ owned_paths:
   - docs/agents/tasks/archive/OTH-20260730-prs003e-a-disposable-mariadb-outage-injector.md
 proven:
   - Feature PR 238 merged exact head 91f90c9325cbabcfd67d16e09317daa4aea1b47b as 09297920ffa15feea2a05b24909d58b8e2a33e2a.
-  - Issue 232 is closed completed.
-  - Exact-head MariaDB 30578360334, CI 30578360728, Required 30578360313 and autofix 30578360325 passed.
-  - Feature diff was exactly four declared test/workflow/task paths, behind_by was zero, and discussions were empty.
-  - Lifecycle PR 258 changed exactly the active/archive pair, passed Required 30580880580 and merged as c308f175d4988ac30cfc296c0de16d3389f5a18f.
-  - Active task record is absent after lifecycle merge and this archive record is present.
-  - Finalizer PR 259 owns exactly this one archive path.
+  - Dedicated MariaDB 30578360334, CI 30578360728, Required 30578360313 and autofix 30578360325 passed.
+  - Feature diff was exactly four declared paths, behind_by was zero and discussions were empty.
+  - Lifecycle PR 258 changed exactly the active/archive pair, passed Required 30580880580 and merged exact head 4f00a739166e306ece09f76bde5148b9bc119bc1 as c308f175d4988ac30cfc296c0de16d3389f5a18f.
+  - Finalizer PR 259 changed exactly one archive file, passed Required 30581120699 and merged exact head 04ca821c031eb8b15c0c567441789a2cd66f4740 as 1fecde7768deeef4fa8af763fd4c56e41eb3363c.
+  - Issue 232 is closed completed, the active record is absent and this terminal archive is present.
   - No production source, reconnect, replay, recovery runtime, automatic resume, schema or PRS-004+ work was added.
 derived:
   - PRS-003E-A supplies controlled runtime outage evidence without changing runtime recovery policy.
 unknown: []
 conflicts: []
 first_failure:
-  marker: rollback-failure-reason-mismatch
+  marker: rollback-failure-reason-mismatch and reconnect-option use on superseded heads
   result: CONTAINED
-  evidence: Initial controlled evidence proved rollback failure is connection-scoped with unknown outcome; the test expectation was corrected without production changes.
+  evidence: final head removed reconnect configuration, accepted native rollback connection failure and passed the complete replacement set
 rejected_hypotheses:
   - production fault injection
   - reconnect or replay after connection loss
@@ -110,18 +140,15 @@ rejected_hypotheses:
 changed_paths:
   - docs/agents/tasks/archive/OTH-20260730-prs003e-a-disposable-mariadb-outage-injector.md
 validation:
-  - command: feature exact-head MariaDB, CI, Required and autofix
+  - command: feature exact-head dedicated evidence, CI, Required and autofix
     result: PASS
-    evidence: Runs 30578360334, 30578360728, 30578360313 and 30578360325 succeeded on 91f90c9325cbabcfd67d16e09317daa4aea1b47b.
-  - command: feature scope, freshness and discussion audit
+    evidence: runs 30578360334, 30578360728, 30578360313 and 30578360325 succeeded on 91f90c9325cbabcfd67d16e09317daa4aea1b47b
+  - command: lifecycle PR 258
     result: PASS
-    evidence: Four paths, behind_by zero, mergeable non-draft PR and no discussion items.
-  - command: lifecycle Required, scope, freshness and discussion audit
+    evidence: exact active/archive pair, Required 30580880580 and expected-head merge c308f175d4988ac30cfc296c0de16d3389f5a18f
+  - command: finalizer PR 259
     result: PASS
-    evidence: PR 258 changed the active/archive pair, passed Required 30580880580, had behind_by zero and no discussion items, and merged as c308f175d4988ac30cfc296c0de16d3389f5a18f.
-  - command: finalizer Required and one-file audit
-    result: NOT_RUN
-    evidence: Finalizer PR 259 requires exact-head validation before expected-head merge.
+    evidence: one archive file, Required 30581120699 and expected-head merge 1fecde7768deeef4fa8af763fd4c56e41eb3363c
 blockers: []
-next_action: Validate PR 259 Required, audit one-file scope, freshness and discussions, then merge expected-head.
+next_action: none
 ```
