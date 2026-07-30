@@ -1,13 +1,13 @@
 ---
 task_id: OTH-20260730-prs003e-a-disposable-mariadb-outage-injector
-status: implementing
+status: validating
 branch: dudantas/prs-003e-a
 base_branch: main
 start_sha: 30ad4f41987481219faf43fdab51596a0bec4732
 created: 2026-07-30
 updated: 2026-07-30
 related_issue: "232"
-related_pr: pending
+related_pr: "238"
 owned_paths:
   - docs/agents/tasks/active/OTH-20260730-prs003e-a-disposable-mariadb-outage-injector.md
   - tests/integration/prs_003e/database_outage_injector.cpp
@@ -50,14 +50,16 @@ Add the smallest test-only controlled-runtime harness that uses one disposable M
 ## Live ownership audit
 
 - task-start `main` is `30ad4f41987481219faf43fdab51596a0bec4732`;
+- current synchronized feature parent is `253ab64f30da6e9c540193df207d4b52717456b3`, created by merging current `main` `35b1a3f5ffe775d2973df6f996f2a966e7d4d761` into this feature branch;
 - PRS-003C-B is terminal through feature PR #228, lifecycle PR #229 and finalizer PR #230;
 - no open PR, branch, issue or active task matching PRS-003D or PRS-003E existed before issue #232 and this branch were created;
-- all owned paths are new and disjoint from production paths, `database.cpp`, both existing test CMake files and the PRS-003 state-machine contract;
+- concurrent PRS-003D-A PR #236 owns only its task, policy architecture, `src/game/database_outage_mutation_admission_policy.hpp`, `tests/unit/game/CMakeLists.txt` and its unit test;
+- all PRS-003E-A owned paths remain new and disjoint from PRS-003D-A, production paths, `database.cpp`, existing test CMake files and the PRS-003 state-machine contract;
 - if a concurrent task claims any owned path, source changes stop and the conflict is recorded here.
 
 ## Accepted evidence
 
-The disposable harness must prove:
+The disposable harness proves:
 
 - a query interrupted while in flight reports client `CR_SERVER_LOST`;
 - the next one-shot operation on the same dead handle reports `CR_SERVER_GONE_ERROR`;
@@ -98,20 +100,20 @@ Revert the feature PR and remove its dedicated workflow/test subtree. No schema,
 
 ## Remaining separate work
 
-- PRS-003E-B bounded recovery evidence/probe contract, only after terminal PRS-003D;
-- PRS-003E-C explicit auditable operator-controlled resume, only after PRS-003E-B and terminal PRS-003D;
+- PRS-003E-B bounded recovery evidence/probe contract, only after terminal PRS-003D and terminal PRS-003E-A;
+- PRS-003E-C explicit auditable operator-controlled resume, only after terminal PRS-003D and terminal PRS-003E-B;
 - any additional slice only if controlled evidence proves a real gap.
 
 ## Context checkpoint
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-30T08:38:38+02:00
-head: pending-implementation
-head_scope: active PRS-003E-A task record on branch created from main 30ad4f4
+updated_at: 2026-07-30T09:07:00+02:00
+head: 253ab64f30da6e9c540193df207d4b52717456b3
+head_scope: synchronized feature head before this checkpoint-only commit
 branch: dudantas/prs-003e-a
-pr: pending
-status: implementing
+pr: 238
+status: validating
 context_routes:
   - production-resilience
   - database
@@ -126,16 +128,23 @@ owned_paths:
   - .github/workflows/prs-003e-database-outage.yml
 proven:
   - PRS-003C-B is terminal on main.
-  - No competing PRS-003D or PRS-003E issue, branch, PR or active ownership record was found before task start.
-  - The accepted PRS-003B classifier and publisher already expose fixed operation, native-error, outcome, reason and sequence seams.
-  - This package owns no production path and no existing test CMake registration.
+  - Issue 232, branch dudantas/prs-003e-a and feature PR 238 are the single PRS-003E-A package.
+  - PR 238 changes exactly the four declared owned paths.
+  - Concurrent PRS-003D-A PR 236 has completely disjoint actual and declared paths.
+  - No production path, database.cpp, existing test CMake file or PRS-003 state-machine contract is modified.
+  - Disposable MariaDB run 30521767237 passed on synchronized head 253ab64.
+  - The controlled run proves CR_SERVER_LOST, CR_SERVER_GONE_ERROR, begin, commit and rollback failures, known-not-committed and unknown outcomes, fixed event/reason/sequence, fail-closed caller false, disabled reconnect, one attempt and no replay.
+  - Autofix run 30521767192 passed on synchronized head 253ab64.
 derived:
-  - A standalone controlled-runtime harness can exercise accepted headers without changing runtime recovery or PRS-003D state-machine ownership.
+  - The existing PRS-003 classifier conservatively reports a killed rollback connection as ConnectionLost with unknown outcome; the initial QueryFailed expectation was incorrect and was corrected without production changes.
 unknown:
-  - Exact native error sequence and all required evidence until the dedicated workflow runs on the exact feature head.
-  - Feature PR, checks, merge and lifecycle archive metadata.
+  - Exact-final-head CI and Required after this checkpoint-only commit.
+  - Feature merge SHA and lifecycle archive/finalizer metadata.
 conflicts: []
-first_failure: null
+first_failure:
+  marker: rollback-failure-reason-mismatch
+  result: CONTAINED
+  evidence: Controlled run 30520781311 proved the native failure was ConnectionLost; the test expectation was corrected to the accepted classifier contract. The next disposable runs passed.
 rejected_hypotheses:
   - production fault-injection endpoint
   - modify database.cpp to expose test hooks
@@ -143,14 +152,26 @@ rejected_hypotheses:
   - use real credentials or persistent database state
   - combine recovery runtime, draining or operator resume
 changed_paths:
+  - .github/workflows/prs-003e-database-outage.yml
   - docs/agents/tasks/active/OTH-20260730-prs003e-a-disposable-mariadb-outage-injector.md
+  - tests/integration/prs_003e/database_outage_injector.cpp
+  - tests/integration/prs_003e/run_disposable_mariadb_outage.sh
 validation:
   - command: live issue, branch, PR and ownership audit
     result: PASS
-    evidence: No competing PRS-003D/003E ownership existed; issue 232 and branch dudantas/prs-003e-a were created from main 30ad4f4.
+    evidence: One PRS-003E-A package exists; PRS-003D-A PR 236 has disjoint owned and actual paths.
   - command: required-read and seam audit
     result: PASS
     evidence: Governance, resilience, PRS-003, PRS-002J and terminal PRS-003C-B records plus classifier/publisher source and existing tests were inspected.
+  - command: PRS-003E MariaDB Outage Evidence run 30521767237
+    result: PASS
+    evidence: Disposable MariaDB 11.4 exercised all accepted outage scenarios on synchronized head 253ab64.
+  - command: autofix.ci run 30521767192
+    result: PASS
+    evidence: No formatting changes were required on synchronized head 253ab64.
+  - command: exact-final-head CI and Required
+    result: PENDING
+    evidence: This checkpoint-only commit must receive the repository-selected final checks before merge.
 blockers: []
-next_action: Implement the three remaining owned test/workflow paths, validate the exact diff, and open the feature PR.
+next_action: Require exact-final-head CI, Required, autofix and disposable MariaDB outage evidence; then repeat scope, discussion and main-freshness audits before expected-head squash merge.
 ```
