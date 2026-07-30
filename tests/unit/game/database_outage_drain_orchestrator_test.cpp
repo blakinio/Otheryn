@@ -73,20 +73,20 @@ TEST(DatabaseOutageDrainOrchestratorTest, SortsDeduplicatesAndCompletesOneFinite
 	ASSERT_EQ(first.playerId, 1U);
 	EXPECT_EQ(orchestrator.next(snapshot, 100ms).action, DatabaseOutageDrainAction::None);
 	ASSERT_TRUE(orchestrator.recordAttempt(1, {
-		.playerFound = true,
-		.removed = true,
-		.finalSaveObserved = true,
-		.finalSaveSucceeded = true,
-	}));
+												  .playerFound = true,
+												  .removed = true,
+												  .finalSaveObserved = true,
+												  .finalSaveSucceeded = true,
+											  }));
 
 	const auto second = orchestrator.next(snapshot, 100ms);
 	ASSERT_EQ(second.playerId, 2U);
 	ASSERT_TRUE(orchestrator.recordAttempt(2, {
-		.playerFound = true,
-		.removed = true,
-		.finalSaveObserved = true,
-		.finalSaveSucceeded = false,
-	}));
+												  .playerFound = true,
+												  .removed = true,
+												  .finalSaveObserved = true,
+												  .finalSaveSucceeded = false,
+											  }));
 
 	const auto third = orchestrator.next(snapshot, 100ms);
 	ASSERT_EQ(third.playerId, 3U);
@@ -116,20 +116,20 @@ TEST(DatabaseOutageDrainOrchestratorTest, DeadlinePublishesBeforeFiniteCleanupCo
 	const auto firstCleanup = orchestrator.next(maintenance, 101ms);
 	ASSERT_EQ(firstCleanup.playerId, 1U);
 	ASSERT_TRUE(orchestrator.recordAttempt(1, {
-		.playerFound = true,
-		.removed = false,
-		.finalSaveObserved = false,
-		.finalSaveSucceeded = false,
-	}));
+												  .playerFound = true,
+												  .removed = false,
+												  .finalSaveObserved = false,
+												  .finalSaveSucceeded = false,
+											  }));
 
 	const auto secondCleanup = orchestrator.next(maintenance, 102ms);
 	ASSERT_EQ(secondCleanup.playerId, 2U);
 	ASSERT_TRUE(orchestrator.recordAttempt(2, {
-		.playerFound = true,
-		.removed = true,
-		.finalSaveObserved = true,
-		.finalSaveSucceeded = true,
-	}));
+												  .playerFound = true,
+												  .removed = true,
+												  .finalSaveObserved = true,
+												  .finalSaveSucceeded = true,
+											  }));
 
 	EXPECT_EQ(orchestrator.next(maintenance, 103ms).action, DatabaseOutageDrainAction::CleanupComplete);
 	const auto summary = orchestrator.summary();
@@ -157,11 +157,11 @@ TEST(DatabaseOutageDrainOrchestratorTest, MismatchedAttemptResultFailsClosedWith
 	ASSERT_TRUE(orchestrator.begin(snapshot, { 5 }));
 	ASSERT_EQ(orchestrator.next(snapshot, 100ms).playerId, 5U);
 	EXPECT_FALSE(orchestrator.recordAttempt(6, {
-		.playerFound = true,
-		.removed = true,
-		.finalSaveObserved = true,
-		.finalSaveSucceeded = true,
-	}));
+												   .playerFound = true,
+												   .removed = true,
+												   .finalSaveObserved = true,
+												   .finalSaveSucceeded = true,
+											   }));
 	EXPECT_EQ(orchestrator.next(snapshot, 100ms).action, DatabaseOutageDrainAction::FailClosedMaintenance);
 	EXPECT_EQ(orchestrator.summary().attempts, 0U);
 	EXPECT_TRUE(orchestrator.summary().failClosed);
@@ -175,11 +175,11 @@ TEST(DatabaseOutageDrainOrchestratorTest, MissingPlayerAdvancesOnceAndIsNeverRet
 	ASSERT_TRUE(orchestrator.recordAttempt(9, {}));
 	ASSERT_EQ(orchestrator.next(snapshot, 100ms).playerId, 10U);
 	ASSERT_TRUE(orchestrator.recordAttempt(10, {
-		.playerFound = true,
-		.removed = true,
-		.finalSaveObserved = true,
-		.finalSaveSucceeded = true,
-	}));
+												   .playerFound = true,
+												   .removed = true,
+												   .finalSaveObserved = true,
+												   .finalSaveSucceeded = true,
+											   }));
 	EXPECT_EQ(orchestrator.next(snapshot, 100ms).action, DatabaseOutageDrainAction::CompleteDrain);
 	EXPECT_EQ(orchestrator.summary().attempts, orchestrator.summary().attemptLimit);
 }
