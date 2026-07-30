@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "repository": "blakinio/Otheryn",
+  "default_lane": "otheryn-runtime",
+  "task_globs": [
+    "docs/agents/tasks/active/*.md",
+    "docs/agents/tasks/*.md"
+  ],
+  "execution": {
+    "checkpoint_interval_minutes": 30,
+    "lease_minutes": 45,
+    "stale_after_minutes": 45,
+    "barrier_mode": "wave",
+    "max_interactive_interruptions": 0
+  },
+  "lanes": [
+    {
+      "id": "otheryn-content",
+      "label": "World, map and content work",
+      "match_keywords": [
+        "map",
+        "otbm",
+        "npc",
+        "monster",
+        "quest",
+        "content",
+        "datapack"
+      ]
+    },
+    {
+      "id": "otheryn-protocol",
+      "label": "Protocol and cross-repository integration",
+      "match_keywords": [
+        "protocol",
+        "opcode",
+        "login",
+        "contract",
+        "integration"
+      ]
+    },
+    {
+      "id": "otheryn-runtime",
+      "label": "Server runtime and uncategorized work",
+      "task_prefixes": [
+        "OTH"
+      ]
+    }
+  ]
+}
