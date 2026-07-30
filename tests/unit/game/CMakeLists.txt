@@ -24,6 +24,7 @@ target_sources(
     canary_ut
     PRIVATE combat_reuse_test.cpp
             database_outage_mutation_admission_policy_test.cpp
+            database_outage_mutation_gate_test.cpp
             dispatcher_budget_test.cpp
             dispatcher_policy_test.cpp
             dispatcher_wdrr_test.cpp
