@@ -402,19 +402,20 @@ bool SaveManager::savePlayer(std::shared_ptr<Player> player) {
 	}
 
 	const Player* const playerIdentity = player.get();
-	const bool logoutStateFinalized = player->isOnline()
-		&& player->getLastLogout() != 0
-		&& player->getLastLogout() >= player->getLastLoginSaved();
+	const auto dispatchSave = [this, &player]() -> bool {
+		const bool logoutStateFinalized = player->isOnline()
+			&& player->getLastLogout() != 0
+			&& player->getLastLogout() >= player->getLastLoginSaved();
+		if (logoutStateFinalized) {
+			return savePlayerFinal(std::move(player));
+		}
+		if (player->isOnline() && g_game().getGameState() != GAME_STATE_SHUTDOWN) {
+			return schedulePlayer(player);
+		}
+		return doSavePlayer(player);
+	};
 
-	bool saveSucceeded = false;
-	if (logoutStateFinalized) {
-		saveSucceeded = savePlayerFinal(std::move(player));
-	} else if (player->isOnline() && g_game().getGameState() != GAME_STATE_SHUTDOWN) {
-		saveSucceeded = schedulePlayer(player);
-	} else {
-		saveSucceeded = doSavePlayer(player);
-	}
-
+	const bool saveSucceeded = dispatchSave();
 	if (m_databaseOutageDrainSaveObservation.player == playerIdentity) {
 		m_databaseOutageDrainSaveObservation.observed = true;
 		m_databaseOutageDrainSaveObservation.succeeded = saveSucceeded;
