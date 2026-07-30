@@ -9,7 +9,7 @@ issue: "231"
 feature_pr: "236"
 feature_head_sha: 24b8bd872382b48f81c717ed98a8d0e3266dbe5d
 feature_merge_sha: 7e7f3b65751a2348146286018454e428f7732c53
-lifecycle_pr: pending
+lifecycle_pr: "244"
 lifecycle_merge_sha: pending
 created: 2026-07-30
 updated: 2026-07-30
@@ -43,12 +43,12 @@ The package intentionally does not wire live gameplay/economy mutation gates, sc
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-30T09:55:00+02:00
+updated_at: 2026-07-30T10:00:00+02:00
 status: terminal
 feature_pr: 236
 feature_head: 24b8bd872382b48f81c717ed98a8d0e3266dbe5d
 feature_merge: 7e7f3b65751a2348146286018454e428f7732c53
-lifecycle_pr: pending
+lifecycle_pr: 244
 lifecycle_merge: pending
 issue: 231
 issue_state: closed_completed
@@ -81,6 +81,9 @@ validation:
   - command: expected-head feature merge and issue audit
     result: PASS
     evidence: PR 236 merged as 7e7f3b65751a2348146286018454e428f7732c53 and issue 231 closed completed
+  - command: lifecycle PR exact-head Required
+    result: PENDING
+    evidence: PR 244 changes only the active-record deletion and archive-record addition; synchronize validation is required before merge
 blockers: []
-next_action: merge this lifecycle archive PR, then record its PR number and merge SHA in one archive-only finalizer
+next_action: validate and merge lifecycle PR 244, then record its merge SHA in one archive-only finalizer
 ```
