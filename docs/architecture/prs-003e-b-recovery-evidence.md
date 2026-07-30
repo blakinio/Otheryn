@@ -2,7 +2,7 @@
 
 ## Disposition
 
-`PRS-003E-B recovery evidence -> IMPLEMENTED PENDING EXACT-HEAD VALIDATION`
+`PRS-003E-B recovery evidence -> VALIDATED PENDING FINAL REPLACEMENT CHECKS`
 
 This slice adds one bounded, database-independent recovery-evidence tracker plus disposable MariaDB evidence. It does not reconnect a failed gameplay handle, replay an operation, resume the game automatically or change production database wiring.
 
@@ -77,9 +77,19 @@ No SQL text, credentials, hostnames, account/player identifiers or arbitrary exc
 - no migration, gameplay schema, production credentials or deployment change;
 - no PRS-004+ implementation and no production RPO/RTO claim.
 
-## Validation boundary
+## Exact-head validation
 
-The dedicated workflow compiles the standalone harness with C++20 warnings-as-errors, starts pinned disposable MariaDB 11.4 on loopback, executes the controlled evidence and removes both binary and container. Repository CI, Required and autofix must pass on the same unchanged final head before merge.
+Exact implementation/autofix head `e0930e3fca423bbb7f2f5b8e626a2fe088b35cec` passed the complete applicable evidence set:
+
+- dedicated PRS-003E-B Recovery Evidence run `30586300932`;
+- regression PRS-003E MariaDB Outage Evidence run `30586300777`;
+- autofix run `30586301018`;
+- full CI run `30586300959`, including fast checks, Lua, Linux debug with tests, Linux release, Windows CMake and solution, macOS, Docker and quickstart smoke;
+- Required run `30586300723`.
+
+The first autofix attempt found only missing final newlines in the two new C++ files. Bot head `e0930e3fca423bbb7f2f5b8e626a2fe088b35cec` contained that formatting-only correction and passed every gate above.
+
+This evidence update creates a new governance-only final head. It must receive replacement exact-head CI, Required, autofix and dedicated workflow success before merge.
 
 ## Rollback
 
