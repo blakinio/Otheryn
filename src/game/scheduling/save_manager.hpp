@@ -79,9 +79,9 @@ public:
 
 private:
 	struct DatabaseOutageDrainSaveObservation final {
-		const Player* player = nullptr;
-		bool observed = false;
-		bool succeeded = false;
+		const Player* player;
+		bool observed;
+		bool succeeded;
 	};
 
 	bool saveMap();
@@ -114,7 +114,7 @@ private:
 	inline static std::mutex m_playerPersistenceMutex;
 	inline static std::map<std::weak_ptr<Player>, std::shared_ptr<PlayerPersistenceState>, std::owner_less<std::weak_ptr<Player>>> m_playerPersistenceStates;
 	inline static PlayerCheckpointTelemetry m_playerCheckpointTelemetry;
-	static thread_local DatabaseOutageDrainSaveObservation m_databaseOutageDrainSaveObservation;
+	inline static thread_local DatabaseOutageDrainSaveObservation m_databaseOutageDrainSaveObservation { nullptr, false, false };
 	PlayerCheckpointQueueAdmission m_playerCheckpointQueueAdmission;
 
 	ThreadPool &threadPool;
