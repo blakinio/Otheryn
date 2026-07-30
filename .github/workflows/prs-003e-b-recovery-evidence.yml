@@ -1,0 +1,49 @@
+---
+name: PRS-003E-B Recovery Evidence
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "src/database/database_outage_recovery_evidence.hpp"
+      - "tests/integration/prs_003e/recovery_evidence_probe.cpp"
+      - "tests/integration/prs_003e/run_recovery_evidence_probe.sh"
+      - ".github/workflows/prs-003e-b-recovery-evidence.yml"
+      - "docs/architecture/prs-003e-b-recovery-evidence.md"
+      - "docs/agents/tasks/active/OTH-20260730-prs003e-b-recovery-evidence.md"
+  push:
+    branches:
+      - main
+    paths:
+      - "src/database/database_outage_recovery_evidence.hpp"
+      - "tests/integration/prs_003e/recovery_evidence_probe.cpp"
+      - "tests/integration/prs_003e/run_recovery_evidence_probe.sh"
+      - ".github/workflows/prs-003e-b-recovery-evidence.yml"
+      - "docs/architecture/prs-003e-b-recovery-evidence.md"
+      - "docs/agents/tasks/active/OTH-20260730-prs003e-b-recovery-evidence.md"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  bounded-recovery-evidence:
+    name: Bounded recovery evidence and probe
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install MariaDB Connector/C headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libmariadb-dev
+
+      - name: Run bounded recovery evidence
+        run: bash tests/integration/prs_003e/run_recovery_evidence_probe.sh
