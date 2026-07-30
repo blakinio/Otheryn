@@ -1,0 +1,45 @@
+---
+name: PRS-003E MariaDB Outage Evidence
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "tests/integration/prs_003e/**"
+      - "src/database/database_failure_classification.hpp"
+      - "src/database/database_outage_state.hpp"
+      - ".github/workflows/prs-003e-database-outage.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "tests/integration/prs_003e/**"
+      - "src/database/database_failure_classification.hpp"
+      - "src/database/database_outage_state.hpp"
+      - ".github/workflows/prs-003e-database-outage.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  disposable-mariadb-outage:
+    name: Disposable MariaDB outage injection
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install MariaDB Connector/C headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libmariadb-dev
+
+      - name: Run controlled outage evidence
+        run: bash tests/integration/prs_003e/run_disposable_mariadb_outage.sh
