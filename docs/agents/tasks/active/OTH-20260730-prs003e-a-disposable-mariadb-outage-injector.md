@@ -170,7 +170,7 @@ validation:
     result: PASS
     evidence: No formatting changes were required on synchronized head 253ab64.
   - command: exact-final-head CI and Required
-    result: PENDING
+    result: NOT_RUN
     evidence: This checkpoint-only commit must receive the repository-selected final checks before merge.
 blockers: []
 next_action: Require exact-final-head CI, Required, autofix and disposable MariaDB outage evidence; then repeat scope, discussion and main-freshness audits before expected-head squash merge.
