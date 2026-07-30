@@ -1,6 +1,6 @@
 ---
 task_id: OTH-20260730-prs003e-a-disposable-mariadb-outage-injector
-status: completed
+status: terminal
 branch: dudantas/prs-003e-a
 base_branch: main
 start_sha: 30ad4f41987481219faf43fdab51596a0bec4732
@@ -11,8 +11,11 @@ updated: 2026-07-30
 completed: 2026-07-30
 related_issue: "232"
 related_pr: "238"
-lifecycle_pr: pending
-lifecycle_merge_sha: pending
+lifecycle_pr: "258"
+lifecycle_head: 4f00a739166e306ece09f76bde5148b9bc119bc1
+lifecycle_required_run: 30580880580
+lifecycle_merge_sha: c308f175d4988ac30cfc296c0de16d3389f5a18f
+finalizer_pr: "259"
 owned_paths:
   - .github/workflows/prs-003e-database-outage.yml
   - tests/integration/prs_003e/database_outage_injector.cpp
@@ -22,48 +25,38 @@ owned_paths:
 
 # PRS-003E-A disposable MariaDB outage injector
 
-## Result
+## Terminal result
 
-Feature PR #238 merged into `main` as `09297920ffa15feea2a05b24909d58b8e2a33e2a`. Issue #232 closed as completed. This lifecycle change moves the durable task record from `active` to `archive` without changing the feature implementation.
+PRS-003E-A is complete. Feature PR #238 merged exact head `91f90c9325cbabcfd67d16e09317daa4aea1b47b` as `09297920ffa15feea2a05b24909d58b8e2a33e2a`; issue #232 closed completed. Lifecycle PR #258 passed Required run `30580880580` and merged as `c308f175d4988ac30cfc296c0de16d3389f5a18f`, removing the active record and creating this archive. Finalizer PR #259 owns only this archive record.
 
 ## Proven evidence
 
 - disposable loopback-only MariaDB 11.4 is created and removed by a dedicated test runner;
 - a killed in-flight query proves `CR_SERVER_LOST`;
 - the next one-shot operation on the same dead handle proves `CR_SERVER_GONE_ERROR`;
-- transaction begin failure is known-not-committed;
+- transaction begin failure and ordinary query failure are known-not-committed;
 - transaction commit and rollback failures have unknown commit outcome;
-- an ordinary query failure is known-not-committed;
 - failures publish fixed reason, outcome, event reason and monotonic sequence through the accepted PRS-003 seams;
 - caller-visible `false` is preserved;
-- each operation is attempted once, no failed write is replayed and no evidence row remains committed;
+- every operation is attempted once, no failed write is replayed and no evidence row remains committed;
 - no reconnect API, `MYSQL_OPT_RECONNECT`, `mysql_ping`, retry loop or automatic resume exists in the harness.
 
-## Exact-head validation
+## Validation
 
-Feature head `91f90c9325cbabcfd67d16e09317daa4aea1b47b` passed:
-
-- disposable MariaDB evidence run `30578360334`;
-- full CI run `30578360728`, including Linux release/debug, Windows CMake/Solution, macOS, smoke tests and Linux debug CTest;
-- Required run `30578360313`;
-- autofix run `30578360325` with no corrective commit.
-
-Final feature audit proved `behind_by=0`, exactly four owned paths, a mergeable non-draft PR and no comments, reviews or review threads.
+Feature head `91f90c9325cbabcfd67d16e09317daa4aea1b47b` passed disposable MariaDB run `30578360334`, full CI `30578360728`, Required `30578360313` and autofix `30578360325`. Final feature audit proved `behind_by=0`, exactly four owned paths and no discussion items. Lifecycle PR #258 changed exactly the active/archive task pair, passed Required `30580880580`, remained fresh and discussion-free, and merged expected-head.
 
 ## Safety boundaries
 
 - no production source or production fault injection;
-- no `src/database/database.cpp` or state-machine contract change;
-- no existing test CMake registration change;
-- no reconnect, ping, replay or retry framework;
-- no recovery probe runtime or operator resume implementation;
+- no `src/database/database.cpp`, state-machine contract or existing test CMake registration change;
+- no reconnect, ping, replay, retry framework, recovery runtime or automatic resume;
 - no mutation admission, draining or final-save orchestration;
 - no schema migration, persistent database state, real credential or public database port;
-- no PRS-004+ work and no RPO/RTO claim.
+- no PRS-004+ implementation and no RPO/RTO claim.
 
-## Remaining program order
+## Program order
 
-- PRS-003E-B opens after terminal PRS-003E-A;
+- PRS-003E-B opens after this terminal PRS-003E-A;
 - PRS-003E-C opens after terminal PRS-003E-B;
 - terminal PRS-003D plus terminal PRS-003E open durable PRS-004;
 - an additional PRS-003E slice is allowed only if controlled evidence proves a real gap.
@@ -76,12 +69,12 @@ Revert feature merge `09297920ffa15feea2a05b24909d58b8e2a33e2a`. No persistent d
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-30T22:52:00+02:00
-head: pending-lifecycle-head
-head_scope: active-to-archive lifecycle candidate after feature merge 09297920
-branch: dudantas/prs-003e-a-archive
-pr: pending
-status: validating
+updated_at: 2026-07-30T22:58:00+02:00
+head: pending-finalizer-validation-head
+head_scope: one-file terminal archive finalizer PR 259 after lifecycle merge c308f175
+branch: dudantas/prs-003e-a-finalizer
+pr: 259
+status: terminal
 context_routes:
   - production-resilience
   - database
@@ -90,20 +83,19 @@ context_routes:
   - testing
   - agent-governance
 owned_paths:
-  - docs/agents/tasks/active/OTH-20260730-prs003e-a-disposable-mariadb-outage-injector.md
   - docs/agents/tasks/archive/OTH-20260730-prs003e-a-disposable-mariadb-outage-injector.md
 proven:
   - Feature PR 238 merged exact head 91f90c9325cbabcfd67d16e09317daa4aea1b47b as 09297920ffa15feea2a05b24909d58b8e2a33e2a.
   - Issue 232 is closed completed.
   - Exact-head MariaDB 30578360334, CI 30578360728, Required 30578360313 and autofix 30578360325 passed.
-  - Feature diff was exactly four declared test/workflow/task paths and behind_by was zero.
-  - Feature discussions, reviews and review threads were empty.
-  - No production source, reconnect, replay, recovery runtime, schema or PRS-004+ work was added.
+  - Feature diff was exactly four declared test/workflow/task paths, behind_by was zero, and discussions were empty.
+  - Lifecycle PR 258 changed exactly the active/archive pair, passed Required 30580880580 and merged as c308f175d4988ac30cfc296c0de16d3389f5a18f.
+  - Active task record is absent after lifecycle merge and this archive record is present.
+  - Finalizer PR 259 owns exactly this one archive path.
+  - No production source, reconnect, replay, recovery runtime, automatic resume, schema or PRS-004+ work was added.
 derived:
-  - PRS-003E-A supplies controlled runtime evidence without changing runtime recovery policy.
-unknown:
-  - Lifecycle PR number, lifecycle Required run and lifecycle merge SHA.
-  - Finalizer PR number, Required run and merge SHA.
+  - PRS-003E-A supplies controlled runtime outage evidence without changing runtime recovery policy.
+unknown: []
 conflicts: []
 first_failure:
   marker: rollback-failure-reason-mismatch
@@ -116,7 +108,6 @@ rejected_hypotheses:
   - automatic resume
   - schema or deployment changes
 changed_paths:
-  - docs/agents/tasks/active/OTH-20260730-prs003e-a-disposable-mariadb-outage-injector.md
   - docs/agents/tasks/archive/OTH-20260730-prs003e-a-disposable-mariadb-outage-injector.md
 validation:
   - command: feature exact-head MariaDB, CI, Required and autofix
@@ -125,9 +116,12 @@ validation:
   - command: feature scope, freshness and discussion audit
     result: PASS
     evidence: Four paths, behind_by zero, mergeable non-draft PR and no discussion items.
-  - command: lifecycle Required and final audit
+  - command: lifecycle Required, scope, freshness and discussion audit
+    result: PASS
+    evidence: PR 258 changed the active/archive pair, passed Required 30580880580, had behind_by zero and no discussion items, and merged as c308f175d4988ac30cfc296c0de16d3389f5a18f.
+  - command: finalizer Required and one-file audit
     result: NOT_RUN
-    evidence: Lifecycle PR has not yet been opened.
+    evidence: Finalizer PR 259 requires exact-head validation before expected-head merge.
 blockers: []
-next_action: Open and validate the active-to-archive lifecycle PR, merge it expected-head, then create one-file terminal finalizer.
+next_action: Validate PR 259 Required, audit one-file scope, freshness and discussions, then merge expected-head.
 ```
