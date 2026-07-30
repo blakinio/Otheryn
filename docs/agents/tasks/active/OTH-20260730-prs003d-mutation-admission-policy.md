@@ -5,7 +5,7 @@ branch: dudantas/prs-003d-a
 base_branch: main
 start_sha: 30ad4f41987481219faf43fdab51596a0bec4732
 issue: "231"
-feature_pr: pending
+feature_pr: "236"
 created: 2026-07-30
 updated: 2026-07-30
 owned_paths:
@@ -64,7 +64,7 @@ Lifecycle rules:
 
 ## Failure-injection plan
 
-Database failure injection is not applicable to this pure slice. Deterministic unit tests will inject every known and unknown operation, lifecycle and outage enum value, verify immutable input preservation and repeat identical evaluations.
+Database failure injection is not applicable to this pure slice. Deterministic unit tests inject every known and unknown operation, lifecycle and outage enum value, verify immutable input preservation and repeat identical evaluations.
 
 ## Rollback plan
 
@@ -74,11 +74,11 @@ Revert the feature merge. The package creates no persistent data, schema, runtim
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-30T08:36:00+02:00
-head: 30ad4f41987481219faf43fdab51596a0bec4732
+updated_at: 2026-07-30T08:41:00+02:00
+head: dc735160ae9b0dfa42bde8abbf0aabe35e163203
 branch: dudantas/prs-003d-a
-pr: pending
-status: active
+pr: 236
+status: validating
 context_routes:
   - production-resilience
   - database-outage
@@ -96,8 +96,11 @@ proven:
   - issue 231 is the only discovered PRS-003D-A issue
   - no open pull request or dudantas/prs-003d branch existed at task start
   - active task directory was absent on main and no owned-path overlap was discovered
+  - feature diff contains exactly the five declared paths and was behind_by zero at PR creation
+  - isolated C++20 syntax, constexpr, noexcept and trivially-copyable checks passed
+  - PR 236 is open from dudantas/prs-003d-a to main
 derived:
-  - the first unblocked PRS-003D package is the pure D-A policy only
+  - the pure policy is ready for repository exact-head validation
 unknown:
   - exact runtime mutation call sites remain intentionally unowned until PRS-003D-B
 conflicts: []
@@ -107,14 +110,22 @@ rejected_hypotheses:
   - allowing unknown operation or enum values
   - allowing durable mutations during degraded grace
   - invoking PRS-002 final save in the pure policy
-changed_paths: []
+changed_paths:
+  - docs/agents/tasks/active/OTH-20260730-prs003d-mutation-admission-policy.md
+  - docs/architecture/prs-003d-mutation-admission-policy.md
+  - src/game/database_outage_mutation_admission_policy.hpp
+  - tests/unit/game/database_outage_mutation_admission_policy_test.cpp
+  - tests/unit/game/CMakeLists.txt
 validation:
   - command: live dependency and ownership preflight
     result: PASS
     evidence: terminal PRS-003C-B and PRS-002J archives read; no open PR or PRS-003D branch found
-  - command: deterministic policy tests
+  - command: isolated C++20 syntax and constexpr/noexcept compile check
+    result: PASS
+    evidence: policy compiled and executed against minimal accepted enum contracts
+  - command: repository CI, Required and autofix on exact final head
     result: NOT_RUN
-    evidence: implementation not yet created
+    evidence: PR 236 opened and checks are pending
 blockers: []
-next_action: add the pure mutation admission policy, architecture note, deterministic tests and the single game test registration line
+next_action: inspect PR 236 exact-head CI, Required and autofix results; fix only confirmed failures inside the declared five paths
 ```
