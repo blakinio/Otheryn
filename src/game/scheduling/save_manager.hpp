@@ -26,6 +26,12 @@ class Game;
 class Player;
 class Guild;
 
+struct DatabaseOutageDrainPlayerRemovalResult final {
+	bool removed = false;
+	bool finalSaveObserved = false;
+	bool finalSaveSucceeded = false;
+};
+
 class SaveManager {
 public:
 	explicit SaveManager(ThreadPool &threadPool, KVStore &kvStore, Logger &logger, Game &game);
@@ -49,6 +55,17 @@ public:
 	 * generation.
 	 */
 	bool savePlayerFinal(std::shared_ptr<Player> player);
+
+	/**
+	 * Removes one exact live player through the existing synchronous logout path.
+	 *
+	 * A thread-local scoped observation records only the `savePlayer` invocation
+	 * already performed by `Player::onRemoveCreature`. The method never performs
+	 * an extra save, never retries removal and reports a missing observation as
+	 * failure evidence.
+	 */
+	DatabaseOutageDrainPlayerRemovalResult removePlayerForDatabaseOutageDrain(const std::shared_ptr<Player> &player);
+
 	bool saveGuild(std::shared_ptr<Guild> guild);
 
 	/**
@@ -61,6 +78,12 @@ public:
 	static void markPlayerDirty(const std::shared_ptr<Player> &player);
 
 private:
+	struct DatabaseOutageDrainSaveObservation final {
+		const Player* player;
+		bool observed;
+		bool succeeded;
+	};
+
 	bool saveMap();
 	bool saveKV();
 
@@ -91,6 +114,7 @@ private:
 	inline static std::mutex m_playerPersistenceMutex;
 	inline static std::map<std::weak_ptr<Player>, std::shared_ptr<PlayerPersistenceState>, std::owner_less<std::weak_ptr<Player>>> m_playerPersistenceStates;
 	inline static PlayerCheckpointTelemetry m_playerCheckpointTelemetry;
+	inline static thread_local DatabaseOutageDrainSaveObservation m_databaseOutageDrainSaveObservation { nullptr, false, false };
 	PlayerCheckpointQueueAdmission m_playerCheckpointQueueAdmission;
 
 	ThreadPool &threadPool;
