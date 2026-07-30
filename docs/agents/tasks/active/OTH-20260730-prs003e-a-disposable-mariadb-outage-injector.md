@@ -69,7 +69,7 @@ The disposable harness proves:
 - ordinary query failure is classified known-not-committed;
 - each failure publishes the fixed reason, commit outcome and deterministic sequence expected by PRS-003A/B;
 - caller-visible failure remains `false` after publication;
-- reconnect is disabled, the dead handle remains dead and each operation is attempted once;
+- no reconnect API or client reconnect option is invoked, the same dead handle remains dead and each operation is attempted once;
 - no failed write is replayed and the disposable evidence table contains no duplicate/replayed row.
 
 ## Injection design
@@ -78,7 +78,7 @@ The disposable harness proves:
 - use test-only empty-root authentication inside the disposable runner;
 - use a separate control connection to issue `KILL CONNECTION` against a test connection;
 - interrupt `SELECT SLEEP(...)` to deterministically create lost-connection evidence;
-- reuse the dead handle once to obtain server-gone evidence without reconnect;
+- reuse the same dead handle once to obtain server-gone evidence without any reconnect call or option;
 - kill transaction connections immediately before begin, commit or rollback calls;
 - compile one standalone C++ test binary against the runner's MariaDB Connector/C and repository headers;
 - remove the container and binary on every exit.
@@ -87,7 +87,7 @@ The disposable harness proves:
 
 - test-only fault injection; no production fault endpoint or runtime hook;
 - no edit to `src/database/database.cpp` or any production source;
-- no reconnect, `mysql_ping`, retry loop, arbitrary SQL replay or automatic resume;
+- no reconnect API, `MYSQL_OPT_RECONNECT`, `mysql_ping`, retry loop, arbitrary SQL replay or automatic resume;
 - no mutation admission, draining, disconnect or final-save orchestration;
 - no recovery runtime, probe contract or operator-resume implementation;
 - no schema migration; only a disposable table inside the ephemeral database;
@@ -100,17 +100,17 @@ Revert the feature PR and remove its dedicated workflow/test subtree. No schema,
 
 ## Remaining separate work
 
-- PRS-003E-B bounded recovery evidence/probe contract, only after terminal PRS-003D and terminal PRS-003E-A;
-- PRS-003E-C explicit auditable operator-controlled resume, only after terminal PRS-003D and terminal PRS-003E-B;
+- PRS-003E-B bounded recovery evidence/probe contract opens after terminal PRS-003E-A; any runtime wiring remains blocked until terminal PRS-003D;
+- PRS-003E-C explicit auditable operator-controlled resume opens after terminal PRS-003E-B; runtime resume remains blocked until terminal PRS-003D;
 - any additional slice only if controlled evidence proves a real gap.
 
 ## Context checkpoint
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-30T09:07:00+02:00
-head: 253ab64f30da6e9c540193df207d4b52717456b3
-head_scope: synchronized feature head before this checkpoint-only commit
+updated_at: 2026-07-30T09:19:00+02:00
+head: 044a02d69c06f7a115657dad5fd644e37989ff4c
+head_scope: reconnect-option removal head before this checkpoint-only commit
 branch: dudantas/prs-003e-a
 pr: 238
 status: validating
@@ -133,22 +133,24 @@ proven:
   - Concurrent PRS-003D-A PR 236 has completely disjoint actual and declared paths.
   - No production path, database.cpp, existing test CMake file or PRS-003 state-machine contract is modified.
   - Disposable MariaDB run 30521767237 passed on synchronized head 253ab64.
-  - The controlled run proves CR_SERVER_LOST, CR_SERVER_GONE_ERROR, begin, commit and rollback failures, known-not-committed and unknown outcomes, fixed event/reason/sequence, fail-closed caller false, disabled reconnect, one attempt and no replay.
+  - The controlled run proves CR_SERVER_LOST, CR_SERVER_GONE_ERROR, begin, commit and rollback failures, known-not-committed and unknown outcomes, fixed event/reason/sequence, fail-closed caller false, one attempt and no replay.
+  - The current source invokes no reconnect API or client reconnect option and reuses the same dead handle for server-gone evidence.
   - Autofix run 30521767192 passed on synchronized head 253ab64.
 derived:
-  - The existing PRS-003 classifier conservatively reports a killed rollback connection as ConnectionLost with unknown outcome; the initial QueryFailed expectation was incorrect and was corrected without production changes.
+  - The existing PRS-003 classifier conservatively reports a killed rollback connection as ConnectionLost or ServerGone with unknown outcome; the initial QueryFailed expectation was incorrect and was corrected without production changes.
 unknown:
-  - Exact-final-head CI and Required after this checkpoint-only commit.
+  - Exact-final-head controlled MariaDB evidence, CI, Required and autofix after the reconnect-option removal.
   - Feature merge SHA and lifecycle archive/finalizer metadata.
 conflicts: []
 first_failure:
   marker: rollback-failure-reason-mismatch
   result: CONTAINED
-  evidence: Controlled run 30520781311 proved the native failure was ConnectionLost; the test expectation was corrected to the accepted classifier contract. The next disposable runs passed.
+  evidence: Controlled run 30520781311 proved the native rollback failure is connection-scoped; the test now validates the accepted native reason with unknown outcome.
 rejected_hypotheses:
   - production fault-injection endpoint
   - modify database.cpp to expose test hooks
-  - reconnect or replay after connection loss
+  - reconnect API or client reconnect option
+  - retry or replay after connection loss
   - use real credentials or persistent database state
   - combine recovery runtime, draining or operator resume
 changed_paths:
@@ -165,13 +167,10 @@ validation:
     evidence: Governance, resilience, PRS-003, PRS-002J and terminal PRS-003C-B records plus classifier/publisher source and existing tests were inspected.
   - command: PRS-003E MariaDB Outage Evidence run 30521767237
     result: PASS
-    evidence: Disposable MariaDB 11.4 exercised all accepted outage scenarios on synchronized head 253ab64.
-  - command: autofix.ci run 30521767192
-    result: PASS
-    evidence: No formatting changes were required on synchronized head 253ab64.
-  - command: exact-final-head CI and Required
+    evidence: Disposable MariaDB 11.4 exercised all accepted outage scenarios on synchronized head 253ab64 before the reconnect-option removal.
+  - command: exact-final-head controlled MariaDB evidence, CI, Required and autofix
     result: NOT_RUN
-    evidence: This checkpoint-only commit must receive the repository-selected final checks before merge.
+    evidence: The reconnect-option removal and this checkpoint-only commit require fresh exact-head validation before merge.
 blockers: []
-next_action: Require exact-final-head CI, Required, autofix and disposable MariaDB outage evidence; then repeat scope, discussion and main-freshness audits before expected-head squash merge.
+next_action: Require exact-final-head controlled MariaDB evidence, CI, Required and autofix; then repeat scope, discussion and main-freshness audits before expected-head squash merge.
 ```
