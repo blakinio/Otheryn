@@ -1,6 +1,6 @@
 ---
 task_id: OTH-20260730-prs003e-b-recovery-evidence
-status: finalizer-pending-terminal-evidence
+status: terminal
 branch: dudantas/prs-003e-b-recovery-evidence
 base_branch: main
 start_sha: 8465a28e9efe5258708ce7b12184c651b94f3d3d
@@ -10,7 +10,9 @@ feature_pr: "264"
 lifecycle_pr: "265"
 lifecycle_head: cd55c08d39885c4776868f70a5a636125da2c191
 lifecycle_merge_sha: 400ffeadc1667d39e1858bf76c1bde8e6764329d
-finalizer_pr: null
+finalizer_pr: "267"
+finalizer_head: 9445ad14b6f7543c89eec192e73044028c70a798
+finalizer_merge_sha: 5b2fe0ce5646c0a3f9a10fa970539e90d222baf4
 issue: "262"
 created: 2026-07-30
 updated: 2026-07-31
@@ -23,9 +25,11 @@ owned_paths:
 
 ## Result
 
-Feature PR #264 merged exact validated head `34e6d4c3e812231174f7e55c4864d6fe73446197` as `79fd8e7218432bbd73cb0a19e8c581e4e885831c`. Issue #262 closed as completed. Lifecycle PR #265 moved the task record from active to archive and merged exact head `cd55c08d39885c4776868f70a5a636125da2c191` as `400ffeadc1667d39e1858bf76c1bde8e6764329d`.
+PRS-003E-B is terminal.
 
-The active record is absent from `main`. This archive is the only task record for PRS-003E-B.
+Feature PR #264 merged exact validated head `34e6d4c3e812231174f7e55c4864d6fe73446197` as `79fd8e7218432bbd73cb0a19e8c581e4e885831c`. Issue #262 closed as completed. Lifecycle PR #265 moved the task record from active to archive and merged exact head `cd55c08d39885c4776868f70a5a636125da2c191` as `400ffeadc1667d39e1858bf76c1bde8e6764329d`. Finalizer PR #267 merged exact head `9445ad14b6f7543c89eec192e73044028c70a798` as `5b2fe0ce5646c0a3f9a10fa970539e90d222baf4`.
+
+The active record is absent from `main`. This archive is the only PRS-003E-B task record.
 
 ## Proven behavior
 
@@ -60,22 +64,28 @@ Exact lifecycle head `cd55c08d39885c4776868f70a5a636125da2c191` changed exactly 
 
 Lifecycle merge used expected-head protection and produced `400ffeadc1667d39e1858bf76c1bde8e6764329d`.
 
+## Finalizer validation
+
+Exact one-file finalizer head `9445ad14b6f7543c89eec192e73044028c70a798` was `behind_by=0`, mergeable and discussion-clean. Required `30590230950` passed before expected-head squash merge `5b2fe0ce5646c0a3f9a10fa970539e90d222baf4`.
+
 ## First failure and safety evidence
 
 Initial autofix `30586236839` found only missing final newlines in the two new C++ files. The formatting-only replacement `e0930e3fca423bbb7f2f5b8e626a2fe088b35cec` passed dedicated E-B `30586300932`, E-A regression `30586300777`, autofix `30586301018`, full CI `30586300959` and Required `30586300723`. The later governance checkpoint produced the exact final feature head, which passed the complete replacement set above.
 
 No functional failure, production database wiring, reconnect option, ping, failed-operation replay, automatic healthy transition, operator resume call, schema migration, production credential or deployment change was introduced.
 
+An unrelated placeholder issue #263 was created accidentally by an API routing error during branch preparation and immediately closed `not_planned`; it carried no task scope, ownership or implementation.
+
 ## Terminal checkpoint
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-31T01:30:00+02:00
-head: 400ffeadc1667d39e1858bf76c1bde8e6764329d
-head_scope: exact lifecycle merge on main before one-file finalizer
-branch: dudantas/prs-003e-b-finalizer
+updated_at: 2026-07-31T01:40:00+02:00
+head: 5b2fe0ce5646c0a3f9a10fa970539e90d222baf4
+head_scope: exact finalizer merge on main before terminal metadata publication
+branch: dudantas/prs-003e-b-terminal-metadata
 pr: null
-status: finalizer-pending-validation
+status: terminal
 context_routes:
   - production-resilience
   - database-outage
@@ -88,12 +98,14 @@ owned_paths:
 proven:
   - feature PR 264 merged exact validated head 34e6d4c3e812231174f7e55c4864d6fe73446197 as 79fd8e7218432bbd73cb0a19e8c581e4e885831c
   - issue 262 is closed completed
-  - lifecycle PR 265 passed Required 30590012836 and dedicated E-B 30590012846 on exact head cd55c08d39885c4776868f70a5a636125da2c191
+  - feature validation passed CI 30588063392, Required 30588063257, E-B 30588063252, E-A 30588063222 and autofix 30588063233
+  - lifecycle PR 265 passed Required 30590012836 and E-B 30590012846 on exact head cd55c08d39885c4776868f70a5a636125da2c191
   - lifecycle PR 265 merged with expected-head protection as 400ffeadc1667d39e1858bf76c1bde8e6764329d
-  - active task record is absent and this archive is present on main
-  - no production source, schema, credential, migration or deployment path changed during lifecycle
-unknown:
-  - finalizer PR number, exact head, Required run and merge SHA
+  - finalizer PR 267 passed Required 30590230950 on exact head 9445ad14b6f7543c89eec192e73044028c70a798
+  - finalizer PR 267 merged with expected-head protection as 5b2fe0ce5646c0a3f9a10fa970539e90d222baf4
+  - active task record is absent and this archive is present
+  - no production source, schema, credential, migration or deployment path changed during lifecycle or finalization
+unknown: []
 conflicts: []
 first_failure:
   marker: autofix-final-newline
@@ -114,9 +126,9 @@ validation:
   - command: lifecycle exact-head validation
     result: PASS
     evidence: Required 30590012836 and E-B 30590012846 passed on cd55c08d39885c4776868f70a5a636125da2c191
-  - command: one-file finalizer validation
-    result: PENDING
-    evidence: finalizer head must pass Required before expected-head merge
+  - command: finalizer exact-head validation
+    result: PASS
+    evidence: Required 30590230950 passed on 9445ad14b6f7543c89eec192e73044028c70a798
 blockers: []
-next_action: open and validate the one-file finalizer PR, merge with expected-head protection, then record its historical evidence in one terminal metadata PR
+next_action: none
 ```
