@@ -5,9 +5,9 @@ branch: dudantas/prs-003e-b-recovery-evidence
 base_branch: main
 start_sha: 8465a28e9efe5258708ce7b12184c651b94f3d3d
 issue: "262"
-feature_pr: null
+feature_pr: "264"
 created: 2026-07-30
-updated: 2026-07-30
+updated: 2026-07-31
 owned_paths:
   - docs/agents/tasks/active/OTH-20260730-prs003e-b-recovery-evidence.md
   - docs/architecture/prs-003e-b-recovery-evidence.md
@@ -36,16 +36,15 @@ search_first:
 ## Current behavior inventory
 
 - Terminal PRS-003E-A proves one-shot MariaDB outage classification and publication without reconnect or replay.
-- `DatabaseOutageStateMachine` already accepts `recoveryEvidenceAccepted(sequence, now)` only from degraded or maintenance and does not change state automatically.
+- `DatabaseOutageStateMachine` accepts `recoveryEvidenceAccepted(sequence, now)` only from degraded or maintenance and does not change state automatically.
 - Any later qualifying `runtimeFailure` clears accepted recovery evidence.
-- No bounded owner currently defines the read plus transactional write/rollback success window that may emit the accepted evidence decision.
-- No E-B branch, PR, active task or path ownership existed at the audited task start.
+- Before this slice, no bounded owner defined the read plus transactional write/rollback success window that may emit accepted evidence.
 
-## Accepted target contract
+## Delivered contract
 
-One database-independent, header-only tracker receives finite constructor inputs, one fixed candidate start/deadline and explicit probe-attempt outcomes. A successful attempt requires read, transaction begin, isolated write, rollback and post-rollback unchanged-object evidence. Failures reset consecutive successes without extending the original deadline. The tracker emits `PublishRecoveryEvidenceAccepted` at most once after the required consecutive window. A helper may then call only the existing serialized state owner's `recoveryEvidenceAccepted`; it never calls `operatorResume` and never enters healthy.
+One database-independent, header-only tracker receives finite constructor inputs, one fixed candidate start/deadline and explicit probe-attempt outcomes. A successful attempt requires read, transaction begin, isolated write, rollback and post-rollback unchanged-object evidence. Failures reset consecutive successes without extending the original deadline. The tracker emits `PublishRecoveryEvidenceAccepted` at most once after the required consecutive window and calls only the existing serialized state owner's `recoveryEvidenceAccepted`; it never calls `operatorResume` or enters healthy.
 
-The disposable MariaDB harness must use new dedicated sessions, never reuse or revive the failed gameplay handle, execute every probe operation once, use only a test-owned disposable table, and prove begin/write/rollback failures, unchanged rollback state, incomplete/reset windows, exact-once evidence publication, state preservation and later failure invalidation.
+The disposable MariaDB harness opens new dedicated sessions, never reuses or revives the failed gameplay handle, executes every operation once, uses only a test-owned disposable table, and proves read/begin/write/rollback failures, unchanged rollback state, incomplete/reset windows, exact-once publication, state preservation, later invalidation and no replay.
 
 ## Explicit non-goals
 
@@ -56,13 +55,13 @@ The disposable MariaDB harness must use new dedicated sessions, never reuse or r
 - no schema migration, gameplay-data probe object, production credential or deployment change;
 - no PRS-003E-C or PRS-004+ implementation and no RPO/RTO claim.
 
-## Failure-injection plan
+## Failure evidence
 
 - deterministic synthetic outcomes cover read, begin, write, rollback and persisted-mutation rejection;
 - fixed deadline and attempt budget cover expiration and exhaustion without extension;
 - disposable loopback-only MariaDB injects killed-session begin and rollback failures, deterministic write rejection and successful transactional rollback;
-- state-owner evidence covers degraded and maintenance acceptance without auto-resume, exact-once publication and later failure invalidation;
-- source/runtime assertions prove the failed gameplay handle is never retried or replayed.
+- degraded and maintenance state-owner evidence proves exact-once acceptance without auto-resume and later failure invalidation;
+- unknown-outcome gameplay mutation and commit are each attempted once and never replayed.
 
 ## Rollback plan
 
@@ -72,12 +71,12 @@ Revert the feature merge. The package owns only new header, documentation, test 
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-30T23:59:00+02:00
-head: 8465a28e9efe5258708ce7b12184c651b94f3d3d
-head_scope: task-start main plus this active-record commit on the canonical branch
+updated_at: 2026-07-31T00:25:00+02:00
+head: e0930e3fca423bbb7f2f5b8e626a2fe088b35cec
+head_scope: exact validated implementation/autofix head before this governance-only evidence checkpoint
 branch: dudantas/prs-003e-b-recovery-evidence
-pr: null
-status: implementation-ready
+pr: 264
+status: merge-ready-pending-replacement-checks
 context_routes:
   - production-resilience
   - database-outage
@@ -93,35 +92,64 @@ owned_paths:
   - tests/integration/prs_003e/run_recovery_evidence_probe.sh
   - .github/workflows/prs-003e-b-recovery-evidence.yml
 proven:
-  - main 8465a28e9efe5258708ce7b12184c651b94f3d3d is the audited task start.
-  - PRS-003E-A is terminal and issue 262 dependency gate is open.
-  - No open PR, matching branch or active task owned any frozen path.
-  - All six frozen paths are new and E-B-specific.
-  - Existing PRS-003 state owner already accepts recovery evidence without state change and invalidates it on later runtime failure.
+  - main 8465a28e9efe5258708ce7b12184c651b94f3d3d was the audited task start and PRS-003E-A was terminal.
+  - issue 262 and PR 264 are the unique PRS-003E-B records.
+  - all six changed paths exactly match the frozen new-file ownership and do not overlap coordinator or other active work.
+  - strict standalone C++20 compilation with warnings-as-errors passed for the tracker and MariaDB harness.
+  - dedicated PRS-003E-B workflow 30586300932 passed on exact head e0930e3fca423bbb7f2f5b8e626a2fe088b35cec.
+  - regression PRS-003E-A workflow 30586300777 passed on the same head.
+  - autofix 30586301018 passed on the same head.
+  - full CI 30586300959 passed fast checks, Lua, Linux debug tests, Linux release, Windows CMake and solution, macOS, Docker and quickstart smoke.
+  - Required 30586300723 passed on the same head.
+  - PR 264 was mergeable, behind_by zero and had no comments, reviews, review threads or requested reviewers at the audit.
+  - the implementation contains no reconnect option, ping, failed-operation replay, automatic healthy transition or operator resume call.
 derived:
-  - A new standalone workflow can compile and exercise the new header without editing shared CMake or existing E-A files.
-unknown:
-  - exact first dedicated-workflow result
+  - this governance-only checkpoint creates a new final head and therefore requires complete replacement exact-head checks.
+unknown: []
 conflicts: []
 first_failure:
-  marker: none
-  result: NOT_RUN
-  evidence: implementation and validation have not started
+  marker: autofix-final-newline
+  result: CONTAINED
+  evidence: initial autofix 30586236839 found only missing final newlines in the two new C++ files; bot commit e0930e3fca423bbb7f2f5b8e626a2fe088b35cec changed no logic and then passed all applicable gates
 rejected_hypotheses:
   - editing production database.cpp
-  - modifying the terminal E-A workflow or harness
+  - modifying the terminal PRS-003E-A workflow or harness
   - automatic resume after successful probes
   - reconnecting or replaying the failed operation
   - claiming shared CMake ownership
+  - treating the newline-only autofix replacement as a functional failure
 changed_paths:
+  - .github/workflows/prs-003e-b-recovery-evidence.yml
   - docs/agents/tasks/active/OTH-20260730-prs003e-b-recovery-evidence.md
+  - docs/architecture/prs-003e-b-recovery-evidence.md
+  - src/database/database_outage_recovery_evidence.hpp
+  - tests/integration/prs_003e/recovery_evidence_probe.cpp
+  - tests/integration/prs_003e/run_recovery_evidence_probe.sh
 validation:
   - command: live dependency, conflict and ownership preflight
     result: PASS
     evidence: exact six-path new-file scope frozen in issue 262 and this task record
-  - command: dedicated MariaDB evidence, CI, Required and autofix
-    result: NOT_RUN
-    evidence: implementation not yet committed
+  - command: strict standalone C++20 compilation
+    result: PASS
+    evidence: tracker and MariaDB harness compiled with warnings-as-errors
+  - command: PRS-003E-B Recovery Evidence 30586300932
+    result: PASS
+    evidence: disposable loopback MariaDB controlled evidence passed on e0930e3fca423bbb7f2f5b8e626a2fe088b35cec
+  - command: PRS-003E MariaDB Outage Evidence 30586300777
+    result: PASS
+    evidence: terminal E-A regression evidence passed on the same head
+  - command: autofix 30586301018
+    result: PASS
+    evidence: no remaining formatting changes on the same head
+  - command: CI 30586300959
+    result: PASS
+    evidence: full cross-platform and Docker matrix passed on the same head
+  - command: Required 30586300723
+    result: PASS
+    evidence: required gate passed after CI on the same head
+  - command: replacement checks for this governance-only checkpoint
+    result: PENDING
+    evidence: this commit creates a new final head that must pass all applicable gates unchanged
 blockers: []
-next_action: implement the bounded recovery-evidence tracker and disposable MariaDB harness within the frozen six-path ownership
+next_action: require replacement exact-head dedicated evidence, CI, Required and autofix, repeat scope, freshness and discussion audits, then expected-head squash merge PR 264
 ```
