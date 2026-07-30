@@ -114,7 +114,7 @@ private:
 	inline static std::mutex m_playerPersistenceMutex;
 	inline static std::map<std::weak_ptr<Player>, std::shared_ptr<PlayerPersistenceState>, std::owner_less<std::weak_ptr<Player>>> m_playerPersistenceStates;
 	inline static PlayerCheckpointTelemetry m_playerCheckpointTelemetry;
-	inline static thread_local DatabaseOutageDrainSaveObservation m_databaseOutageDrainSaveObservation;
+	static thread_local DatabaseOutageDrainSaveObservation m_databaseOutageDrainSaveObservation;
 	PlayerCheckpointQueueAdmission m_playerCheckpointQueueAdmission;
 
 	ThreadPool &threadPool;
