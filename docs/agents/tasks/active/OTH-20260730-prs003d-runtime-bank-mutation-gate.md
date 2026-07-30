@@ -60,12 +60,12 @@ Revert the feature merge. The slice adds no persistent data, schema, credentials
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-30T10:52:00+02:00
-head: 5ea4d31520ef8dae61bb1974ae7ccfc69198e1e2
-head_scope: exact six-path implementation head before this PR-link checkpoint update
+updated_at: 2026-07-30T11:00:00+02:00
+head: 2e19e050a335abe7dbbc3f1358c9d242cfa863d2
+head_scope: exact validated feature head before this governance-only evidence commit
 branch: dudantas/prs-003d-b
 pr: 249
-status: validating
+status: merge-ready-pending-replacement-checks
 context_routes:
   - production-resilience
   - database-outage
@@ -85,15 +85,18 @@ proven:
   - Issue 248, branch dudantas/prs-003d-b and PR 249 are the unique D-B package records.
   - Coordinator PR 239 owns only its coordinator record.
   - PRS-003E-A PR 238 owns four disjoint workflow and integration-test paths.
-  - The feature diff contains exactly the six declared paths and is behind_by zero.
+  - The feature diff contains exactly the six declared paths and was behind_by zero.
   - Bank balance writes converge on Bank::balance(uint64_t) before Bankable::setBankBalance().
   - The adapter captures one immutable snapshot and invokes the boolean mutation at most once only after admission.
   - The live bank seam uses CriticalDurable, current lifecycle and the accepted process snapshot before the setter.
+  - Exact head 2e19e050a335abe7dbbc3f1358c9d242cfa863d2 passed CI 30528315391, Required 30528314637 and autofix 30528314653.
+  - Full CI included fast checks, Lua, Linux release, Linux debug with CTest, Windows CMake/Solution, macOS and Docker.
   - No draining, checkpoint, recovery, schema, fencing, ledger or deployment behavior is present.
 derived:
   - one gated bank-balance seam is the smallest reviewable critical-durable runtime slice
+  - this governance-only evidence commit requires a complete replacement exact-head check set
 unknown:
-  - exact final feature head and repository CI evidence after this checkpoint update
+  - exact replacement final head and its CI evidence
 conflicts: []
 first_failure: null
 rejected_hypotheses:
@@ -115,9 +118,18 @@ validation:
   - command: six-path scope and source ordering audit
     result: PASS
     evidence: behind_by zero; live bank gate appears before setBankBalance and returns the mutation result
-  - command: exact-final-head CI, Required and autofix
-    result: NOT_RUN
-    evidence: PR 249 opened and replacement checks are pending after this checkpoint update
+  - command: CI #662 on exact head 2e19e050a335abe7dbbc3f1358c9d242cfa863d2
+    result: PASS
+    evidence: full applicable platform builds and Linux debug CTest completed successfully
+  - command: Required #738 on the same exact head
+    result: PASS
+    evidence: Required accepted the completed CI result
+  - command: autofix #572 on the same exact head
+    result: PASS
+    evidence: no replacement commit was produced
+  - command: replacement checks for this governance-only commit
+    result: PENDING
+    evidence: this update creates a new final head and must pass all applicable gates unchanged
 blockers: []
-next_action: require exact-final-head CI, Required and autofix for PR 249, then repeat scope, freshness and discussion audits
+next_action: require replacement CI, Required and autofix, then repeat scope, freshness and discussion audits before expected-head merge
 ```
