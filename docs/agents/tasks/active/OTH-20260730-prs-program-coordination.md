@@ -7,7 +7,7 @@ start_sha: 30ad4f41987481219faf43fdab51596a0bec4732
 created: 2026-07-30
 updated: 2026-07-30
 related_issue: "233"
-related_pr: "234"
+related_pr: "239"
 owned_paths:
   - docs/agents/tasks/active/OTH-20260730-prs-program-coordination.md
 required_reads:
@@ -16,213 +16,447 @@ required_reads:
   - docs/agents/PRODUCTION_RESILIENCE_IMPLEMENTATION.md
   - docs/architecture/production-resilience-and-recovery.md
   - docs/architecture/prs-003-database-outage-state-machine-contract.md
-  - docs/agents/tasks/archive/OTH-20260726-prs001-backup-pitr-foundation.md
-  - docs/agents/tasks/archive/OTH-20260726-prs002-dirty-player-checkpoint-contract.md
-  - docs/agents/tasks/archive/OTH-20260726-prs002a-player-persistence-state.md
-  - docs/agents/tasks/archive/OTH-20260726-prs002b-generation-aware-save-scheduling.md
-  - docs/agents/tasks/archive/OTH-20260726-prs002c-bounded-player-storage-mutations.md
-  - docs/agents/tasks/archive/OTH-20260726-prs002d-failed-checkpoint-evidence.md
-  - docs/agents/tasks/archive/OTH-20260727-prs002e-sql-failure-rollback-evidence.md
-  - docs/agents/tasks/archive/OTH-20260727-prs002f-kv-post-commit-failure-evidence.md
-  - docs/agents/tasks/archive/OTH-20260728-prs002g-commit-before-ack-crash-evidence.md
-  - docs/agents/tasks/archive/OTH-20260728-prs002h-bounded-checkpoint-queue-admission.md
-  - docs/agents/tasks/archive/OTH-20260729-prs002i-checkpoint-operational-metrics.md
-  - docs/agents/tasks/archive/OTH-20260729-prs002j-final-player-save.md
-  - docs/agents/tasks/archive/OTH-20260729-prs003-database-outage-contract.md
-  - docs/agents/tasks/archive/OTH-20260729-prs003a-database-outage-state-machine.md
-  - docs/agents/tasks/archive/OTH-20260729-prs003b-database-failure-classification.md
-  - docs/agents/tasks/archive/OTH-20260729-prs003c-login-handoff-admission-policy.md
-  - docs/agents/tasks/archive/OTH-20260729-prs003c-login-handoff-integration.md
-  - docs/agents/tasks/archive/OTH-20260729-prs004a-session-revision-fencing-contract.md
+  - docs/agents/tasks/archive/OTH-20260730-prs003d-mutation-admission-policy.md
+  - docs/agents/tasks/archive/OTH-20260730-prs003d-runtime-bank-mutation-gate.md
+  - docs/agents/tasks/archive/OTH-20260730-prs003d-bounded-draining.md
+  - docs/agents/tasks/archive/OTH-20260730-prs003e-a-disposable-mariadb-outage-injector.md
 search_first:
+  - open PRS issues
+  - open PRS pull requests
   - docs/agents/tasks/active/
   - docs/agents/tasks/archive/
-  - open issues
-  - open pull requests
-  - dudantas package branches
+  - matching dudantas/prs branches
 ---
 
 # PRS program coordination — PRS-003D through PRS-008
 
 ## Mission
 
-Coordinate terminal delivery of PRS-003D, PRS-003E, durable PRS-004, PRS-005, PRS-006, PRS-007, PRS-008, an independent final audit and closure of parent issue #116. This task owns governance and lifecycle evidence only; it owns no feature code, package architecture, schema, migration, save, handoff or deployment path.
+Coordinate the complete terminal lifecycle of PRS-003D, PRS-003E, durable PRS-004, PRS-005, PRS-006, PRS-007, PRS-008, the independent final audit and closure of #233 and #116. This record owns coordination evidence only and never authorizes feature, schema, migration, runtime, save, handoff or deployment implementation by the coordinator.
 
 ## Live baseline
 
-- task-start `main`: `30ad4f41987481219faf43fdab51596a0bec4732`;
-- coordination issue: `#233`;
-- coordinator branch: `dudantas/prs-program-coordination`;
-- coordinator PR: `#234`;
-- parent resilience issue `#116`: open;
-- PRS-003C-B issue `#222`: closed completed;
-- PRS-003C-B terminal feature/lifecycle/finalizer chain ends at task-start `main`;
-- PRS-004A is terminal only as a pure process-local fencing contract; durable schema/CAS/save/handoff integration remains unimplemented;
-- no open PRS package issue, pull request, matching `dudantas/prs*` branch or active task record was found during preflight.
-
-## Coordinator ownership
-
-```yaml
-owned_paths:
-  - docs/agents/tasks/active/OTH-20260730-prs-program-coordination.md
-future_lifecycle_paths:
-  - docs/agents/tasks/archive/OTH-20260730-prs-program-coordination.md
-```
-
-The future archive path is reserved only for the coordinator lifecycle move and finalizer. It is not active ownership while this record remains under `active/`.
+- current audited `main`: `b7cb8fdbb90fafcab0c77ff594abb20619e6a98c`;
+- coordination issue: #233, open;
+- parent resilience tracker: #116, open;
+- coordinator PR: #239, refreshed to current main and restricted to this file;
+- PRS-003D-A/B/C: terminal;
+- PRS-003E-A: terminal through feature #238, lifecycle #258, finalizer #259 and evidence #260;
+- duplicate PR #261: closed without merge;
+- stale PRS-003E-A refs: neutralized to current main;
+- PRS-003E-B issue #262: open, dependency gate open, branch/task/owned paths not yet created;
+- PRS-003E-C and PRS-004+ feature gates: closed.
 
 ## Dependency graph
 
 ```text
 terminal PRS-003C-B
-  ├─> PRS-003D-A policy
-  │     └─> PRS-003D-B runtime mutation gates
-  │           └─> PRS-003D-C bounded draining/final checkpoints
+  ├─> terminal PRS-003D-A
+  │     └─> terminal PRS-003D-B
+  │           └─> terminal PRS-003D-C
   │
-  └─> PRS-003E-A test-only outage injection
-          └─> PRS-003E-B recovery evidence/probes
-                  └─> PRS-003E-C operator resume
+  └─> terminal PRS-003E-A
+          └─> active PRS-003E-B
+                  └─> PRS-003E-C
 
-terminal PRS-003D + PRS-003E
-  └─> PRS-004B schema
-        └─> PRS-004C CAS API
-              └─> PRS-004D save wiring
-                    └─> PRS-004E handoff
-                          └─> PRS-004F stale-writer evidence
+terminal PRS-003D + terminal PRS-003E
+  └─> PRS-004B
+        └─> PRS-004C
+              └─> PRS-004D
+                    └─> PRS-004E
+                          └─> PRS-004F
 
 terminal durable PRS-004
-  └─> PRS-005 one critical operation
-
-terminal PRS-005
-  └─> PRS-006 one SQL/KV domain
-
-terminal PRS-006
-  └─> PRS-007 manual replica/failover
-
-terminal PRS-007
-  └─> PRS-008 production Compose
-
-terminal PRS-003D–PRS-008
-  └─> final independent audit and issue #116 closure
+  └─> PRS-005
+        └─> PRS-006
+              └─> PRS-007
+                    └─> PRS-008
+                          └─> independent audit
+                                └─> close #233 and #116
 ```
-
-PRS-003D-A and test-only PRS-003E-A may proceed in parallel only after exact, disjoint file ownership is proven. PRS-004 through PRS-008 may perform read-only discovery while their gates are closed, but may not modify runtime, schema or deployment paths.
-
-## Agent roles
-
-| Agent | Package | Initial gate |
-|---|---|---|
-| 1 | PRS-003D | open for bounded policy discovery |
-| 2 | PRS-003E | open for test-only injection discovery |
-| 3 | PRS-004 | read-only until terminal PRS-003D and PRS-003E |
-| 4 | PRS-005 | read-only until durable PRS-004 |
-| 5 | PRS-006 | read-only until terminal PRS-005 |
-| 6 | PRS-007 | read-only until terminal PRS-006 |
-| 7 | PRS-008 | read-only until terminal PRS-007 |
-| 8 | final independent audit | closed until terminal PRS-003D–PRS-008 |
 
 ## Ownership registry
 
 ```yaml
-active_packages: []
+packages:
+  - package: PRS-003D
+    slice: PRS-003D-A
+    issue: 231
+    branch: dudantas/prs-003d-a
+    task_record: docs/agents/tasks/archive/OTH-20260730-prs003d-mutation-admission-policy.md
+    pr: 236
+    base_sha: 35b1a3f5ffe775d2973df6f996f2a966e7d4d761
+    head_sha: 24b8bd872382b48f81c717ed98a8d0e3266dbe5d
+    owned_paths:
+      - docs/architecture/prs-003d-mutation-admission-policy.md
+      - src/game/database_outage_mutation_admission_policy.hpp
+      - tests/unit/game/database_outage_mutation_admission_policy_test.cpp
+      - tests/unit/game/CMakeLists.txt
+    actual_changed_paths: same_as_owned_paths
+    gate_state: terminal
+    ci: PASS:30523296793
+    required: PASS:30523296740
+    autofix: PASS:30523296602
+    dedicated_checks: deterministic mutation-admission policy tests PASS
+    discussion_state: clean
+    freshness: behind_by=0 at merge
+    merge_state: merged:7e7f3b65751a2348146286018454e428f7732c53
+    lifecycle_pr: 244
+    finalizer_pr: 245
+    terminal: true
+    blockers: []
+    next_action: none
+
+  - package: PRS-003D
+    slice: PRS-003D-B
+    issue: 248
+    branch: dudantas/prs-003d-b
+    task_record: docs/agents/tasks/archive/OTH-20260730-prs003d-runtime-bank-mutation-gate.md
+    pr: 249
+    base_sha: 704405c625278c7ec4d197ebd03e4c3d829c76ef
+    head_sha: c963aef818ff2fcf034cf9f979b2d2f415b26a15
+    owned_paths:
+      - docs/architecture/prs-003d-runtime-bank-mutation-gate.md
+      - src/game/database_outage_mutation_gate.hpp
+      - src/game/bank/bank.cpp
+      - tests/unit/game/database_outage_mutation_gate_test.cpp
+      - tests/unit/game/CMakeLists.txt
+    actual_changed_paths: same_as_owned_paths
+    gate_state: terminal
+    ci: PASS:30529636790
+    required: PASS:30529636278
+    autofix: PASS:30529636233
+    dedicated_checks: live bank mutation-gate tests PASS
+    discussion_state: clean
+    freshness: behind_by=0 at merge
+    merge_state: merged:e18467d1f79e5388ec3bb824815dd8ecd0103c06
+    lifecycle_pr: 250
+    finalizer_pr: 251
+    terminal: true
+    blockers: []
+    next_action: none
+
+  - package: PRS-003D
+    slice: PRS-003D-C
+    issue: 253
+    branch: dudantas/prs-003d-c
+    task_record: docs/agents/tasks/archive/OTH-20260730-prs003d-bounded-draining.md
+    pr: 254
+    base_sha: b66241361d2cd1d97ee9c5a3fc28ee0677f39b8b
+    head_sha: 8745ffdcd14bc6e99f99e712ba030162d32094e3
+    owned_paths:
+      - docs/architecture/prs-003d-bounded-draining.md
+      - src/database/database_failure_classification.hpp
+      - src/database/database.cpp
+      - src/game/database_outage_drain_orchestrator.hpp
+      - src/game/scheduling/save_manager.hpp
+      - src/game/scheduling/save_manager.cpp
+      - tests/unit/database/database_failure_classification_test.cpp
+      - tests/unit/game/database_outage_drain_orchestrator_test.cpp
+      - tests/unit/game/CMakeLists.txt
+      - docs/agents/tasks/archive/OTH-20260730-prs003d-bounded-draining.md
+    actual_changed_paths: exact ten-path feature scope plus archive lifecycle path
+    gate_state: terminal
+    ci: PASS:30537779771
+    required: PASS:30537779602
+    autofix: PASS:30537779604
+    dedicated_checks: full CTest and bounded-drain evidence PASS
+    discussion_state: clean
+    freshness: behind_by=0 at merge
+    merge_state: merged:db059bfa6a92f23922b236e0463ee457f1a27179
+    lifecycle_pr: 255
+    finalizer_pr: 256
+    terminal: true
+    blockers: []
+    next_action: none
+
+  - package: PRS-003E
+    slice: PRS-003E-A
+    issue: 232
+    branch: dudantas/prs-003e-a
+    task_record: docs/agents/tasks/archive/OTH-20260730-prs003e-a-disposable-mariadb-outage-injector.md
+    pr: 238
+    base_sha: 732b8d76cb3a6e344f3503f6cb7b003a7e0d72b1
+    head_sha: 91f90c9325cbabcfd67d16e09317daa4aea1b47b
+    owned_paths:
+      - .github/workflows/prs-003e-database-outage.yml
+      - tests/integration/prs_003e/database_outage_injector.cpp
+      - tests/integration/prs_003e/run_disposable_mariadb_outage.sh
+      - docs/agents/tasks/archive/OTH-20260730-prs003e-a-disposable-mariadb-outage-injector.md
+    actual_changed_paths: exact four-path feature scope; one-file terminal archive evidence
+    gate_state: terminal
+    ci: PASS:30578360728
+    required: PASS:30578360313
+    autofix: PASS:30578360325
+    dedicated_checks: PASS:30578360334
+    discussion_state: clean
+    freshness: behind_by=0 at feature/lifecycle/finalizer/evidence merges
+    merge_state: merged:09297920ffa15feea2a05b24909d58b8e2a33e2a
+    lifecycle_pr: 258
+    finalizer_pr: 259
+    terminal: true
+    blockers: []
+    next_action: none
+
+  - package: PRS-003E
+    slice: PRS-003E-B
+    issue: 262
+    branch: null
+    task_record: docs/agents/tasks/active/OTH-20260730-prs003e-b-recovery-evidence.md
+    pr: null
+    base_sha: b7cb8fdbb90fafcab0c77ff594abb20619e6a98c
+    head_sha: null
+    owned_paths: []
+    actual_changed_paths: []
+    gate_state: open_for_live_discovery_and_exact_ownership_freeze
+    ci: NOT_RUN
+    required: NOT_RUN
+    autofix: NOT_RUN
+    dedicated_checks: NOT_RUN
+    discussion_state: issue_created_no_pr
+    freshness: must_start_from_current_main
+    merge_state: not_started
+    lifecycle_pr: null
+    finalizer_pr: null
+    terminal: false
+    blockers:
+      - exact owned_paths and feature branch must be created by the execution agent after live conflict audit
+    next_action: create the canonical branch and one active task record, freeze disjoint owned_paths, then implement only bounded recovery evidence/probes
+
+  - package: PRS-003E
+    slice: PRS-003E-C
+    issue: null
+    branch: null
+    task_record: null
+    pr: null
+    base_sha: null
+    head_sha: null
+    owned_paths: []
+    actual_changed_paths: []
+    gate_state: closed_until_terminal_PRS-003E-B
+    ci: NOT_RUN
+    required: NOT_RUN
+    autofix: NOT_RUN
+    dedicated_checks: NOT_RUN
+    discussion_state: none
+    freshness: not_applicable
+    merge_state: blocked
+    lifecycle_pr: null
+    finalizer_pr: null
+    terminal: false
+    blockers:
+      - PRS-003E-B issue 262 is not terminal
+    next_action: none_until_gate_opens
+
+  - package: PRS-004
+    slice: PRS-004B-through-PRS-004F
+    issue: 235
+    branch: null
+    task_record: null
+    pr: null
+    base_sha: null
+    head_sha: null
+    owned_paths: []
+    actual_changed_paths: []
+    gate_state: closed_until_terminal_PRS-003E-C
+    ci: NOT_RUN
+    required: NOT_RUN
+    autofix: NOT_RUN
+    dedicated_checks: NOT_RUN
+    discussion_state: package_issue_only
+    freshness: not_applicable
+    merge_state: blocked
+    lifecycle_pr: null
+    finalizer_pr: null
+    terminal: false
+    blockers:
+      - PRS-003E is not terminal
+    next_action: read_only_discovery_only
+
+  - package: PRS-005
+    slice: one-critical-operation
+    issue: 237
+    branch: null
+    task_record: null
+    pr: null
+    base_sha: null
+    head_sha: null
+    owned_paths: []
+    actual_changed_paths: []
+    gate_state: closed_until_terminal_durable_PRS-004
+    ci: NOT_RUN
+    required: NOT_RUN
+    autofix: NOT_RUN
+    dedicated_checks: NOT_RUN
+    discussion_state: package_issue_only
+    freshness: not_applicable
+    merge_state: blocked
+    lifecycle_pr: null
+    finalizer_pr: null
+    terminal: false
+    blockers:
+      - durable PRS-004 is not terminal
+    next_action: read_only_discovery_only
+
+  - package: PRS-006
+    slice: one-SQL-KV-domain
+    issue: 240
+    branch: null
+    task_record: null
+    pr: null
+    base_sha: null
+    head_sha: null
+    owned_paths: []
+    actual_changed_paths: []
+    gate_state: closed_until_terminal_PRS-005
+    ci: NOT_RUN
+    required: NOT_RUN
+    autofix: NOT_RUN
+    dedicated_checks: NOT_RUN
+    discussion_state: package_issue_only
+    freshness: not_applicable
+    merge_state: blocked
+    lifecycle_pr: null
+    finalizer_pr: null
+    terminal: false
+    blockers:
+      - PRS-005 is not terminal
+    next_action: read_only_discovery_only
+
+  - package: PRS-007
+    slice: manual-replica-failover
+    issue: 241
+    branch: null
+    task_record: null
+    pr: null
+    base_sha: null
+    head_sha: null
+    owned_paths: []
+    actual_changed_paths: []
+    gate_state: closed_until_terminal_PRS-006
+    ci: NOT_RUN
+    required: NOT_RUN
+    autofix: NOT_RUN
+    dedicated_checks: NOT_RUN
+    discussion_state: package_issue_only
+    freshness: not_applicable
+    merge_state: blocked
+    lifecycle_pr: null
+    finalizer_pr: null
+    terminal: false
+    blockers:
+      - PRS-006 is not terminal
+    next_action: read_only_discovery_only
+
+  - package: PRS-008
+    slice: production-compose-hardening
+    issue: 242
+    branch: null
+    task_record: null
+    pr: null
+    base_sha: null
+    head_sha: null
+    owned_paths: []
+    actual_changed_paths: []
+    gate_state: closed_until_terminal_PRS-007
+    ci: NOT_RUN
+    required: NOT_RUN
+    autofix: NOT_RUN
+    dedicated_checks: NOT_RUN
+    discussion_state: package_issue_only
+    freshness: not_applicable
+    merge_state: blocked
+    lifecycle_pr: null
+    finalizer_pr: null
+    terminal: false
+    blockers:
+      - PRS-007 is not terminal
+    next_action: read_only_discovery_only
+
+  - package: FINAL-AUDIT
+    slice: independent-terminal-audit
+    issue: 243
+    branch: null
+    task_record: null
+    pr: null
+    base_sha: null
+    head_sha: null
+    owned_paths: []
+    actual_changed_paths: []
+    gate_state: closed_until_terminal_PRS-003D-through-PRS-008
+    ci: NOT_RUN
+    required: NOT_RUN
+    autofix: NOT_RUN
+    dedicated_checks: NOT_RUN
+    discussion_state: audit_issue_only
+    freshness: not_applicable
+    merge_state: blocked
+    lifecycle_pr: null
+    finalizer_pr: null
+    terminal: false
+    blockers:
+      - PRS-003E-B through PRS-008 are not terminal
+    next_action: read_only_discovery_only
 ```
 
-A package enters this registry only after its bounded issue, `dudantas/...` branch, single active task record and exact non-overlapping `owned_paths` exist on GitHub. Registry data mirrors those records and never replaces them.
+## Conflict and safety controls
 
-## Conflict policy
-
-Before accepting any feature PR, audit every active task record, open PR, package branch, declared path, actual changed file and full relevant patch. Treat shared CMake registration, resilience architecture documents, `src/database/database.cpp`, `src/io/iologindata.cpp`, save/handoff paths, migration registration and production Docker/Compose entry points as serialized resources.
-
-If ownership overlaps, preserve the earlier valid owner, stop the later package, close any duplicate implementation PR without merge and require a narrower or refreshed slice. Never resolve overlap through a broad merge of competing implementations.
-
-## Safety exclusions
-
-The coordinator will not authorize reconnect/replay frameworks, `MYSQL_OPT_RECONNECT`, `mysql_ping` recovery, unknown-outcome write retry without idempotency, unbounded retry/draining, automatic maintenance resume, automatic database promotion, automatic world rollback, stale writes without durable fencing, Redis-only writer authority, success before durable commit, unauthorized schema changes, production credentials/data mutation, real deployment, local quickstart mutation for PRS-008 or unsupported RPO/RTO claims.
-
-## CI and lifecycle state
-
-```yaml
-coordination_record:
-  changed_paths:
-    - docs/agents/tasks/active/OTH-20260730-prs-program-coordination.md
-  focused_validation: PENDING
-  ci: PENDING
-  required: PENDING
-  autofix: PENDING
-  pr: 234
-program_merge_evidence:
-  prs003c_b:
-    feature_pr: 228
-    feature_merge: ec14b683b04078aabca42cbe051fff3c5f0554a1
-    lifecycle_pr: 229
-    lifecycle_merge: 7bef45b2f01d410d4890ffa0bef71ed088460dc5
-    finalizer_merge: 30ad4f41987481219faf43fdab51596a0bec4732
-    issue: 222
-    issue_state: closed_completed
-  prs004a:
-    feature_pr: 212
-    feature_merge: b00507ec22542b8cf284040bea57bc70941d0964
-    lifecycle_pr: 215
-    lifecycle_merge: 87bc63889839960cc9dd7d4502cfb4e25a5eaadb
-    finalizer_merge: a263e7c7370b39bbf65557ccb570cf29ed775e74
-    issue: 207
-    issue_state: closed_completed
-```
+- one active owner per path;
+- later packages remain read-only while gated;
+- duplicate implementation or metadata PRs close without merge after canonical patch comparison;
+- every merge requires exact-head successful checks, clean discussion, exact changed paths, mergeable state and `behind_by=0`;
+- all merges use squash with `expected_head_sha`;
+- no reconnect, ping recovery, arbitrary SQL replay, unknown-outcome write retry, unbounded retry/drain, automatic resume, automatic promotion, automatic rollback, Redis-only writer authority, success before durable commit, production credentials/data or unsupported RPO/RTO claims.
 
 ## Context checkpoint
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-30T08:40:00+02:00
-head: 6c1bbdd8575bc98fa99d6ac426ba5ca31a620312
-head_scope: live PR head before this PR-link-only checkpoint update
+updated_at: 2026-07-30T23:08:00+02:00
+head: b7cb8fdbb90fafcab0c77ff594abb20619e6a98c
+head_scope: current main after terminal PRS-003E-A; this coordinator-only commit refreshes registry and opens PRS-003E-B governance
 branch: dudantas/prs-program-coordination
-pr: 234
+pr: 239
 status: active
 context_routes:
   - production-resilience
   - coordination
   - database-persistence
-  - deployment
   - ci
   - agent-governance
 owned_paths:
   - docs/agents/tasks/active/OTH-20260730-prs-program-coordination.md
 proven:
-  - Live main is 30ad4f41987481219faf43fdab51596a0bec4732.
-  - Parent issue 116 is open and PRS-003C-B issue 222 is closed completed.
-  - PRS-003C-B and PRS-004A have terminal archives with exact feature, lifecycle and finalizer evidence.
-  - PRS-004A is process-local only and does not prove durable fencing.
-  - No existing open coordination issue, open PRS package issue, open PRS pull request, matching dudantas/prs branch or active task record was found.
-  - Issue 233, branch dudantas/prs-program-coordination and one-path PR 234 reserve the coordinator scope.
+  - PRS-003D-A/B/C are terminal with full feature, lifecycle and finalizer evidence.
+  - PRS-003E-A is terminal through PRs 238, 258, 259 and 260.
+  - Duplicate PR 261 is closed without merge and stale E-A refs are neutralized.
+  - Issue 262 is the only PRS-003E-B issue and no E-B branch or PR existed at issue creation.
+  - PRS-003E-C and PRS-004+ feature gates remain closed.
 derived:
-  - PRS-003D-A and PRS-003E-A may begin in parallel only after exact disjoint ownership is established.
-  - All later runtime, schema and deployment gates remain closed.
+  - PRS-003E-B may now create one branch/task and exact disjoint ownership.
 unknown:
-  - Exact file ownership for PRS-003D-A and PRS-003E-A pending package-specific source discovery.
-  - Exact-final-head coordinator PR checks and merge audits.
+  - PRS-003E-B exact owned paths and implementation head.
 conflicts: []
 first_failure:
-  marker: local-github-clone-dns-unavailable
+  marker: duplicate-finalizer-evidence-pr-261
   result: CONTAINED
-  evidence: Local sandbox could not resolve github.com; live repository reads and writes use the authorized GitHub connector.
+  evidence: canonical PR 260 merged; duplicate 261 closed without merge and its branch was neutralized
 rejected_hypotheses:
-  - combine multiple PRS packages into one broad feature PR
-  - let a later agent take a path already owned by an earlier valid task
-  - treat unresolved or process-local evidence as durable completion
-  - mutate production data, credentials or deployment
+  - merge duplicate metadata patches
+  - reserve PRS-003E-C or PRS-004 source paths before their gates open
+  - automatic reconnect, replay or maintenance resume
 changed_paths:
   - docs/agents/tasks/active/OTH-20260730-prs-program-coordination.md
 validation:
-  - command: live repository preflight
+  - command: live GitHub preflight and terminal archive audit
     result: PASS
-    evidence: main, issues, pull requests, branches, active tasks, mandatory contracts and terminal archives were audited through GitHub.
-  - command: pull-request scope audit
+    evidence: main, issues, PRs, branches, task archives, exact checks and lifecycle merges were re-audited
+  - command: coordinator changed-path audit
     result: PASS
-    evidence: PR 234 reports exactly one changed path owned by the coordinator.
-  - command: repository checkpoint validator and exact-head CI, Required and autofix
-    result: PENDING
-    evidence: Require all gates on the final unchanged PR 234 head.
+    evidence: PR 239 is restricted to this one coordinator-owned path after branch refresh
+  - command: exact-head Required and coordinator merge audit
+    result: NOT_RUN
+    evidence: this refreshed coordinator head requires replacement checks before merge
 blockers: []
-next_action: inspect exact-final-head CI, Required and autofix for PR 234, then perform one-path, discussion and base-freshness audits before expected-head squash merge.
+next_action: validate exact-head PR 239, then monitor issue 262 for one canonical branch, task record and disjoint owned_paths
 ```
