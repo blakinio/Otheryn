@@ -10,7 +10,9 @@ feature_pr: "254"
 lifecycle_pr: "255"
 lifecycle_head: a9b963c289c24f5db900eb7c36f44dbdf8400bee
 lifecycle_merge_sha: f3da0e8d99611c5d0847902464b687099c57abb8
-finalizer_pr: pending
+finalizer_pr: "256"
+finalizer_head: 708dfb75c896241bf0e1d2d24a250e845192f303
+finalizer_merge_sha: 8ced531b5819d6cba1675b378786b73cd58ceea8
 issue: "253"
 created: 2026-07-30
 updated: 2026-07-30
@@ -23,7 +25,7 @@ owned_paths:
 
 ## Result
 
-Feature PR #254 delivered bounded database-outage draining and merged exact validated head `8745ffdcd14bc6e99f99e712ba030162d32094e3` as `db059bfa6a92f23922b236e0463ee457f1a27179`. That merge occurred automatically or through an external action while exact-head checks were being monitored; it was not initiated by this agent. Lifecycle PR #255 moved the task record from active to archive and merged as `f3da0e8d99611c5d0847902464b687099c57abb8`. Issue #253 is closed as completed.
+Feature PR #254 delivered bounded database-outage draining and merged exact validated head `8745ffdcd14bc6e99f99e712ba030162d32094e3` as `db059bfa6a92f23922b236e0463ee457f1a27179`. That merge occurred automatically or through an external action while exact-head checks were being monitored; it was not initiated by this agent. Lifecycle PR #255 archived the task as `f3da0e8d99611c5d0847902464b687099c57abb8`. Finalizer PR #256 completed the terminal archive as `8ced531b5819d6cba1675b378786b73cd58ceea8`. Issue #253 is closed as completed.
 
 ## Proven behavior
 
@@ -54,15 +56,22 @@ Feature PR #254 delivered bounded database-outage draining and merged exact vali
 
 ## Lifecycle validation
 
-- lifecycle PR: #255;
-- lifecycle head: `a9b963c289c24f5db900eb7c36f44dbdf8400bee`;
+- lifecycle PR #255, head `a9b963c289c24f5db900eb7c36f44dbdf8400bee`;
 - Required #754 / `30539237549`: PASS;
-- lifecycle scope: exactly the active-record deletion and archive-record addition;
-- lifecycle freshness: `behind_by=0`;
-- lifecycle discussion: no comments, reviews or review threads;
-- lifecycle expected-head squash merge: `f3da0e8d99611c5d0847902464b687099c57abb8`;
-- active task record: absent from `main`;
-- archive task record: present on `main`.
+- scope: exactly the active deletion and archive addition;
+- freshness: `behind_by=0`;
+- discussion: no comments, reviews or review threads;
+- expected-head squash merge: `f3da0e8d99611c5d0847902464b687099c57abb8`.
+
+## Finalizer validation
+
+- finalizer PR #256, head `708dfb75c896241bf0e1d2d24a250e845192f303`;
+- Required #755 / `30539419766`: PASS;
+- scope: exactly one archive file;
+- freshness: `behind_by=0`;
+- discussion: no comments, reviews or review threads;
+- expected-head squash merge: `8ced531b5819d6cba1675b378786b73cd58ceea8`;
+- this archive-only correction records historical finalizer evidence and changes no runtime behavior.
 
 ## First-failure chain
 
@@ -80,16 +89,16 @@ Formatting-only autofix, a GCC nested thread-local initialization restriction, t
 
 ## Rollback
 
-Revert feature merge `db059bfa6a92f23922b236e0463ee457f1a27179`. Archive-only lifecycle commits require no runtime rollback.
+Revert feature merge `db059bfa6a92f23922b236e0463ee457f1a27179`. Archive-only lifecycle and metadata commits require no runtime rollback.
 
 ## Context checkpoint
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-30T13:42:00+02:00
-head: f3da0e8d99611c5d0847902464b687099c57abb8
-head_scope: feature and active-to-archive lifecycle are merged; finalizer metadata PR is pending
-branch: dudantas/prs-003d-c-finalizer
+updated_at: 2026-07-30T13:48:00+02:00
+head: 8ced531b5819d6cba1675b378786b73cd58ceea8
+head_scope: terminal feature, lifecycle and finalizer merges on main; this correction records historical evidence only
+branch: dudantas/prs-003d-c-terminal-metadata
 pr: null
 status: terminal
 context_routes:
@@ -105,7 +114,8 @@ proven:
   - Feature PR 254 changed exactly ten declared paths and merged validated head 8745ffdcd14bc6e99f99e712ba030162d32094e3 as db059bfa6a92f23922b236e0463ee457f1a27179.
   - CI 30537779771, Required 30537779602 and autofix 30537779604 passed.
   - Full Linux debug CTest passed existing PRS-002 contracts and new D-C deterministic tests.
-  - Lifecycle PR 255 changed exactly the active/archive pair, passed Required 30539237549 and merged as f3da0e8d99611c5d0847902464b687099c57abb8.
+  - Lifecycle PR 255 passed Required 30539237549 and merged as f3da0e8d99611c5d0847902464b687099c57abb8.
+  - Finalizer PR 256 passed Required 30539419766 and merged as 8ced531b5819d6cba1675b378786b73cd58ceea8.
   - Issue 253 is closed completed, active record is absent and archive record is present.
 derived:
   - PRS-003D-C provides finite drain attempts, bounded final-save observation and explicit maintenance transition without recovery behavior.
@@ -126,12 +136,12 @@ validation:
   - command: feature exact-head checks
     result: PASS
     evidence: CI 30537779771, Required 30537779602 and autofix 30537779604 succeeded
-  - command: feature historical scope and discussion audit
-    result: PASS
-    evidence: exactly ten declared paths and no discussion items
   - command: lifecycle PR 255
     result: PASS
-    evidence: exact active/archive pair, Required 30539237549, behind_by zero and merge f3da0e8d99611c5d0847902464b687099c57abb8
+    evidence: exact active/archive pair, Required 30539237549 and expected-head merge f3da0e8d99611c5d0847902464b687099c57abb8
+  - command: finalizer PR 256
+    result: PASS
+    evidence: one archive file, Required 30539419766 and expected-head merge 8ced531b5819d6cba1675b378786b73cd58ceea8
 blockers: []
-next_action: merge the one-file finalizer PR, then record its historical evidence and set next_action to none
+next_action: none
 ```
