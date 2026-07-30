@@ -16,6 +16,9 @@ lifecycle_head: 4f00a739166e306ece09f76bde5148b9bc119bc1
 lifecycle_required_run: 30580880580
 lifecycle_merge_sha: c308f175d4988ac30cfc296c0de16d3389f5a18f
 finalizer_pr: "259"
+finalizer_head: 04ca821c031eb8b15c0c567441789a2cd66f4740
+finalizer_required_run: 30581120699
+finalizer_merge_sha: 1fecde7768deeef4fa8af763fd4c56e41eb3363c
 owned_paths:
   - .github/workflows/prs-003e-database-outage.yml
   - tests/integration/prs_003e/database_outage_injector.cpp
@@ -27,7 +30,7 @@ owned_paths:
 
 ## Terminal result
 
-PRS-003E-A is complete. Feature PR #238 merged exact head `91f90c9325cbabcfd67d16e09317daa4aea1b47b` as `09297920ffa15feea2a05b24909d58b8e2a33e2a`; issue #232 closed completed. Lifecycle PR #258 passed Required run `30580880580` and merged as `c308f175d4988ac30cfc296c0de16d3389f5a18f`, removing the active record and creating this archive. Finalizer PR #259 owns only this archive record.
+PRS-003E-A is complete and terminal. Feature PR #238 merged exact head `91f90c9325cbabcfd67d16e09317daa4aea1b47b` as `09297920ffa15feea2a05b24909d58b8e2a33e2a`; issue #232 closed completed. Lifecycle PR #258 passed Required `30580880580` and merged as `c308f175d4988ac30cfc296c0de16d3389f5a18f`. One-file finalizer PR #259 passed Required `30581120699` and merged as `1fecde7768deeef4fa8af763fd4c56e41eb3363c`.
 
 ## Proven evidence
 
@@ -43,7 +46,7 @@ PRS-003E-A is complete. Feature PR #238 merged exact head `91f90c9325cbabcfd67d1
 
 ## Validation
 
-Feature head `91f90c9325cbabcfd67d16e09317daa4aea1b47b` passed disposable MariaDB run `30578360334`, full CI `30578360728`, Required `30578360313` and autofix `30578360325`. Final feature audit proved `behind_by=0`, exactly four owned paths and no discussion items. Lifecycle PR #258 changed exactly the active/archive task pair, passed Required `30580880580`, remained fresh and discussion-free, and merged expected-head.
+Feature head `91f90c9325cbabcfd67d16e09317daa4aea1b47b` passed disposable MariaDB `30578360334`, full CI `30578360728`, Required `30578360313` and autofix `30578360325`. Final feature audit proved `behind_by=0`, exactly four owned paths and no discussion items. Lifecycle PR #258 changed exactly the active/archive pair, passed Required and merged expected-head. Finalizer PR #259 changed exactly this archive file, passed Required, remained fresh and discussion-free, and merged expected-head.
 
 ## Safety boundaries
 
@@ -69,10 +72,10 @@ Revert feature merge `09297920ffa15feea2a05b24909d58b8e2a33e2a`. No persistent d
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-30T22:58:00+02:00
-head: pending-finalizer-validation-head
-head_scope: one-file terminal archive finalizer PR 259 after lifecycle merge c308f175
-branch: dudantas/prs-003e-a-finalizer
+updated_at: 2026-07-30T23:02:00+02:00
+head: 1fecde7768deeef4fa8af763fd4c56e41eb3363c
+head_scope: terminal PRS-003E-A finalizer merge; this metadata-only record adds historical finalizer evidence
+branch: main
 pr: 259
 status: terminal
 context_routes:
@@ -90,8 +93,8 @@ proven:
   - Exact-head MariaDB 30578360334, CI 30578360728, Required 30578360313 and autofix 30578360325 passed.
   - Feature diff was exactly four declared test/workflow/task paths, behind_by was zero, and discussions were empty.
   - Lifecycle PR 258 changed exactly the active/archive pair, passed Required 30580880580 and merged as c308f175d4988ac30cfc296c0de16d3389f5a18f.
-  - Active task record is absent after lifecycle merge and this archive record is present.
-  - Finalizer PR 259 owns exactly this one archive path.
+  - Finalizer PR 259 changed exactly one archive path, passed Required 30581120699 and merged as 1fecde7768deeef4fa8af763fd4c56e41eb3363c.
+  - Active task record is absent and this terminal archive record is present on main.
   - No production source, reconnect, replay, recovery runtime, automatic resume, schema or PRS-004+ work was added.
 derived:
   - PRS-003E-A supplies controlled runtime outage evidence without changing runtime recovery policy.
@@ -119,9 +122,9 @@ validation:
   - command: lifecycle Required, scope, freshness and discussion audit
     result: PASS
     evidence: PR 258 changed the active/archive pair, passed Required 30580880580, had behind_by zero and no discussion items, and merged as c308f175d4988ac30cfc296c0de16d3389f5a18f.
-  - command: finalizer Required and one-file audit
-    result: NOT_RUN
-    evidence: Finalizer PR 259 requires exact-head validation before expected-head merge.
+  - command: finalizer Required, scope, freshness and discussion audit
+    result: PASS
+    evidence: PR 259 changed one archive path, passed Required 30581120699, had behind_by zero and no discussion items, and merged as 1fecde7768deeef4fa8af763fd4c56e41eb3363c.
 blockers: []
-next_action: Validate PR 259 Required, audit one-file scope, freshness and discussions, then merge expected-head.
+next_action: none
 ```
