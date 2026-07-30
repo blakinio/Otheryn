@@ -405,7 +405,7 @@ namespace {
 			DatabaseRuntimeOperation::TransactionRollback,
 			rollback.terminalOperation.nativeError,
 			DatabaseRuntimeResultKind::FailureUnknownCommitOutcome,
-			DatabaseOutageFailureReason::QueryFailed,
+			DatabaseOutageFailureReason::ConnectionLost,
 			DatabaseOutageCommitOutcome::Unknown,
 			"rollback-failure"
 		);
