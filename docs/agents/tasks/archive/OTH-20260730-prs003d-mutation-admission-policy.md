@@ -43,7 +43,7 @@ The package intentionally does not wire live gameplay/economy mutation gates, sc
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-30T10:05:00+02:00
+updated_at: 2026-07-30T10:08:00+02:00
 status: terminal
 feature_pr: 236
 feature_head: 24b8bd872382b48f81c717ed98a8d0e3266dbe5d
@@ -66,6 +66,8 @@ proven:
   - open PRS-003E-A and coordinator work remain on disjoint owned paths
   - coordinator record was not modified by Agent 1
   - no runtime mutation wiring, draining, checkpoint invocation, recovery, schema, fencing, ledger or deployment change was added
+unknown: []
+conflicts: []
 validation:
   - command: isolated C++20 syntax and pure-contract compile check
     result: PASS
