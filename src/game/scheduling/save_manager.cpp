@@ -401,16 +401,65 @@ bool SaveManager::savePlayer(std::shared_ptr<Player> player) {
 		return false;
 	}
 
+	const Player* const playerIdentity = player.get();
 	const bool logoutStateFinalized = player->isOnline()
 		&& player->getLastLogout() != 0
 		&& player->getLastLogout() >= player->getLastLoginSaved();
+
+	bool saveSucceeded = false;
 	if (logoutStateFinalized) {
-		return savePlayerFinal(std::move(player));
+		saveSucceeded = savePlayerFinal(std::move(player));
+	} else if (player->isOnline() && g_game().getGameState() != GAME_STATE_SHUTDOWN) {
+		saveSucceeded = schedulePlayer(player);
+	} else {
+		saveSucceeded = doSavePlayer(player);
 	}
-	if (player->isOnline() && g_game().getGameState() != GAME_STATE_SHUTDOWN) {
-		return schedulePlayer(player);
+
+	if (m_databaseOutageDrainSaveObservation.player == playerIdentity) {
+		m_databaseOutageDrainSaveObservation.observed = true;
+		m_databaseOutageDrainSaveObservation.succeeded = saveSucceeded;
 	}
-	return doSavePlayer(player);
+	return saveSucceeded;
+}
+
+DatabaseOutageDrainPlayerRemovalResult SaveManager::removePlayerForDatabaseOutageDrain(const std::shared_ptr<Player> &player) {
+	DatabaseOutageDrainPlayerRemovalResult result;
+	if (!player) {
+		logger.error("Database outage drain removal failed because player is null.");
+		return result;
+	}
+	if (m_databaseOutageDrainSaveObservation.player != nullptr) {
+		logger.error("Database outage drain removal rejected nested save observation for player {}.", player->getName());
+		return result;
+	}
+
+	m_databaseOutageDrainSaveObservation = {
+		.player = player.get(),
+		.observed = false,
+		.succeeded = false,
+	};
+
+	try {
+		player->removePlayer(true, true);
+		result.removed = player->isRemoved();
+		result.finalSaveObserved = m_databaseOutageDrainSaveObservation.observed;
+		result.finalSaveSucceeded = result.finalSaveObserved && m_databaseOutageDrainSaveObservation.succeeded;
+	} catch (const std::exception &e) {
+		logger.error("Database outage drain removal for player {} threw: {}", player->getName(), e.what());
+	} catch (...) {
+		logger.error("Database outage drain removal for player {} threw an unknown exception.", player->getName());
+	}
+
+	m_databaseOutageDrainSaveObservation = {};
+	if (!result.removed) {
+		logger.error("Database outage drain failed to remove player {}.", player->getName());
+	}
+	if (!result.finalSaveObserved) {
+		logger.error("Database outage drain observed no final save for player {}.", player->getName());
+	} else if (!result.finalSaveSucceeded) {
+		logger.error("Database outage drain final save failed for player {}.", player->getName());
+	}
+	return result;
 }
 
 bool SaveManager::savePlayerFinal(std::shared_ptr<Player> player) {
