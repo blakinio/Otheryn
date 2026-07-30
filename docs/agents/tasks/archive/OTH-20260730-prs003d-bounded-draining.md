@@ -1,13 +1,16 @@
 ---
 task_id: OTH-20260730-prs003d-bounded-draining
-status: completed
+status: terminal
 branch: dudantas/prs-003d-c
 base_branch: main
 start_sha: b66241361d2cd1d97ee9c5a3fc28ee0677f39b8b
 feature_head: 8745ffdcd14bc6e99f99e712ba030162d32094e3
 feature_merge_sha: db059bfa6a92f23922b236e0463ee457f1a27179
 feature_pr: "254"
-lifecycle_pr: pending
+lifecycle_pr: "255"
+lifecycle_head: a9b963c289c24f5db900eb7c36f44dbdf8400bee
+lifecycle_merge_sha: f3da0e8d99611c5d0847902464b687099c57abb8
+finalizer_pr: pending
 issue: "253"
 created: 2026-07-30
 updated: 2026-07-30
@@ -20,38 +23,50 @@ owned_paths:
 
 ## Result
 
-Feature PR #254 delivered the bounded database-outage drain runtime and merged from exact validated head `8745ffdcd14bc6e99f99e712ba030162d32094e3` as `db059bfa6a92f23922b236e0463ee457f1a27179`. The merge occurred automatically or through an external action while the exact-head checks were being monitored; it was not initiated by this agent. Issue #253 closed as completed.
+Feature PR #254 delivered bounded database-outage draining and merged exact validated head `8745ffdcd14bc6e99f99e712ba030162d32094e3` as `db059bfa6a92f23922b236e0463ee457f1a27179`. That merge occurred automatically or through an external action while exact-head checks were being monitored; it was not initiated by this agent. Lifecycle PR #255 moved the task record from active to archive and merged as `f3da0e8d99611c5d0847902464b687099c57abb8`. Issue #253 is closed as completed.
 
 ## Proven behavior
 
-- serialized control publication advances degraded-deadline, drain-completion and drain-deadline events through one monotonic publisher;
-- one fixed sorted and deduplicated online-player generation is captured;
-- the attempt limit equals the unique vector size and one exact pending ID prevents duplicate attempts;
+- one serialized publisher owns monotonic runtime and control-event sequences;
+- a fixed sorted and deduplicated player-ID generation has a finite attempt budget equal to its unique size;
+- one exact pending ID prevents duplicate attempts and malformed results fail closed;
 - each dispatcher event attempts at most one captured player;
-- completion publishes `DrainCompleted`;
-- timeout publishes `DrainDeadlineExpired` and maintenance before finite cleanup continues;
+- completion and deadline expiry publish distinct state-machine reasons;
+- deadline expiry enters maintenance before finite cleanup continues;
 - completion, timeout and malformed runtime state enter `GAME_STATE_MAINTAIN`;
 - forced removal reuses the existing synchronous logout callback;
-- a scoped exact-player SaveManager observer records only the existing bounded final-save result and never starts a duplicate save;
-- missing player, removal failure, missing save observation and save failure remain explicit evidence;
+- SaveManager observes only the existing bounded final save and never starts a duplicate save;
+- missing player, removal failure, missing save observation and save failure are explicit evidence;
 - no reconnect, ping, SQL replay, repeating cycle event or unbounded retry loop was added.
 
-## Validation
+## Feature validation
 
 - exact feature head: `8745ffdcd14bc6e99f99e712ba030162d32094e3`;
-- CI #671, run `30537779771`: PASS;
-- Required #752, run `30537779602`: PASS;
-- autofix #580, run `30537779604`: PASS with no head change;
-- all Windows, macOS, Linux, Docker, smoke, schema-import and full CTest gates: PASS;
-- full CTest preserved existing PRS-002 save-dispatch contracts and passed new D-C tests;
-- pre-PR freshness audit: `behind_by=0`;
+- CI #671 / `30537779771`: PASS;
+- Required #752 / `30537779602`: PASS;
+- autofix #580 / `30537779604`: PASS with no head change;
+- Windows, macOS, Linux, Docker, smoke, schema-import and full CTest: PASS;
+- full CTest preserved PRS-002 save-dispatch contracts and passed new D-C tests;
+- pre-PR freshness: `behind_by=0`;
 - feature scope: exactly ten declared paths;
-- feature discussion audit: no comments, reviews, review threads or requested reviewers;
+- feature discussion: no comments, reviews, review threads or requested reviewers;
 - feature merge: `db059bfa6a92f23922b236e0463ee457f1a27179`.
+
+## Lifecycle validation
+
+- lifecycle PR: #255;
+- lifecycle head: `a9b963c289c24f5db900eb7c36f44dbdf8400bee`;
+- Required #754 / `30539237549`: PASS;
+- lifecycle scope: exactly the active-record deletion and archive-record addition;
+- lifecycle freshness: `behind_by=0`;
+- lifecycle discussion: no comments, reviews or review threads;
+- lifecycle expected-head squash merge: `f3da0e8d99611c5d0847902464b687099c57abb8`;
+- active task record: absent from `main`;
+- archive task record: present on `main`.
 
 ## First-failure chain
 
-Formatting-only autofix, a GCC nested thread-local initialization restriction, three preserved PRS-002 source contracts and one D-C source-test boundary failed on superseded heads. Final head `8745ffdcd14bc6e99f99e712ba030162d32094e3` repaired every cause and passed the complete replacement set.
+Formatting-only autofix, a GCC nested thread-local initialization restriction, three preserved PRS-002 source contracts and one D-C source-test boundary failed on superseded heads. Exact final feature head `8745ffdcd14bc6e99f99e712ba030162d32094e3` repaired every cause and passed the complete replacement set.
 
 ## Safety boundaries preserved
 
@@ -65,18 +80,18 @@ Formatting-only autofix, a GCC nested thread-local initialization restriction, t
 
 ## Rollback
 
-Revert feature merge `db059bfa6a92f23922b236e0463ee457f1a27179`.
+Revert feature merge `db059bfa6a92f23922b236e0463ee457f1a27179`. Archive-only lifecycle commits require no runtime rollback.
 
 ## Context checkpoint
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-30T13:33:00+02:00
-head: db059bfa6a92f23922b236e0463ee457f1a27179
-head_scope: exact validated feature merge on main; lifecycle archive is pending
-branch: dudantas/prs-003d-c-archive
+updated_at: 2026-07-30T13:42:00+02:00
+head: f3da0e8d99611c5d0847902464b687099c57abb8
+head_scope: feature and active-to-archive lifecycle are merged; finalizer metadata PR is pending
+branch: dudantas/prs-003d-c-finalizer
 pr: null
-status: completed
+status: terminal
 context_routes:
   - production-resilience
   - database-outage
@@ -85,21 +100,20 @@ context_routes:
   - testing
   - agent-governance
 owned_paths:
-  - docs/agents/tasks/active/OTH-20260730-prs003d-bounded-draining.md
   - docs/agents/tasks/archive/OTH-20260730-prs003d-bounded-draining.md
 proven:
-  - Feature PR 254 changed exactly ten declared paths and merged exact validated head 8745ffdcd14bc6e99f99e712ba030162d32094e3 as db059bfa6a92f23922b236e0463ee457f1a27179.
+  - Feature PR 254 changed exactly ten declared paths and merged validated head 8745ffdcd14bc6e99f99e712ba030162d32094e3 as db059bfa6a92f23922b236e0463ee457f1a27179.
   - CI 30537779771, Required 30537779602 and autofix 30537779604 passed.
   - Full Linux debug CTest passed existing PRS-002 contracts and new D-C deterministic tests.
-  - Feature discussion audit found no comments, reviews or review threads.
-  - Issue 253 is closed as completed.
+  - Lifecycle PR 255 changed exactly the active/archive pair, passed Required 30539237549 and merged as f3da0e8d99611c5d0847902464b687099c57abb8.
+  - Issue 253 is closed completed, active record is absent and archive record is present.
 derived:
   - PRS-003D-C provides finite drain attempts, bounded final-save observation and explicit maintenance transition without recovery behavior.
 unknown: []
 conflicts: []
 first_failure:
   marker: formatting, GCC initialization and source-contract failures on superseded heads
-  evidence: all causes were repaired; the exact final feature head passed the complete replacement set
+  evidence: all causes were repaired; exact final feature head passed the complete replacement set
 rejected_hypotheses:
   - unbounded drain retries
   - duplicate final save
@@ -107,18 +121,17 @@ rejected_hypotheses:
   - recovery or resume in D-C
   - schema, fencing or idempotency work
 changed_paths:
-  - docs/agents/tasks/active/OTH-20260730-prs003d-bounded-draining.md
   - docs/agents/tasks/archive/OTH-20260730-prs003d-bounded-draining.md
 validation:
-  - command: feature exact-head CI, Required and autofix
+  - command: feature exact-head checks
     result: PASS
-    evidence: runs 30537779771, 30537779602 and 30537779604 succeeded on 8745ffdcd14bc6e99f99e712ba030162d32094e3
-  - command: historical feature scope and discussion audit
+    evidence: CI 30537779771, Required 30537779602 and autofix 30537779604 succeeded
+  - command: feature historical scope and discussion audit
     result: PASS
-    evidence: exactly ten declared paths; no comments, reviews or review threads
-  - command: feature merge and issue state
+    evidence: exactly ten declared paths and no discussion items
+  - command: lifecycle PR 255
     result: PASS
-    evidence: merge db059bfa6a92f23922b236e0463ee457f1a27179 is main and issue 253 is closed completed
+    evidence: exact active/archive pair, Required 30539237549, behind_by zero and merge f3da0e8d99611c5d0847902464b687099c57abb8
 blockers: []
-next_action: merge the active-to-archive lifecycle PR, then complete the archive finalizer lifecycle
+next_action: merge the one-file finalizer PR, then record its historical evidence and set next_action to none
 ```
