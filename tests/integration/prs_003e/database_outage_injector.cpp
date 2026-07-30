@@ -3,12 +3,11 @@
 
 #include "database/database_failure_classification.hpp"
 
+#include <atomic>
 #include <chrono>
-#include <condition_variable>
 #include <cstdlib>
 #include <exception>
 #include <iostream>
-#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -205,25 +204,22 @@ struct InterruptedConnectionEvidence final {
 };
 
 [[nodiscard]] InterruptedConnectionEvidence injectLostThenGone(const DatabaseConfig &config) {
-	std::mutex mutex;
-	std::condition_variable ready;
-	bool connectionReady = false;
+	std::atomic<bool> connectionReady = false;
+	std::atomic<bool> workerFailed = false;
 	unsigned long connectionId = 0;
 	InterruptedConnectionEvidence evidence;
 
 	std::thread worker([&] {
 		if (mysql_thread_init() != 0) {
 			evidence.workerFailure = std::make_exception_ptr(std::runtime_error("mysql_thread_init failed"));
+			workerFailed.store(true, std::memory_order_release);
+			connectionReady.store(true, std::memory_order_release);
 			return;
 		}
 		try {
 			Connection primary(config);
-			{
-				std::lock_guard lock(mutex);
-				connectionId = mysql_thread_id(primary.get());
-				connectionReady = true;
-			}
-			ready.notify_one();
+			connectionId = mysql_thread_id(primary.get());
+			connectionReady.store(true, std::memory_order_release);
 
 			const auto lost = executeOnce(primary.get(), "SELECT SLEEP(30)");
 			evidence.lostError = lost.nativeError;
@@ -234,15 +230,16 @@ struct InterruptedConnectionEvidence final {
 			evidence.goneAttempts = gone.attempts;
 		} catch (...) {
 			evidence.workerFailure = std::current_exception();
+			workerFailed.store(true, std::memory_order_release);
+			connectionReady.store(true, std::memory_order_release);
 		}
 		mysql_thread_end();
 	});
 
-	{
-		std::unique_lock lock(mutex);
-		ready.wait(lock, [&] { return connectionReady || evidence.workerFailure != nullptr; });
+	while (!connectionReady.load(std::memory_order_acquire)) {
+		std::this_thread::sleep_for(5ms);
 	}
-	if (evidence.workerFailure == nullptr) {
+	if (!workerFailed.load(std::memory_order_acquire)) {
 		Connection control(config);
 		std::this_thread::sleep_for(250ms);
 		killConnection(control.get(), connectionId);
@@ -420,17 +417,22 @@ void runEvidence(const DatabaseConfig &config) {
 } // namespace
 
 int main() {
+	bool libraryInitialized = false;
 	try {
 		if (mysql_library_init(0, nullptr, nullptr) != 0) {
 			throw std::runtime_error("mysql_library_init failed");
 		}
+		libraryInitialized = true;
 		const auto config = readConfig();
 		runEvidence(config);
 		mysql_library_end();
+		libraryInitialized = false;
 		std::cout << "PRS-003E-A disposable MariaDB outage evidence: PASS\n";
 		return 0;
 	} catch (const std::exception &exception) {
-		mysql_library_end();
+		if (libraryInitialized) {
+			mysql_library_end();
+		}
 		std::cerr << "PRS-003E-A disposable MariaDB outage evidence: FAIL: " << exception.what() << '\n';
 		return 1;
 	}
