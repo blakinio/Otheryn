@@ -50,11 +50,11 @@ Add the smallest test-only controlled-runtime harness that uses one disposable M
 ## Live ownership audit
 
 - task-start `main` is `30ad4f41987481219faf43fdab51596a0bec4732`;
-- current synchronized feature parent is `253ab64f30da6e9c540193df207d4b52717456b3`, created by merging current `main` `35b1a3f5ffe775d2973df6f996f2a966e7d4d761` into this feature branch;
-- PRS-003C-B is terminal through feature PR #228, lifecycle PR #229 and finalizer PR #230;
-- no open PR, branch, issue or active task matching PRS-003D or PRS-003E existed before issue #232 and this branch were created;
-- concurrent PRS-003D-A PR #236 owns only its task, policy architecture, `src/game/database_outage_mutation_admission_policy.hpp`, `tests/unit/game/CMakeLists.txt` and its unit test;
-- all PRS-003E-A owned paths remain new and disjoint from PRS-003D-A, production paths, `database.cpp`, existing test CMake files and the PRS-003 state-machine contract;
+- the feature branch was synchronized with current `main` `732b8d76cb3a6e344f3503f6cb7b003a7e0d72b1` through merge commit `78472c68ff4b71d33d48b879a683a5dc8bbffbfb`;
+- PRS-003D-A, PRS-003D-B and PRS-003D-C are terminal on `main`;
+- PRS-003E-A still owns exactly four new test/workflow/task paths;
+- no production source, `database.cpp`, existing test CMake registration or PRS-003 state-machine contract is modified;
+- PRS-003D-A/B/C paths remain disjoint from the four PRS-003E-A paths;
 - if a concurrent task claims any owned path, source changes stop and the conflict is recorded here.
 
 ## Accepted evidence
@@ -109,9 +109,9 @@ Revert the feature PR and remove its dedicated workflow/test subtree. No schema,
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-30T09:44:00+02:00
-head: de0f8b88dea45e794b5d576665c30e6bd3a25c8c
-head_scope: exact-validated feature head before this dependency-graph-only checkpoint update
+updated_at: 2026-07-30T22:15:00+02:00
+head: pending-final-validation-head
+head_scope: metadata-only checkpoint refresh after synchronizing terminal PRS-003D-A/B/C from main 732b8d76
 branch: dudantas/prs-003e-a
 pr: 238
 status: validating
@@ -128,19 +128,18 @@ owned_paths:
   - tests/integration/prs_003e/run_disposable_mariadb_outage.sh
   - .github/workflows/prs-003e-database-outage.yml
 proven:
-  - PRS-003C-B is terminal on main.
+  - PRS-003C-B and PRS-003D-A/B/C are terminal on main.
   - Issue 232, branch dudantas/prs-003e-a and feature PR 238 are the single PRS-003E-A package.
   - PR 238 changes exactly the four declared owned paths.
-  - Concurrent PRS-003D-A PR 236 has completely disjoint actual and declared paths.
   - No production path, database.cpp, existing test CMake file or PRS-003 state-machine contract is modified.
-  - Exact head de0f8b8 passed disposable MariaDB run 30522591120, CI run 30522591264, Required run 30522591126 and autofix run 30522591168.
+  - Previous exact head 42e2261 passed disposable MariaDB run 30525434156, CI run 30525434549, Required run 30525434153 and autofix run 30525434173.
   - The controlled run proves CR_SERVER_LOST, CR_SERVER_GONE_ERROR, begin, commit and rollback failures, known-not-committed and unknown outcomes, fixed event/reason/sequence, fail-closed caller false, one attempt and no replay.
   - The current source invokes no reconnect API or client reconnect option and reuses the same dead handle for server-gone evidence.
   - PRS-003E-B follows terminal PRS-003E-A, PRS-003E-C follows terminal PRS-003E-B, and durable PRS-004 remains blocked until terminal PRS-003D plus terminal PRS-003E.
 derived:
   - The existing PRS-003 classifier conservatively reports a killed rollback connection as ConnectionLost or ServerGone with unknown outcome; the initial QueryFailed expectation was incorrect and was corrected without production changes.
 unknown:
-  - Exact-final-head controlled MariaDB evidence, CI, Required and autofix after this dependency-graph-only update.
+  - Exact-final-head controlled MariaDB evidence, CI, Required and autofix after synchronizing terminal PRS-003D-B/C.
   - Feature merge SHA and lifecycle archive/finalizer metadata.
 conflicts: []
 first_failure:
@@ -162,16 +161,16 @@ changed_paths:
 validation:
   - command: live issue, branch, PR and ownership audit
     result: PASS
-    evidence: One PRS-003E-A package exists; PRS-003D-A PR 236 has disjoint owned and actual paths.
+    evidence: One PRS-003E-A package exists; terminal PRS-003D-A/B/C paths remain disjoint.
   - command: required-read and seam audit
     result: PASS
-    evidence: Governance, resilience, PRS-003, PRS-002J and terminal PRS-003C-B records plus classifier/publisher source and existing tests were inspected.
-  - command: exact-head controlled MariaDB, CI, Required and autofix on de0f8b8
+    evidence: Governance, resilience, PRS-003, PRS-002J, terminal PRS-003C-B and terminal PRS-003D records plus classifier/publisher source and existing tests were inspected.
+  - command: prior exact-head controlled MariaDB, CI, Required and autofix on 42e2261
     result: PASS
-    evidence: Runs 30522591120, 30522591264, 30522591126 and 30522591168 completed successfully.
+    evidence: Runs 30525434156, 30525434549, 30525434153 and 30525434173 completed successfully.
   - command: exact-final-head controlled MariaDB evidence, CI, Required and autofix
     result: NOT_RUN
-    evidence: This dependency-graph-only checkpoint update requires fresh exact-head validation before merge.
+    evidence: The synchronized metadata head requires fresh exact-head validation before merge.
 blockers: []
 next_action: Require exact-final-head controlled MariaDB evidence, CI, Required and autofix; then repeat scope, patch, discussion and main-freshness audits before expected-head squash merge.
 ```
