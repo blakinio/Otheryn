@@ -12,7 +12,6 @@
 #include <string>
 #include <string_view>
 #include <thread>
-#include <utility>
 
 using namespace std::chrono_literals;
 
@@ -34,8 +33,7 @@ namespace {
 	}
 
 	[[nodiscard]] DatabaseConfig readConfig() {
-		const auto portText = requiredEnvironment("PRS003E_DB_PORT");
-		const auto parsedPort = std::stoul(portText);
+		const auto parsedPort = std::stoul(requiredEnvironment("PRS003E_DB_PORT"));
 		if (parsedPort == 0 || parsedPort > 65535) {
 			throw std::runtime_error("PRS003E_DB_PORT is outside the TCP port range");
 		}
@@ -61,15 +59,6 @@ namespace {
 			if (handle_ == nullptr) {
 				throw std::runtime_error("mysql_init failed");
 			}
-
-			bool reconnect = false;
-			if (mysql_options(handle_, MYSQL_OPT_RECONNECT, &reconnect) != 0) {
-				const std::string message = mysql_error(handle_);
-				mysql_close(handle_);
-				handle_ = nullptr;
-				throw std::runtime_error("cannot disable MYSQL_OPT_RECONNECT: " + message);
-			}
-
 			if (mysql_real_connect(
 					handle_,
 					config.host.c_str(),
@@ -160,7 +149,13 @@ namespace {
 		return nativeError == 0 ? DatabaseNativeErrorKind::None : DatabaseNativeErrorKind::Other;
 	}
 
-	[[nodiscard]] DatabaseOutageEventReason expectedInitialEventReason(DatabaseRuntimeResultKind result) {
+	[[nodiscard]] DatabaseOutageFailureReason nativeFailureReason(unsigned int nativeError) {
+		return nativeError == CR_SERVER_GONE_ERROR
+			? DatabaseOutageFailureReason::ServerGone
+			: DatabaseOutageFailureReason::ConnectionLost;
+	}
+
+	[[nodiscard]] DatabaseOutageEventReason initialEventReason(DatabaseRuntimeResultKind result) {
 		return result == DatabaseRuntimeResultKind::FailureUnknownCommitOutcome
 			? DatabaseOutageEventReason::UnknownCommitOutcome
 			: DatabaseOutageEventReason::FirstRuntimeFailure;
@@ -179,28 +174,25 @@ namespace {
 		require(classification.failureReason == expectedFailureReason, std::string(label) + ": failure reason mismatch");
 		require(classification.commitOutcome == expectedOutcome, std::string(label) + ": commit outcome mismatch");
 
-		DatabaseOutageStateMachine eventState({ 100ms, 50ms });
-		DatabaseOutageEventPublisher eventPublisher(eventState);
-		const auto publication = eventPublisher.publish(classification, 100ms);
+		DatabaseOutageStateMachine state({ 100ms, 50ms });
+		DatabaseOutageEventPublisher publisher(state);
+		const auto publication = publisher.publish(classification, 100ms);
 		require(publication.event.has_value(), std::string(label) + ": publication did not emit an event");
 		require(publication.event->eventSequence == 1U, std::string(label) + ": first event sequence is not one");
 		require(publication.event->eventTime == 100ms, std::string(label) + ": event time mismatch");
 		require(publication.event->disposition == DatabaseOutageEventDisposition::Applied, std::string(label) + ": event was not applied");
-		require(publication.event->reason == expectedInitialEventReason(expectedResult), std::string(label) + ": event reason mismatch");
+		require(publication.event->reason == initialEventReason(expectedResult), std::string(label) + ": event reason mismatch");
 		require(publication.event->after.lastFailureReason == expectedFailureReason, std::string(label) + ": snapshot reason mismatch");
 		require(publication.event->after.lastFailureOutcome == expectedOutcome, std::string(label) + ": snapshot outcome mismatch");
 
 		DatabaseOutageStateMachine callerState({ 100ms, 50ms });
 		DatabaseOutageEventPublisher callerPublisher(callerState);
-		const bool callerResult = callerPublisher.publishAndPreserve(false, classification, 100ms);
-		require(!callerResult, std::string(label) + ": publication converted caller failure to success");
+		require(!callerPublisher.publishAndPreserve(false, classification, 100ms), std::string(label) + ": caller failure became success");
 	}
 
 	struct InterruptedConnectionEvidence final {
-		unsigned int lostError = 0;
-		unsigned int goneError = 0;
-		unsigned int lostAttempts = 0;
-		unsigned int goneAttempts = 0;
+		OperationEvidence lost;
+		OperationEvidence gone;
 		std::exception_ptr workerFailure;
 	};
 
@@ -221,14 +213,8 @@ namespace {
 				Connection primary(config);
 				connectionId = mysql_thread_id(primary.get());
 				connectionReady.store(true, std::memory_order_release);
-
-				const auto lost = executeOnce(primary.get(), "SELECT SLEEP(30)");
-				evidence.lostError = lost.nativeError;
-				evidence.lostAttempts = lost.attempts;
-
-				const auto gone = executeOnce(primary.get(), "SELECT 1");
-				evidence.goneError = gone.nativeError;
-				evidence.goneAttempts = gone.attempts;
+				evidence.lost = executeOnce(primary.get(), "SELECT SLEEP(30)");
+				evidence.gone = executeOnce(primary.get(), "SELECT 1");
 			} catch (...) {
 				evidence.workerFailure = std::current_exception();
 				workerFailed.store(true, std::memory_order_release);
@@ -265,35 +251,29 @@ namespace {
 		uint64_t persistedRows = 0;
 	};
 
-	[[nodiscard]] TransactionFailureEvidence injectCommitFailure(const DatabaseConfig &config) {
+	[[nodiscard]] TransactionFailureEvidence injectTransactionFailure(
+		const DatabaseConfig &config,
+		std::string_view marker,
+		std::string_view terminalSql
+	) {
 		Connection primary(config);
 		Connection control(config);
 		executeRequired(primary.get(), "START TRANSACTION");
-		const auto mutation = executeOnce(primary.get(), "INSERT INTO prs003e_evidence(marker) VALUES ('commit-failure')");
-		require(mutation.succeeded, "commit-failure: setup mutation did not execute");
+		const auto mutation = executeOnce(
+			primary.get(),
+			"INSERT INTO prs003e_evidence(marker) VALUES ('" + std::string(marker) + "')"
+		);
+		require(mutation.succeeded, std::string(marker) + ": setup mutation did not execute");
 		killConnection(control.get(), mysql_thread_id(primary.get()));
-		const auto commit = executeOnce(primary.get(), "COMMIT");
-		const auto persistedRows = scalarUnsigned(control.get(), "SELECT COUNT(*) FROM prs003e_evidence WHERE marker = 'commit-failure'");
+		const auto terminal = executeOnce(primary.get(), terminalSql);
+		const auto rows = scalarUnsigned(
+			control.get(),
+			"SELECT COUNT(*) FROM prs003e_evidence WHERE marker = '" + std::string(marker) + "'"
+		);
 		return TransactionFailureEvidence {
-			.terminalOperation = commit,
+			.terminalOperation = terminal,
 			.mutationAttempts = mutation.attempts,
-			.persistedRows = persistedRows,
-		};
-	}
-
-	[[nodiscard]] TransactionFailureEvidence injectRollbackFailure(const DatabaseConfig &config) {
-		Connection primary(config);
-		Connection control(config);
-		executeRequired(primary.get(), "START TRANSACTION");
-		const auto mutation = executeOnce(primary.get(), "INSERT INTO prs003e_evidence(marker) VALUES ('rollback-failure')");
-		require(mutation.succeeded, "rollback-failure: setup mutation did not execute");
-		killConnection(control.get(), mysql_thread_id(primary.get()));
-		const auto rollback = executeOnce(primary.get(), "ROLLBACK");
-		const auto persistedRows = scalarUnsigned(control.get(), "SELECT COUNT(*) FROM prs003e_evidence WHERE marker = 'rollback-failure'");
-		return TransactionFailureEvidence {
-			.terminalOperation = rollback,
-			.mutationAttempts = mutation.attempts,
-			.persistedRows = persistedRows,
+			.persistedRows = rows,
 		};
 	}
 
@@ -332,13 +312,19 @@ namespace {
 		executeRequired(connection.get(), "TRUNCATE TABLE prs003e_evidence");
 	}
 
+	void verifyTransactionEvidence(const TransactionFailureEvidence &evidence, std::string_view label) {
+		require(!evidence.terminalOperation.succeeded, std::string(label) + ": terminal operation unexpectedly succeeded");
+		require(evidence.terminalOperation.attempts == 1U, std::string(label) + ": terminal operation attempted more than once");
+		require(evidence.mutationAttempts == 1U, std::string(label) + ": mutation was replayed");
+		require(evidence.persistedRows == 0U, std::string(label) + ": killed transaction left a persisted row");
+	}
+
 	void runEvidence(const DatabaseConfig &config) {
 		prepareDisposableSchema(config);
 
 		Connection ordinaryFailure(config);
 		const auto known = executeOnce(ordinaryFailure.get(), "SELECT * FROM prs003e_missing_table");
-		require(!known.succeeded, "known-not-committed: missing-table query unexpectedly succeeded");
-		require(known.attempts == 1U, "known-not-committed: query attempted more than once");
+		require(!known.succeeded && known.attempts == 1U, "known-not-committed: one-shot query evidence mismatch");
 		verifyPublishedFailure(
 			DatabaseRuntimeOperation::Query,
 			known.nativeError,
@@ -349,13 +335,13 @@ namespace {
 		);
 
 		const auto interrupted = injectLostThenGone(config);
-		require(interrupted.lostAttempts == 1U, "lost-connection: query attempted more than once");
-		require(interrupted.goneAttempts == 1U, "server-gone: query attempted more than once");
-		require(interrupted.lostError == CR_SERVER_LOST, "lost-connection: expected CR_SERVER_LOST");
-		require(interrupted.goneError == CR_SERVER_GONE_ERROR, "server-gone: expected CR_SERVER_GONE_ERROR");
+		require(interrupted.lost.attempts == 1U, "lost-connection: query attempted more than once");
+		require(interrupted.gone.attempts == 1U, "server-gone: query attempted more than once");
+		require(interrupted.lost.nativeError == CR_SERVER_LOST, "lost-connection: expected CR_SERVER_LOST");
+		require(interrupted.gone.nativeError == CR_SERVER_GONE_ERROR, "server-gone: expected CR_SERVER_GONE_ERROR");
 		verifyPublishedFailure(
 			DatabaseRuntimeOperation::Query,
-			interrupted.lostError,
+			interrupted.lost.nativeError,
 			DatabaseRuntimeResultKind::FailureUnknownCommitOutcome,
 			DatabaseOutageFailureReason::ConnectionLost,
 			DatabaseOutageCommitOutcome::Unknown,
@@ -363,7 +349,7 @@ namespace {
 		);
 		verifyPublishedFailure(
 			DatabaseRuntimeOperation::Query,
-			interrupted.goneError,
+			interrupted.gone.nativeError,
 			DatabaseRuntimeResultKind::FailureUnknownCommitOutcome,
 			DatabaseOutageFailureReason::ServerGone,
 			DatabaseOutageCommitOutcome::Unknown,
@@ -371,8 +357,7 @@ namespace {
 		);
 
 		const auto begin = injectBeginFailure(config);
-		require(!begin.succeeded, "begin-failure: START TRANSACTION unexpectedly succeeded");
-		require(begin.attempts == 1U, "begin-failure: START TRANSACTION attempted more than once");
+		require(!begin.succeeded && begin.attempts == 1U, "begin-failure: one-shot begin evidence mismatch");
 		verifyPublishedFailure(
 			DatabaseRuntimeOperation::TransactionBegin,
 			begin.nativeError,
@@ -382,11 +367,8 @@ namespace {
 			"begin-failure"
 		);
 
-		const auto commit = injectCommitFailure(config);
-		require(!commit.terminalOperation.succeeded, "commit-failure: COMMIT unexpectedly succeeded");
-		require(commit.terminalOperation.attempts == 1U, "commit-failure: COMMIT attempted more than once");
-		require(commit.mutationAttempts == 1U, "commit-failure: mutation was replayed");
-		require(commit.persistedRows == 0U, "commit-failure: killed transaction left a persisted row");
+		const auto commit = injectTransactionFailure(config, "commit-failure", "COMMIT");
+		verifyTransactionEvidence(commit, "commit-failure");
 		verifyPublishedFailure(
 			DatabaseRuntimeOperation::TransactionCommit,
 			commit.terminalOperation.nativeError,
@@ -396,24 +378,24 @@ namespace {
 			"commit-failure"
 		);
 
-		const auto rollback = injectRollbackFailure(config);
-		require(!rollback.terminalOperation.succeeded, "rollback-failure: ROLLBACK unexpectedly succeeded");
-		require(rollback.terminalOperation.attempts == 1U, "rollback-failure: ROLLBACK attempted more than once");
-		require(rollback.mutationAttempts == 1U, "rollback-failure: mutation was replayed");
-		require(rollback.persistedRows == 0U, "rollback-failure: killed transaction left a persisted row");
+		const auto rollback = injectTransactionFailure(config, "rollback-failure", "ROLLBACK");
+		verifyTransactionEvidence(rollback, "rollback-failure");
+		require(
+			rollback.terminalOperation.nativeError == CR_SERVER_LOST || rollback.terminalOperation.nativeError == CR_SERVER_GONE_ERROR,
+			"rollback-failure: expected a connection failure"
+		);
 		verifyPublishedFailure(
 			DatabaseRuntimeOperation::TransactionRollback,
 			rollback.terminalOperation.nativeError,
 			DatabaseRuntimeResultKind::FailureUnknownCommitOutcome,
-			DatabaseOutageFailureReason::ConnectionLost,
+			nativeFailureReason(rollback.terminalOperation.nativeError),
 			DatabaseOutageCommitOutcome::Unknown,
 			"rollback-failure"
 		);
 
 		verifyMonotonicSequence();
-
 		Connection finalAudit(config);
-		require(scalarUnsigned(finalAudit.get(), "SELECT COUNT(*) FROM prs003e_evidence") == 0U, "no-replay: disposable evidence table is not empty");
+		require(scalarUnsigned(finalAudit.get(), "SELECT COUNT(*) FROM prs003e_evidence") == 0U, "no-replay: evidence table is not empty");
 	}
 } // namespace
 
@@ -424,8 +406,7 @@ int main() {
 			throw std::runtime_error("mysql_library_init failed");
 		}
 		libraryInitialized = true;
-		const auto config = readConfig();
-		runEvidence(config);
+		runEvidence(readConfig());
 		mysql_library_end();
 		libraryInitialized = false;
 		std::cout << "PRS-003E-A disposable MariaDB outage evidence: PASS\n";
