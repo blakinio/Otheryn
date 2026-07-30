@@ -94,13 +94,13 @@ struct DatabaseOutagePublicationResult final {
 };
 
 /**
- * Serializes runtime database-result publication to one PRS-003A state owner.
+ * Serializes runtime failures and bounded control events to one PRS-003 state owner.
  *
  * The publisher owns only event sequencing. It cannot reconnect, replay SQL,
  * retry an operation, schedule a deadline or change gameplay state. Generated
  * events clamp caller time to the owner's last accepted monotonic time. Explicit
- * events retain their supplied sequence and time so duplicate, stale and
- * regressing publication is rejected by the existing state-machine contract.
+ * runtime-failure events retain their supplied sequence and time so duplicate,
+ * stale and regressing publication remains state-machine validated.
  */
 class DatabaseOutageEventPublisher final {
 public:
@@ -119,11 +119,7 @@ public:
 			return {};
 		}
 
-		const auto snapshot = stateOwner_.snapshot();
-		if (snapshot.lastEventTime.has_value() && now < *snapshot.lastEventTime) {
-			now = *snapshot.lastEventTime;
-		}
-		return publishLocked(nextSequenceLocked(), classification, now);
+		return publishLocked(nextSequenceLocked(), classification, clampTimeLocked(now));
 	}
 
 	[[nodiscard]] DatabaseOutagePublicationResult publish(const DatabaseRuntimeOutageEvent &event) {
@@ -134,6 +130,21 @@ public:
 
 		advanceSequenceLocked(event.sequence);
 		return publishLocked(event.sequence, event.classification, event.time);
+	}
+
+	[[nodiscard]] DatabaseOutageEventResult degradedDeadlineExpired(DatabaseOutageTimePoint now) {
+		std::lock_guard lock(mutex_);
+		return stateOwner_.degradedDeadlineExpired(nextSequenceLocked(), clampTimeLocked(now));
+	}
+
+	[[nodiscard]] DatabaseOutageEventResult drainCompleted(DatabaseOutageTimePoint now) {
+		std::lock_guard lock(mutex_);
+		return stateOwner_.drainCompleted(nextSequenceLocked(), clampTimeLocked(now));
+	}
+
+	[[nodiscard]] DatabaseOutageEventResult drainDeadlineExpired(DatabaseOutageTimePoint now) {
+		std::lock_guard lock(mutex_);
+		return stateOwner_.drainDeadlineExpired(nextSequenceLocked(), clampTimeLocked(now));
 	}
 
 	template <typename Result>
@@ -151,6 +162,14 @@ public:
 	}
 
 private:
+	[[nodiscard]] DatabaseOutageTimePoint clampTimeLocked(DatabaseOutageTimePoint now) const {
+		const auto snapshot = stateOwner_.snapshot();
+		if (snapshot.lastEventTime.has_value() && now < *snapshot.lastEventTime) {
+			return *snapshot.lastEventTime;
+		}
+		return now;
+	}
+
 	[[nodiscard]] DatabaseOutageEventSequence nextSequenceLocked() noexcept {
 		const auto sequence = nextSequence_;
 		if (nextSequence_ < std::numeric_limits<DatabaseOutageEventSequence>::max()) {
@@ -189,3 +208,6 @@ private:
 };
 
 [[nodiscard]] DatabaseOutageSnapshot getDatabaseOutageSnapshot();
+[[nodiscard]] DatabaseOutageEventResult publishDatabaseOutageDegradedDeadlineExpired(DatabaseOutageTimePoint now);
+[[nodiscard]] DatabaseOutageEventResult publishDatabaseOutageDrainCompleted(DatabaseOutageTimePoint now);
+[[nodiscard]] DatabaseOutageEventResult publishDatabaseOutageDrainDeadlineExpired(DatabaseOutageTimePoint now);
