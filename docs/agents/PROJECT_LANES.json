@@ -40,10 +40,7 @@
     },
     {
       "id": "otheryn-runtime",
-      "label": "Server runtime and uncategorized work",
-      "task_prefixes": [
-        "OTH"
-      ]
+      "label": "Server runtime and uncategorized work"
     }
   ]
 }
