@@ -7,7 +7,7 @@ start_sha: 30ad4f41987481219faf43fdab51596a0bec4732
 created: 2026-07-30
 updated: 2026-07-30
 related_issue: "233"
-related_pr: pending
+related_pr: "234"
 owned_paths:
   - docs/agents/tasks/active/OTH-20260730-prs-program-coordination.md
 required_reads:
@@ -53,6 +53,7 @@ Coordinate terminal delivery of PRS-003D, PRS-003E, durable PRS-004, PRS-005, PR
 - task-start `main`: `30ad4f41987481219faf43fdab51596a0bec4732`;
 - coordination issue: `#233`;
 - coordinator branch: `dudantas/prs-program-coordination`;
+- coordinator PR: `#234`;
 - parent resilience issue `#116`: open;
 - PRS-003C-B issue `#222`: closed completed;
 - PRS-003C-B terminal feature/lifecycle/finalizer chain ends at task-start `main`;
@@ -144,11 +145,11 @@ The coordinator will not authorize reconnect/replay frameworks, `MYSQL_OPT_RECON
 coordination_record:
   changed_paths:
     - docs/agents/tasks/active/OTH-20260730-prs-program-coordination.md
-  focused_validation: NOT_RUN
-  ci: NOT_RUN
-  required: NOT_RUN
-  autofix: NOT_RUN
-  pr: pending
+  focused_validation: PENDING
+  ci: PENDING
+  required: PENDING
+  autofix: PENDING
+  pr: 234
 program_merge_evidence:
   prs003c_b:
     feature_pr: 228
@@ -172,11 +173,11 @@ program_merge_evidence:
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-30T08:39:00+02:00
-head: 30ad4f41987481219faf43fdab51596a0bec4732
-head_scope: task-start main before the coordinator-record commit
+updated_at: 2026-07-30T08:40:00+02:00
+head: 6c1bbdd8575bc98fa99d6ac426ba5ca31a620312
+head_scope: live PR head before this PR-link-only checkpoint update
 branch: dudantas/prs-program-coordination
-pr: null
+pr: 234
 status: active
 context_routes:
   - production-resilience
@@ -193,13 +194,13 @@ proven:
   - PRS-003C-B and PRS-004A have terminal archives with exact feature, lifecycle and finalizer evidence.
   - PRS-004A is process-local only and does not prove durable fencing.
   - No existing open coordination issue, open PRS package issue, open PRS pull request, matching dudantas/prs branch or active task record was found.
-  - Issue 233 and branch dudantas/prs-program-coordination now reserve the coordinator scope.
+  - Issue 233, branch dudantas/prs-program-coordination and one-path PR 234 reserve the coordinator scope.
 derived:
   - PRS-003D-A and PRS-003E-A may begin in parallel only after exact disjoint ownership is established.
   - All later runtime, schema and deployment gates remain closed.
 unknown:
   - Exact file ownership for PRS-003D-A and PRS-003E-A pending package-specific source discovery.
-  - Exact-head coordinator PR checks pending publication.
+  - Exact-final-head coordinator PR checks and merge audits.
 conflicts: []
 first_failure:
   marker: local-github-clone-dns-unavailable
@@ -216,12 +217,12 @@ validation:
   - command: live repository preflight
     result: PASS
     evidence: main, issues, pull requests, branches, active tasks, mandatory contracts and terminal archives were audited through GitHub.
-  - command: repository checkpoint validator
-    result: NOT_RUN
-    evidence: Run through exact-head repository CI because the local sandbox has no GitHub clone.
-  - command: exact-head CI, Required and autofix
-    result: NOT_RUN
-    evidence: Coordinator pull request is not published yet.
+  - command: pull-request scope audit
+    result: PASS
+    evidence: PR 234 reports exactly one changed path owned by the coordinator.
+  - command: repository checkpoint validator and exact-head CI, Required and autofix
+    result: PENDING
+    evidence: Require all gates on the final unchanged PR 234 head.
 blockers: []
-next_action: publish the one-path coordinator pull request, require exact-head checks, and merge it only after scope, discussion and base-freshness audits pass.
+next_action: inspect exact-final-head CI, Required and autofix for PR 234, then perform one-path, discussion and base-freshness audits before expected-head squash merge.
 ```
