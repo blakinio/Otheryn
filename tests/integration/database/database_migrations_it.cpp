@@ -165,10 +165,11 @@ end
 
 		bool triggerExists() const {
 			return readCount(fmt::format(
-				"SELECT COUNT(*) AS `count` FROM `information_schema`.`TRIGGERS` "
-				"WHERE `TRIGGER_SCHEMA` = DATABASE() AND `TRIGGER_NAME` = '{}'",
-				creationTrigger
-			)) == 1;
+					   "SELECT COUNT(*) AS `count` FROM `information_schema`.`TRIGGERS` "
+					   "WHERE `TRIGGER_SCHEMA` = DATABASE() AND `TRIGGER_NAME` = '{}'",
+					   creationTrigger
+				   ))
+				== 1;
 		}
 
 	private:
