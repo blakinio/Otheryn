@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS `server_config` (
     CONSTRAINT `server_config_pk` PRIMARY KEY (`config`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
-INSERT INTO `server_config` (`config`, `value`) VALUES ('db_version', '59'), ('motd_hash', ''), ('motd_num', '0'), ('players_record', '0');
+INSERT INTO `server_config` (`config`, `value`) VALUES ('db_version', '60'), ('motd_hash', ''), ('motd_num', '0'), ('players_record', '0');
 
 -- Table structure `accounts`
 CREATE TABLE IF NOT EXISTS `accounts` (
@@ -171,8 +171,8 @@ CREATE TABLE IF NOT EXISTS `player_writer_fence` (
     CONSTRAINT `player_writer_fence_pk` PRIMARY KEY (`player_id`),
     CONSTRAINT `player_writer_fence_token_uq` UNIQUE (`writer_token`),
     CONSTRAINT `player_writer_fence_active_ck` CHECK (
-        (`ownership_generation` = 0 AND `writer_token` IS NULL)
-        OR (`ownership_generation` > 0 AND `writer_token` IS NOT NULL)
+        (`ownership_generation` = 0 AND `writer_token` IS NULL AND `state_revision` = 0)
+        OR (`ownership_generation` > 0)
     ),
     CONSTRAINT `player_writer_fence_player_fk`
     FOREIGN KEY (`player_id`) REFERENCES `players` (`id`)
@@ -392,7 +392,7 @@ CREATE TABLE IF NOT EXISTS `guild_wars` (
     `started` bigint(15) NOT NULL DEFAULT '0',
     `ended` bigint(15) NOT NULL DEFAULT '0',
     `frags_limit` smallint(4) UNSIGNED NOT NULL DEFAULT '0',
-    `payment` bigint(13) UNSIGNED NOT NULL DEFAULT '0',
+    `payment` bigint(13) NOT NULL DEFAULT '0',
     `duration_days` tinyint(3) UNSIGNED NOT NULL DEFAULT '0',
     INDEX `guild1` (`guild1`),
     INDEX `guild2` (`guild2`),
