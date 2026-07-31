@@ -12,14 +12,16 @@ issue: "276"
 feature_pr: "279"
 feature_head_sha: 0793f4478520b123d395077d01fe989aa741e09f
 feature_merge_sha: 5672b9d561cba1b9a482519df10e4472119bc8da
-lifecycle_pr: pending
-lifecycle_head_sha: pending
-lifecycle_merge_sha: pending
+lifecycle_pr: "281"
+lifecycle_head_sha: e231c3211cc2195c369db22c629b6c8b7af3bb1c
+lifecycle_required_run: 30650937957
+lifecycle_merge_sha: 20654da5ce2388a5ab16f60c45d428c9c5cf75c7
 finalizer_pr: pending
 finalizer_head_sha: pending
+finalizer_required_run: pending
 finalizer_merge_sha: pending
 created: 2026-07-31
-updated: 2026-07-31T19:22:00+02:00
+updated: 2026-07-31T19:25:00+02:00
 owned_paths:
   - schema.sql
   - data-otservbr-global/migrations/59.lua
@@ -34,56 +36,57 @@ owned_paths:
 
 ## Delivered contract
 
-A dedicated `player_writer_fence` MariaDB authority table now stores stable player subject, ownership generation, exact nullable `BINARY(16)` writer token and state revision. It enforces subject primary-key ownership, global token uniqueness, active/inactive shape and player foreign-key cascade. Existing and newly created players receive fail-closed inactive rows.
+A dedicated `player_writer_fence` MariaDB authority table stores stable player subject, ownership generation, exact nullable `BINARY(16)` writer token and state revision. It enforces subject primary-key ownership, global token uniqueness, active/inactive shape and player foreign-key cascade. Existing and newly created players receive fail-closed inactive rows.
 
 Migration 59, canonical schema 59 and a bounded rollback/re-upgrade procedure describe the same object. This slice adds no CAS API, protected-save wiring, handoff, Redis authority, retry/replay, production credentials, deployment or RPO/RTO claim.
 
 ## Exact feature evidence
 
 - issue #276: closed completed;
-- feature PR #279: expected-head squash merged;
-- exact feature head: `0793f4478520b123d395077d01fe989aa741e09f`;
-- feature merge: `5672b9d561cba1b9a482519df10e4472119bc8da`;
-- changed paths: exactly seven declared owned paths;
-- base freshness: `behind_by=0` before merge;
-- discussions, reviews and review threads: empty;
-- PRS-004B Durable Fence Schema run `30649631382`: PASS;
-- CI run `30649631473`: PASS;
-- Required run `30649631397`: PASS;
-- Repository Audit run `30649631320`: PASS;
-- autofix run `30649631361`: PASS;
-- MySQL Schema Check run `30649631189`: PASS.
+- feature PR #279 exact head `0793f4478520b123d395077d01fe989aa741e09f`;
+- feature merge `5672b9d561cba1b9a482519df10e4472119bc8da`;
+- exact seven-path scope, clean discussions and `behind_by=0`;
+- dedicated `30649631382`, CI `30649631473`, Required `30649631397`, Repository Audit `30649631320`, autofix `30649631361`, MySQL Schema Check `30649631189`: PASS.
+
+## Lifecycle evidence
+
+- lifecycle PR #281 exact head `e231c3211cc2195c369db22c629b6c8b7af3bb1c`;
+- lifecycle Required `30650937957`: PASS;
+- lifecycle dedicated `30650937944`: PASS;
+- lifecycle merge `20654da5ce2388a5ab16f60c45d428c9c5cf75c7`;
+- active task absent on `main` after lifecycle merge;
+- lifecycle diff exactly active deletion plus archive addition.
 
 ## Safety evidence
 
-- no `MYSQL_OPT_RECONNECT`, `mysql_ping`, reconnect loop or SQL replay;
+- no reconnect, ping, retry or SQL replay;
 - no CAS/save/handoff behavior in the schema slice;
 - no production database access, credentials or deployment;
-- rollback is bounded, explicit and disposable-test proven, not an automatic production framework.
+- rollback is bounded and explicit, not an automatic production framework.
 
 ## Context checkpoint
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-31T19:22:00+02:00
+updated_at: 2026-07-31T19:25:00+02:00
 status: completed
-phase: archive
-head: 0793f4478520b123d395077d01fe989aa741e09f
-head_scope: exact validated feature head
+phase: finalizer
 feature_pr: 279
+feature_head_sha: 0793f4478520b123d395077d01fe989aa741e09f
 feature_merge_sha: 5672b9d561cba1b9a482519df10e4472119bc8da
-lifecycle_pr: pending
+lifecycle_pr: 281
+lifecycle_head_sha: e231c3211cc2195c369db22c629b6c8b7af3bb1c
+lifecycle_required_run: 30650937957
+lifecycle_merge_sha: 20654da5ce2388a5ab16f60c45d428c9c5cf75c7
 finalizer_pr: pending
 proven:
-  - exact seven-path scope
-  - clean schema import and migration 58 to 59
-  - fail-closed backfill and creation trigger
-  - constraints, duplicate-token rejection, bounded rollback and re-upgrade
-  - exact-head dedicated, CI, Required, Repository Audit, autofix and schema checks
+  - exact seven-path feature scope and exact-head green checks
+  - schema import, migration, constraints, backfill, trigger and bounded rollback/re-upgrade
+  - issue completed and active-to-archive lifecycle merged
+  - active record absent
 unknown:
-  - lifecycle PR head, Required and merge
-  - finalizer PR head, Required and merge
+  - finalizer PR exact head, Required and merge
 conflicts: []
 blockers: []
-next_action: merge the two-path lifecycle PR, then complete one-file finalizer and terminal metadata
+next_action: merge the one-file finalizer and record its historical terminal evidence
 ```
