@@ -1,8 +1,8 @@
 ---
 task_id: OTH-20260731-prs003e-c-operator-resume
-status: active
+status: validating
 project_lane: otheryn-runtime
-phase: implement
+phase: validate
 session_id: chat-github-20260731-prs003e-c-01
 execution_mode: chat-github
 execution_reason: exact new-file ownership can be implemented through the GitHub connector while the sandbox has no GitHub DNS
@@ -12,8 +12,8 @@ start_sha: 86742d3b0ff6e31dc24b479179d48a6bd88f9145
 issue: "269"
 feature_pr: null
 created: 2026-07-31
-updated: 2026-07-31T09:25:00+02:00
-lease_expires_at: 2026-07-31T10:10:00+02:00
+updated: 2026-07-31T09:34:00+02:00
+lease_expires_at: 2026-07-31T10:19:00+02:00
 owned_paths:
   - docs/agents/tasks/active/OTH-20260731-prs003e-c-operator-resume.md
   - docs/architecture/prs-003e-c-operator-resume.md
@@ -46,14 +46,14 @@ search_first:
 
 - Terminal PRS-003E-B supplies bounded accepted recovery evidence without automatic resume.
 - `DatabaseOutageStateMachine::operatorResume` already enforces degraded-or-maintenance state plus accepted recovery evidence and rejects stale sequence/time.
-- No typed operator request contract currently requires authorization, explicit confirmation and an exact observed outage generation before invoking that method.
+- Before this slice, no typed operator request contract required authorization, explicit confirmation and an exact observed outage generation before invoking that method.
 - The coordinator record is stale, but its conditional E-C gate is satisfied by live terminal E-B evidence.
 
-## Accepted target contract
+## Delivered contract
 
-Add one database-independent, header-only operator-control API. A request must be authorized, explicitly confirmed and match the exact observed outage state, transition count and last event sequence. Only degraded or maintenance with accepted evidence is eligible. One accepted request invokes the existing state owner once and returns `ResumeGameLifecycle` only after an applied healthy transition. Every rejection is fixed and low-cardinality.
+One database-independent, header-only operator-control API now requires authorization, explicit confirmation and the exact observed outage state, transition count and last event sequence. Only degraded or maintenance with accepted evidence is eligible. One accepted request invokes the existing state owner once and returns `ResumeGameLifecycle` only after an applied healthy transition. Every rejection is fixed and low-cardinality.
 
-The controlled standalone probe proves status inspection, rejected authorization/confirmation/state/generation/evidence, degraded and maintenance success, later failure invalidation, duplicate/stale/concurrent exact-once behavior and active-interval clearing.
+The controlled standalone probe covers read-only status, rejected authorization/confirmation/state/generation/evidence, degraded and maintenance success, later failure invalidation, duplicate/stale/concurrent exact-once behavior and active-interval clearing. The runner compiles with C++20 warnings-as-errors, repeats concurrency evidence under finite timeouts and statically excludes production transport/database ownership.
 
 ## Explicit non-goals
 
@@ -65,13 +65,11 @@ The controlled standalone probe proves status inspection, rejected authorization
 - no schema, credential, migration, deployment, login, handoff, mutation, drain or save change;
 - no PRS-004+ work and no RPO/RTO claim.
 
-## Failure-injection plan
+## Failure-injection evidence
 
-- unauthorized request;
-- unconfirmed request;
+- unauthorized and unconfirmed requests;
 - wrong expected state;
-- stale transition count;
-- stale last event sequence;
+- stale transition count and last event sequence;
 - missing accepted evidence;
 - qualifying failure after accepted evidence;
 - duplicate event sequence;
@@ -86,16 +84,17 @@ Revert the feature merge. The slice owns only six new E-C-specific files and add
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-07-31T09:25:00+02:00
-phase: implement
+updated_at: 2026-07-31T09:34:00+02:00
+phase: validate
 session_id: chat-github-20260731-prs003e-c-01
 execution_mode: chat-github
 execution_reason: exact six-path new-file scope through GitHub connector; sandbox GitHub DNS unavailable
-lease_expires_at: 2026-07-31T10:10:00+02:00
-head: pending-first-task-record-commit
+lease_expires_at: 2026-07-31T10:19:00+02:00
+head: 17f48c6fc5519ee5fb81a954f36ab72f522cf5b3
+head_scope: complete six-file implementation before this governance-only validation checkpoint
 branch: dudantas/prs-003e-c-operator-resume
 pr: null
-status: active
+status: validating
 project_lane: otheryn-runtime
 context_routes:
   - production-resilience
@@ -114,12 +113,14 @@ owned_paths:
 proven:
   - main 86742d3b0ff6e31dc24b479179d48a6bd88f9145 is the audited task start
   - PRS-003E-B is terminal and issue 262 is closed completed
-  - no open pull request and no matching E-C branch existed before claim
   - issue 269 is the unique E-C execution issue
   - all six owned paths are new and E-C-specific
+  - branch compare contains exactly six declared paths and behind_by zero
+  - the API calls the existing state owner at most once per accepted request and owns no database or game lifecycle
+  - deterministic evidence covers degraded, maintenance, invalidation, duplicate and concurrent requests
 unknown:
-  - exact implementation head and focused test result
-  - exact feature PR and final check runs
+  - exact feature PR number and exact final head
+  - dedicated workflow, CI, Required and autofix outcomes
 conflicts: []
 first_failure: null
 rejected_hypotheses:
@@ -129,12 +130,23 @@ rejected_hypotheses:
   - reconnecting or replaying the failed operation
   - modifying existing production source or shared CMake
 changed_paths:
+  - .github/workflows/prs-003e-c-operator-resume.yml
   - docs/agents/tasks/active/OTH-20260731-prs003e-c-operator-resume.md
+  - docs/architecture/prs-003e-c-operator-resume.md
+  - src/database/database_outage_operator_control.hpp
+  - tests/integration/prs_003e/operator_resume_probe.cpp
+  - tests/integration/prs_003e/run_operator_resume_probe.sh
 validation:
   - command: live dependency, conflict and ownership preflight
     result: PASS
     evidence: issue 269 and exact six-path new-file ownership on main 86742d3b0ff6e31dc24b479179d48a6bd88f9145
+  - command: branch scope and freshness audit
+    result: PASS
+    evidence: exact six added paths, behind_by=0 on implementation head 17f48c6fc5519ee5fb81a954f36ab72f522cf5b3
+  - command: local repository build
+    result: NOT_RUN
+    evidence: sandbox has no GitHub DNS or checkout; dedicated exact-head workflow performs strict standalone compilation and deterministic execution
 blockers: []
-last_completed_step: issue, canonical branch and durable active task record created after live preflight
-next_action: implement the header-only operator API, deterministic probe, runner, workflow and architecture contract
+last_completed_step: complete six-file implementation persisted and scope audited before exact-head validation
+next_action: open the feature PR and require dedicated operator evidence, full applicable CI, Required and autofix on the unchanged exact head
 ```
