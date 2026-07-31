@@ -2,7 +2,7 @@
 name: PRS-004C Durable Fence CAS
 
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - schema.sql
@@ -13,61 +13,31 @@ on:
       - .github/workflows/prs-004c-durable-fence-cas.yml
       - docs/architecture/prs-004c-durable-writer-fence-cas.md
       - docs/agents/tasks/active/OTH-20260731-prs004c-durable-fence-cas.md
+  push:
+    branches:
+      - main
+    paths:
+      - schema.sql
+      - data-otservbr-global/migrations/60.lua
+      - src/database/player_writer_fence_repository.*
+      - tests/integration/database/**
+      - .github/workflows/prs-004c-durable-fence-cas.yml
+
+permissions:
+  contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  materialize-schema-60:
-    if: github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+  integration:
     permissions:
-      contents: write
-      pull-requests: read
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          repository: ${{ github.repository }}
-          fetch-depth: 0
-
-      - name: Materialize released-state-compatible schema
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path('schema.sql')
-          text = path.read_text(encoding='utf-8')
-          if "('db_version', '60')" in text:
-              raise SystemExit(0)
-          if text.count("('db_version', '59')") != 1:
-              raise SystemExit('expected exactly one schema version 59 marker')
-          text = text.replace("('db_version', '59')", "('db_version', '60')", 1)
-
-          old = """CONSTRAINT `player_writer_fence_active_ck` CHECK (
-        (`ownership_generation` = 0 AND `writer_token` IS NULL)
-        OR (`ownership_generation` > 0 AND `writer_token` IS NOT NULL)
-    ),"""
-          new = """CONSTRAINT `player_writer_fence_active_ck` CHECK (
-        (`ownership_generation` = 0 AND `writer_token` IS NULL AND `state_revision` = 0)
-        OR (`ownership_generation` > 0)
-    ),"""
-          if text.count(old) != 1:
-              raise SystemExit('expected exactly one PRS-004B check constraint')
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
-          PY
-
-      - name: Commit canonical schema when required
-        env:
-          HEAD_REF: ${{ github.event.pull_request.head.ref }}
-        run: |
-          if git diff --quiet -- schema.sql; then
-            exit 0
-          fi
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add schema.sql
-          git commit -m "build(database): materialize released fence schema"
-          git push origin "HEAD:${HEAD_REF}"
+      contents: read
+      packages: read
+    uses: ./.github/workflows/reusable-build-linux.yml
+    with:
+      buildtypes: '["linux-debug"]'
+      run_canary_smoke: false
+      run_global_smoke: false
+    secrets: inherit
