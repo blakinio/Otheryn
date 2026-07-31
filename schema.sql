@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS `server_config` (
     CONSTRAINT `server_config_pk` PRIMARY KEY (`config`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
-INSERT INTO `server_config` (`config`, `value`) VALUES ('db_version', '58'), ('motd_hash', ''), ('motd_num', '0'), ('players_record', '0');
+INSERT INTO `server_config` (`config`, `value`) VALUES ('db_version', '59'), ('motd_hash', ''), ('motd_num', '0'), ('players_record', '0');
 
 -- Table structure `accounts`
 CREATE TABLE IF NOT EXISTS `accounts` (
@@ -161,6 +161,34 @@ CREATE TABLE IF NOT EXISTS `players` (
     FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`)
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+-- Table structure `player_writer_fence`
+CREATE TABLE IF NOT EXISTS `player_writer_fence` (
+    `player_id` int(11) NOT NULL,
+    `ownership_generation` bigint(20) UNSIGNED NOT NULL DEFAULT '0',
+    `writer_token` binary(16) DEFAULT NULL,
+    `state_revision` bigint(20) UNSIGNED NOT NULL DEFAULT '0',
+    CONSTRAINT `player_writer_fence_pk` PRIMARY KEY (`player_id`),
+    CONSTRAINT `player_writer_fence_token_uq` UNIQUE (`writer_token`),
+    CONSTRAINT `player_writer_fence_active_ck` CHECK (
+        (`ownership_generation` = 0 AND `writer_token` IS NULL)
+        OR (`ownership_generation` > 0 AND `writer_token` IS NOT NULL)
+    ),
+    CONSTRAINT `player_writer_fence_player_fk`
+    FOREIGN KEY (`player_id`) REFERENCES `players` (`id`)
+    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+DELIMITER //
+CREATE TRIGGER `oncreate_player_writer_fence` AFTER INSERT ON `players`
+FOR EACH ROW
+BEGIN
+    INSERT INTO `player_writer_fence`
+        (`player_id`, `ownership_generation`, `writer_token`, `state_revision`)
+    VALUES (NEW.`id`, 0, NULL, 0);
+END
+//
+DELIMITER ;
 
 -- Table structure `account_bans`
 CREATE TABLE IF NOT EXISTS `account_bans` (
