@@ -117,4 +117,95 @@ end
 		EXPECT_EQ(baseVersion, readVersion());
 	}
 
+	class DurableWriterFenceMigrationTest : public ::testing::Test {
+	protected:
+		static constexpr int32_t previousVersion = 58;
+		static constexpr int32_t durableFenceVersion = 59;
+		static constexpr std::string_view authorityTable = "player_writer_fence";
+		static constexpr std::string_view creationTrigger = "oncreate_player_writer_fence";
+
+		void SetUp() override {
+			ASSERT_TRUE(DatabaseManager::getDatabaseConfig("db_version", originalVersion));
+			originalVersionCaptured = true;
+			ASSERT_TRUE(rollbackToVersion58());
+		}
+
+		void TearDown() override {
+			if (!originalVersionCaptured) {
+				return;
+			}
+
+			if (originalVersion == durableFenceVersion) {
+				EXPECT_TRUE(rollbackToVersion58());
+				EXPECT_TRUE(DatabaseManager::updateDatabase());
+			} else {
+				EXPECT_TRUE(g_database().executeQuery(fmt::format("DROP TRIGGER IF EXISTS `{}`", creationTrigger)));
+				EXPECT_TRUE(g_database().executeQuery(fmt::format("DROP TABLE IF EXISTS `{}`", authorityTable)));
+				EXPECT_TRUE(DatabaseManager::registerDatabaseConfig("db_version", originalVersion));
+			}
+		}
+
+		bool rollbackToVersion58() const {
+			return g_database().executeQuery(fmt::format("DROP TRIGGER IF EXISTS `{}`", creationTrigger))
+				&& g_database().executeQuery(fmt::format("DROP TABLE IF EXISTS `{}`", authorityTable))
+				&& DatabaseManager::registerDatabaseConfig("db_version", previousVersion);
+		}
+
+		int32_t readVersion() const {
+			int32_t version = -1;
+			EXPECT_TRUE(DatabaseManager::getDatabaseConfig("db_version", version));
+			return version;
+		}
+
+		uint64_t readCount(std::string_view query) const {
+			const auto result = g_database().storeQuery(query);
+			EXPECT_NE(nullptr, result);
+			return result ? result->getNumber<uint64_t>("count") : 0;
+		}
+
+		bool triggerExists() const {
+			return readCount(fmt::format(
+				"SELECT COUNT(*) AS `count` FROM `information_schema`.`TRIGGERS` "
+				"WHERE `TRIGGER_SCHEMA` = DATABASE() AND `TRIGGER_NAME` = '{}'",
+				creationTrigger
+			)) == 1;
+		}
+
+	private:
+		int32_t originalVersion = -1;
+		bool originalVersionCaptured = false;
+	};
+
+	TEST_F(DurableWriterFenceMigrationTest, Version58UpgradeAndRollbackAreDeterministic) {
+		ASSERT_EQ(previousVersion, readVersion());
+		ASSERT_FALSE(DatabaseManager::tableExists(std::string(authorityTable)));
+		ASSERT_FALSE(triggerExists());
+
+		ASSERT_TRUE(DatabaseManager::updateDatabase());
+		EXPECT_EQ(durableFenceVersion, readVersion());
+		EXPECT_TRUE(DatabaseManager::tableExists(std::string(authorityTable)));
+		EXPECT_TRUE(triggerExists());
+		EXPECT_EQ(
+			readCount("SELECT COUNT(*) AS `count` FROM `players`"),
+			readCount("SELECT COUNT(*) AS `count` FROM `player_writer_fence`")
+		);
+		EXPECT_EQ(
+			0,
+			readCount(
+				"SELECT COUNT(*) AS `count` FROM `player_writer_fence` "
+				"WHERE `ownership_generation` <> 0 OR `writer_token` IS NOT NULL OR `state_revision` <> 0"
+			)
+		);
+
+		ASSERT_TRUE(rollbackToVersion58());
+		ASSERT_EQ(previousVersion, readVersion());
+		ASSERT_FALSE(DatabaseManager::tableExists(std::string(authorityTable)));
+		ASSERT_FALSE(triggerExists());
+
+		ASSERT_TRUE(DatabaseManager::updateDatabase());
+		EXPECT_EQ(durableFenceVersion, readVersion());
+		EXPECT_TRUE(DatabaseManager::tableExists(std::string(authorityTable)));
+		EXPECT_TRUE(triggerExists());
+	}
+
 } // namespace it_database_migrations
