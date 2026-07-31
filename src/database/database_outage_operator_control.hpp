@@ -80,7 +80,7 @@ public:
 			return rejected(DatabaseOutageOperatorResumeDisposition::RejectedUnconfirmed, before);
 		}
 		if (request.eventSequence == 0 || request.eventSequence <= before.lastEventSequence
-			|| (before.lastEventTime.has_value() && request.eventTime < *before.lastEventTime)) {
+		    || (before.lastEventTime.has_value() && request.eventTime < *before.lastEventTime)) {
 			return rejected(DatabaseOutageOperatorResumeDisposition::RejectedStaleOrDuplicate, before);
 		}
 		if (request.expectedState != before.state) {
@@ -102,8 +102,8 @@ public:
 		const auto event = stateOwner_.operatorResume(request.eventSequence, request.eventTime);
 		const auto after = stateOwner_.snapshot();
 		if (event.disposition == DatabaseOutageEventDisposition::Applied
-			&& event.after.state == DatabaseOutageState::Healthy
-			&& after.state == DatabaseOutageState::Healthy) {
+		    && event.after.state == DatabaseOutageState::Healthy
+		    && after.state == DatabaseOutageState::Healthy) {
 			return DatabaseOutageOperatorResumeResult {
 				.disposition = DatabaseOutageOperatorResumeDisposition::Applied,
 				.action = DatabaseOutageOperatorAction::ResumeGameLifecycle,
