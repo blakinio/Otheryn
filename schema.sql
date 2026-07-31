@@ -392,7 +392,7 @@ CREATE TABLE IF NOT EXISTS `guild_wars` (
     `started` bigint(15) NOT NULL DEFAULT '0',
     `ended` bigint(15) NOT NULL DEFAULT '0',
     `frags_limit` smallint(4) UNSIGNED NOT NULL DEFAULT '0',
-    `payment` bigint(13) NOT NULL DEFAULT '0',
+    `payment` bigint(13) UNSIGNED NOT NULL DEFAULT '0',
     `duration_days` tinyint(3) UNSIGNED NOT NULL DEFAULT '0',
     INDEX `guild1` (`guild1`),
     INDEX `guild2` (`guild2`),
@@ -434,7 +434,7 @@ CREATE TABLE IF NOT EXISTS `guild_invites` (
 CREATE TABLE IF NOT EXISTS `guild_ranks` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
     `guild_id` int(11) NOT NULL COMMENT 'guild',
-    `name` varchar(255) NOT NULL COMMENT 'rank name',
+    `name` varchar(255) NOT NULL COMMENT 'rank name - leader, vice, member, maybe something else',
     `level` int(11) NOT NULL COMMENT 'rank level - leader, vice, member, maybe something else',
     INDEX `guild_id` (`guild_id`),
     CONSTRAINT `guild_ranks_pk` PRIMARY KEY (`id`),
