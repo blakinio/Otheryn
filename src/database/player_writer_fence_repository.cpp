@@ -89,8 +89,8 @@ PlayerWriterFenceResult PlayerWriterFenceRepository::transfer(
 	const PlayerWriterFenceContext &desired
 ) const {
 	if (!validOwnedContext(current) || !validOwnedContext(desired) || current.playerId != desired.playerId
-		|| desired.ownershipGeneration <= current.ownershipGeneration || desired.stateRevision != current.stateRevision
-		|| current.writerToken == desired.writerToken) {
+	    || desired.ownershipGeneration <= current.ownershipGeneration || desired.stateRevision != current.stateRevision
+	    || current.writerToken == desired.writerToken) {
 		return PlayerWriterFenceResult::MalformedContext;
 	}
 
@@ -118,7 +118,7 @@ PlayerWriterFenceResult PlayerWriterFenceRepository::advanceRevision(
 	PlayerWriterFenceRevision nextRevision
 ) const {
 	if (!validOwnedContext(current) || current.stateRevision == std::numeric_limits<PlayerWriterFenceRevision>::max()
-		|| nextRevision != current.stateRevision + 1) {
+	    || nextRevision != current.stateRevision + 1) {
 		return PlayerWriterFenceResult::MalformedContext;
 	}
 
