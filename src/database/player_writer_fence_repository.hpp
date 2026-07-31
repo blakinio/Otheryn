@@ -3,6 +3,7 @@
 #ifndef USE_PRECOMPILED_HEADERS
 	#include <array>
 	#include <cstdint>
+	#include <string>
 #endif
 
 using PlayerWriterFenceSubjectId = uint32_t;
