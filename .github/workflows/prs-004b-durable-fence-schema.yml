@@ -1,0 +1,138 @@
+---
+name: PRS-004B Durable Fence Schema
+
+on:
+  push:
+    branches:
+      - dudantas/prs-004b-durable-fence-schema
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - schema.sql
+      - data-otservbr-global/migrations/59.lua
+      - tests/integration/database/database_migrations_it.cpp
+      - tests/integration/prs_004b/**
+      - .github/workflows/prs-004b-durable-fence-schema.yml
+      - docs/architecture/prs-004b-durable-writer-fence-schema.md
+      - docs/agents/tasks/active/OTH-20260731-prs004b-durable-fence-schema.md
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  materialize-canonical-schema:
+    if: github.event_name == 'push' && github.ref_name == 'dudantas/prs-004b-durable-fence-schema'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: dudantas/prs-004b-durable-fence-schema
+          fetch-depth: 0
+
+      - name: Materialize version 59 authority schema once
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('schema.sql')
+          text = path.read_text(encoding='utf-8')
+          marker = '-- Table structure `player_writer_fence`'
+          if marker in text:
+              raise SystemExit(0)
+
+          old_version = "('db_version', '58')"
+          if text.count(old_version) != 1:
+              raise SystemExit('expected exactly one schema version 58 marker')
+          text = text.replace(old_version, "('db_version', '59')", 1)
+
+          players_end = """    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+-- Table structure `account_bans`"""
+          if text.count(players_end) != 1:
+              raise SystemExit('unable to locate unique players table boundary')
+
+          authority = """    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+-- Table structure `player_writer_fence`
+CREATE TABLE IF NOT EXISTS `player_writer_fence` (
+    `player_id` int(11) NOT NULL,
+    `ownership_generation` bigint(20) UNSIGNED NOT NULL DEFAULT '0',
+    `writer_token` binary(16) DEFAULT NULL,
+    `state_revision` bigint(20) UNSIGNED NOT NULL DEFAULT '0',
+    CONSTRAINT `player_writer_fence_pk` PRIMARY KEY (`player_id`),
+    CONSTRAINT `player_writer_fence_token_uq` UNIQUE (`writer_token`),
+    CONSTRAINT `player_writer_fence_active_ck` CHECK (
+        (`ownership_generation` = 0 AND `writer_token` IS NULL)
+        OR (`ownership_generation` > 0 AND `writer_token` IS NOT NULL)
+    ),
+    CONSTRAINT `player_writer_fence_player_fk`
+    FOREIGN KEY (`player_id`) REFERENCES `players` (`id`)
+    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+DELIMITER //
+CREATE TRIGGER `oncreate_player_writer_fence` AFTER INSERT ON `players`
+FOR EACH ROW
+BEGIN
+    INSERT INTO `player_writer_fence`
+        (`player_id`, `ownership_generation`, `writer_token`, `state_revision`)
+    VALUES (NEW.`id`, 0, NULL, 0);
+END
+//
+DELIMITER ;
+
+-- Table structure `account_bans`"""
+          text = text.replace(players_end, authority, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+
+          if git diff --quiet -- schema.sql; then
+            exit 0
+          fi
+
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add schema.sql
+          git commit -m "build(database): materialize durable fence schema"
+          git push origin HEAD:dudantas/prs-004b-durable-fence-schema
+
+  durable-fence-schema:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: root
+        ports:
+          - 3306/tcp
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -proot"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install MariaDB client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends mariadb-client
+
+      - name: Validate clean import, constraints and rollback
+        env:
+          TEST_DB_HOST: 127.0.0.1
+          TEST_DB_PORT: ${{ job.services.mariadb.ports[3306] }}
+          TEST_DB_USER: root
+          TEST_DB_PASSWORD: root
+          TEST_DB_NAME: prs004b_test
+        run: bash tests/integration/prs_004b/run_durable_fence_schema.sh
