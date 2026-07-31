@@ -434,7 +434,7 @@ CREATE TABLE IF NOT EXISTS `guild_invites` (
 CREATE TABLE IF NOT EXISTS `guild_ranks` (
     `id` int(11) NOT NULL AUTO_INCREMENT,
     `guild_id` int(11) NOT NULL COMMENT 'guild',
-    `name` varchar(255) NOT NULL COMMENT 'rank name - leader, vice, member, maybe something else',
+    `name` varchar(255) NOT NULL COMMENT 'rank name',
     `level` int(11) NOT NULL COMMENT 'rank level - leader, vice, member, maybe something else',
     INDEX `guild_id` (`guild_id`),
     CONSTRAINT `guild_ranks_pk` PRIMARY KEY (`id`),
