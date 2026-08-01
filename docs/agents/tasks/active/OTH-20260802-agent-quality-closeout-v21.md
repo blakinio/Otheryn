@@ -1,6 +1,6 @@
 ---
 task_id: OTH-20260802-agent-quality-closeout-v21
-status: implementing
+status: validating
 project_lane: otheryn-governance
 policy_version: 2
 task_kind: integration
@@ -8,18 +8,18 @@ implementation_authorized: false
 decomposition_decision: single
 context_pressure: medium
 context_growth: stable
-phase: integrate
+phase: validate
 session_id: chat-20260802-quality-v21
 session_role: coordinator
 execution_mode: chat-github
 branch: dudantas/agent-quality-closeout-v21
 base_branch: main
-start_sha: 63a6b9a42a49daf00295f490e18985a276cc8ebd
+start_sha: 1d5e8768cc6229ee5632530714c43bbc0d801378
 issue: ""
-feature_pr: ""
+feature_pr: "299"
 created: 2026-08-02
-updated: 2026-08-02T00:20:00+02:00
-lease_expires_at: 2026-08-02T02:20:00+02:00
+updated: 2026-08-02T00:24:00+02:00
+lease_expires_at: 2026-08-02T02:24:00+02:00
 owned_paths:
   - docs/agents/AGENT_QUALITY_AND_CLOSEOUT.md
   - docs/agents/PROMPTING_HANDOVER.md
@@ -45,12 +45,12 @@ Make outcome-based evals, trust boundaries, full-stack vertical slices, independ
 ```yaml
 checkpoint_version: 1
 policy_version: 2
-updated_at: 2026-08-02T00:20:00+02:00
-head: 63a6b9a42a49daf00295f490e18985a276cc8ebd
+updated_at: 2026-08-02T00:24:00+02:00
+head: 1d5e8768cc6229ee5632530714c43bbc0d801378
 branch: dudantas/agent-quality-closeout-v21
-pr: none
-status: implementing
-phase: integrate
+pr: 299
+status: validating
+phase: validate
 run_scope: autonomous_program
 continuation_policy: continue_until_real_stop
 task_completion_policy: finalize_archive_and_continue
@@ -61,10 +61,11 @@ owned_paths:
   - docs/agents/tasks/active/OTH-20260802-agent-quality-closeout-v21.md
 proven:
   - The v2.1 contract exists and is mandatory in the handover.
+  - PR 299 owns the governance contract, handover integration, and task record.
 derived:
   - Future substantial work must pass the integrated quality and closeout gate.
 unknown:
-  - Exact-head workflow results and PR number.
+  - Exact-head Required workflow result after this PR binding update.
 conflicts: []
 changed_paths:
   - docs/agents/AGENT_QUALITY_AND_CLOSEOUT.md
@@ -72,5 +73,5 @@ changed_paths:
   - docs/agents/tasks/active/OTH-20260802-agent-quality-closeout-v21.md
 validation: []
 blockers: []
-next_action: open the governance PR, record its exact identity, and validate the final head
+next_action: verify exact-head Required workflow for PR 299, then complete merge and archive gates
 ```
