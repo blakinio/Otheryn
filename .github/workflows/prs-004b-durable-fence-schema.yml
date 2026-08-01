@@ -6,7 +6,6 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - data-otservbr-global/migrations/59.lua
-      - tests/integration/database/database_migrations_it.cpp
       - tests/integration/prs_004b/**
       - .github/workflows/prs-004b-durable-fence-schema.yml
       - docs/architecture/prs-004b-durable-writer-fence-schema.md
@@ -16,7 +15,6 @@ on:
       - main
     paths:
       - data-otservbr-global/migrations/59.lua
-      - tests/integration/database/database_migrations_it.cpp
       - tests/integration/prs_004b/**
       - .github/workflows/prs-004b-durable-fence-schema.yml
 
