@@ -4,7 +4,7 @@ status: completed
 feature_pr: 307
 feature_head: 004a39eddf232c6b4215bf86e8c774f716b10cdc
 merge_commit: 1975239d1337a9fa8e7e5c55d4ea548a47d66c1d
-archive_pr: pending
+archive_pr: 308
 completed: 2026-08-02T12:10:00+02:00
 owned_paths: []
 ---
@@ -13,7 +13,7 @@ owned_paths: []
 
 ## Terminal result
 
-PR #307 merged the mandatory GitHub-only execution contract, root bootstrap routing, local agent routing, and gated autonomous merge/auto-merge authority to `main` as `1975239d1337a9fa8e7e5c55d4ea548a47d66c1d`.
+PR #307 merged the mandatory GitHub-only execution contract, root bootstrap routing, local agent routing, and gated autonomous merge/auto-merge authority to `main` as `1975239d1337a9fa8e7e5c55d4ea548a47d66c1d`. PR #308 archives this terminal record and releases ownership.
 
 ## Closeout
 
@@ -44,7 +44,7 @@ final_ci:
 pull_requests:
   terminal_prs:
     - blakinio/Otheryn#307 merged as 1975239d1337a9fa8e7e5c55d4ea548a47d66c1d
-  archive_pr: pending
+  archive_pr: blakinio/Otheryn#308
   unresolved_review_threads: 0
 task_archived_or_terminal: true
 ownership_released: true
