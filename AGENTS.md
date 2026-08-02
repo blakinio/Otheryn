@@ -22,8 +22,8 @@
 - Before committing or pushing, always check `git status --short --branch` and `git branch -vv`.
 - Never push directly to `origin/main`, including from the local `main` branch. Changes targeting `main` must go through a pull request.
 - A working branch must not track `origin/main` unless the current branch is exactly `main`.
-- Create new working branches under the GitHub username prefix `dudantas/`, not `codex/`, unless the user explicitly asks for another name.
-- For feature/fix branches, the upstream must point to the same remote branch name, for example `dudantas/example -> origin/dudantas/example`.
+- Use a dedicated task branch whose name identifies the task. A repository-owner prefix such as `blakinio/` may be used, but no external username is mandatory. Do not use `codex/` unless the owner explicitly requests it.
+- For feature/fix branches, the upstream must point to the same remote branch name, for example `blakinio/example -> origin/blakinio/example`.
 - If a branch is tracking the wrong upstream, stop and fix it before committing or pushing:
   - `git branch --unset-upstream <branch>`
   - then push explicitly with `git push -u origin <branch>` only when the branch should be published.
