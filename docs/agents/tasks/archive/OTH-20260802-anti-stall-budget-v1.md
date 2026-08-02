@@ -3,7 +3,7 @@ task_id: OTH-20260802-anti-stall-budget-v1
 status: completed
 feature_pr: 305
 merge_commit: eaca27e256204c0aa65042e56481da4a3dbd8f88
-archive_pr: pending
+archive_pr: 306
 completed: 2026-08-02T10:58:00+02:00
 owned_paths: []
 ---
@@ -12,7 +12,7 @@ owned_paths: []
 
 ## Terminal result
 
-PR #305 merged the mandatory anti-stall contract, root bootstrap routing and local agent routing to `main` as `eaca27e256204c0aa65042e56481da4a3dbd8f88`.
+PR #305 merged the mandatory anti-stall contract, root bootstrap routing and local agent routing to `main` as `eaca27e256204c0aa65042e56481da4a3dbd8f88`. PR #306 archives this terminal record and releases ownership.
 
 ## Closeout
 
@@ -42,7 +42,7 @@ final_ci:
 pull_requests:
   terminal_prs:
     - blakinio/Otheryn#305 merged as eaca27e256204c0aa65042e56481da4a3dbd8f88
-  archive_pr: pending
+  archive_pr: blakinio/Otheryn#306
   unresolved_review_threads: 0
 task_archived_or_terminal: true
 ownership_released: true
@@ -60,4 +60,4 @@ max_repair_cycles_per_gate: 3
 max_context_reconstruction_attempts: 1
 ```
 
-No material finding or blocker remains. The archive PR is the sole related PR until it merges.
+No material finding or blocker remains. PR #306 is the sole related PR and becomes terminal when merged.
