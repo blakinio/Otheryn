@@ -20,10 +20,10 @@ start_sha: "e6e3c689b786f2618e2fd78d9f36be630f858846"
 issue: ""
 feature_pr: "303"
 merge_commit: "cf7fb8b970d69cb1186254156aee4606808ae0c3"
-archive_pr: "pending"
+archive_pr: "304"
 created: 2026-08-02
-updated: 2026-08-02T09:09:00+02:00
-completed: 2026-08-02T09:09:00+02:00
+updated: 2026-08-02T09:10:00+02:00
+completed: 2026-08-02T09:10:00+02:00
 owned_paths: []
 ---
 
@@ -31,7 +31,7 @@ owned_paths: []
 
 ## Terminal result
 
-PR #303 merged the mandatory root Codex bootstrap to `main` as `cf7fb8b970d69cb1186254156aee4606808ae0c3`. This archive change removes the active task and releases ownership.
+PR #303 merged the mandatory root Codex bootstrap to `main` as `cf7fb8b970d69cb1186254156aee4606808ae0c3`. PR #304 removes the active task, archives this terminal record and releases ownership.
 
 ## Closeout
 
@@ -64,10 +64,10 @@ pull_requests:
   unresolved_review_threads: 0
   terminal_prs:
     - blakinio/Otheryn#303 merged as cf7fb8b970d69cb1186254156aee4606808ae0c3
-  archive_pr: pending
+  archive_pr: blakinio/Otheryn#304
 task_archived_or_terminal: true
 ownership_released: true
 stale_branches_reconciled: true
 ```
 
-No material finding or blocker remains. The archive PR is the sole intentionally open related PR until it merges.
+No material finding or blocker remains. PR #304 is the sole intentionally open related PR and becomes terminal when merged.
