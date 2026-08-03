@@ -8,13 +8,15 @@ Audyt utrzymuje dokładnie 103 kanoniczne elementy. Piętnaście wierszy ma stat
 
 | Repozytorium | Rewizja |
 |---|---|
-| `blakinio/Otheryn` | `1f316400053f489e58608d13961069835871ab0e` |
+| `blakinio/Otheryn` | task-start audited snapshot `1f316400053f489e58608d13961069835871ab0e`; final drift head `3186099e69b05ba17966f1ebe8caeedc3302ae51` |
 | `opentibiabr/canary` | `f7ae4d17ed1eb58621a9bed3e0a7d912b9eb9c32` |
 | `zimbadev/crystalserver` | `8eb99d0583ccb52cc368cb45c65d97ec9fbd181e` |
 | `blakinio/canary` | `a288bfaf5a3016a9c3b01c4848d242dc7a1fb98f` |
 | `blakinio/otclient` | `2f0bff09cd9f5a9acf2629d7ba080e98d3f5f1ad` |
 
-Cztery repozytoria porównawcze nie zmieniły głównego SHA względem końca poprzedniego audytu. Otheryn przeszedł wyłącznie przez merge poprzednich artefaktów audytu i archiwizację; porównanie `ae4373ad… -> 1f316400…` obejmuje tylko ścieżki `docs/agents/**`.
+Cztery repozytoria porównawcze nie zmieniły głównego SHA względem końca poprzedniego audytu. Po starcie zadania Otheryn przeszedł z `1f316400…` do `3186099e…` przez PR `#285` (PRS-004C durable writer-fence CAS). Zmiana dotyczy nowego repozytorium CAS, migracji 60, schematu, testów i workflow; nie pokrywa się z dokładnymi ścieżkami 15 potwierdzonych luk. Dla wierszy multiworld i binary player persistence ponownie sprawdzono granicę: nowy writer-fence nie definiuje world identity/routingu i nie zastępuje player persistence, więc decyzje pozostają niezmienione.
+
+Pola `otheryn_exact_revision` w dwóch inwentarzach zachowują dokładny snapshot, na którym wykonano pełną analizę wierszową (`1f316400…`). Późniejszy head `3186099e…` jest udokumentowany i zweryfikowany jako osobny target-drift, a nie retroaktywnie przedstawiany jako pierwotny snapshot.
 
 ## Odzyskanie zakresu kanonicznego
 
@@ -89,6 +91,6 @@ Nie zmieniono żadnego bucketu poprzedniego audytu bez nowego dowodu. Dwa wiersz
 
 ## Drift
 
-Wszystkie 34 kanoniczne PR-y pozostają otwarte z niezmienionymi headami. Wszystkie 69 kanonicznych Issues pozostają otwarte. Upstream Canary `#4059` pojawił się po zamrożeniu zakresu i nie jest częścią 103 wierszy.
+Wszystkie 34 kanoniczne PR-y pozostają otwarte z niezmienionymi headami. Wszystkie 69 kanonicznych Issues pozostają otwarte. Upstream Canary `#4059` pojawił się po zamrożeniu zakresu i nie jest częścią 103 wierszy. Otheryn main przeszedł do `3186099e69b05ba17966f1ebe8caeedc3302ae51`; jego jedyny nowy pakiet PRS-004C został zintegrowany z gałęzią audytu i nie zmienił żadnej klasyfikacji.
 
 Szczegółowe 103 wiersze znajdują się w `matrix.md`, a pełne pola dowodowe w deterministycznych `inventory.json.gz` i `inventory.csv.gz`.
