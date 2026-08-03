@@ -4,8 +4,8 @@ Audit: `OTERYN-20260803-post-oam-upstream-open-items-delta-audit`
 
 ## Durable files
 
-- `inventory.json` — complete 103-row machine-readable inventory.
-- `inventory.csv` — tabular export of the same inventory.
+- `inventory.json.gz` — gzip-compressed complete 103-row machine-readable JSON inventory.
+- `inventory.csv.gz` — gzip-compressed tabular CSV export of the same inventory.
 - `report.md` — human-readable reconciliation and independent challenge.
 - `validation.txt` — deterministic local artifact validation result.
 
