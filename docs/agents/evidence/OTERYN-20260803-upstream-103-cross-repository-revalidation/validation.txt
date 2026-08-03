@@ -1,0 +1,27 @@
+FAIL
+
+audit_id=OTERYN-20260803-upstream-103-cross-repository-revalidation
+checked_at=2026-08-03T20:11:08Z
+canonical_path=docs/agents/evidence/OTERYN-20260803-post-oam-upstream-open-items-delta-audit/inventory.json.gz
+canonical_blob_sha=40f878d0214783f3b496d4b6ef18a03da416c91c
+base64_decoded_bytes=12871
+recomputed_git_blob_sha=40f878d0214783f3b496d4b6ef18a03da416c91c
+git_blob_identity=PASS
+gzip_header=PASS
+gzip_embedded_filename=inventory.json
+gzip_strict_decompression=FAIL: CRC check failed
+deflate_stream_eof=PASS
+raw_deflate_output_bytes=224725
+gzip_footer_isize=224475
+isize_difference_bytes=250
+gzip_footer_crc32=0xdb147cff
+computed_output_crc32=0x5f82b6a0
+json_parse=FAIL: Expecting ',' delimiter at line 3125 column 91 (character 126968)
+previous_validation_claim=PASS with json_rows=103, unique_keys=103 and errors=[]
+previous_validation_blob_sha=8c7ee97508c41ba77e47aef0ccda89597a24d7f7
+conflict=the immutable canonical Git blob is internally corrupt and contradicts its predecessor validation record
+canonical_scope_validation=BLOCKED
+rows_compared=0
+runtime_e2e=NOT_APPLICABLE: Documentation/evidence-only cross-repository audit; no runtime behavior was changed.
+executable_paths_changed=0
+result=BLOCKED_BY_CANONICAL_INVENTORY_INTEGRITY_CONFLICT
