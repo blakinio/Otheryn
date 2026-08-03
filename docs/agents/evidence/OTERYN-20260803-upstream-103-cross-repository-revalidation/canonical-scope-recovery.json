@@ -1,0 +1,21 @@
+{
+  "schema": "canonical-scope-recovery-v1",
+  "status": "PASS",
+  "basis": "The predecessor inventory.csv.gz is byte-valid, strictly decompresses, and contains the exact 103 canonical rows matching the archived report and validation totals. It is used only to recover canonical row identity and predecessor fields; newly opened upstream items remain drift-only.",
+  "source_csv_path": "docs/agents/evidence/OTERYN-20260803-post-oam-upstream-open-items-delta-audit/inventory.csv.gz",
+  "source_csv_git_blob_sha": "8ae3ddb89cebe581d236fcd0d4c6c74420bd9b30",
+  "source_csv_sha256": "963332f099e78c5a22ba646b1925ada0bfb0b961249970af531e09a120f7bcf8",
+  "source_json_path": "docs/agents/evidence/OTERYN-20260803-post-oam-upstream-open-items-delta-audit/inventory.json.gz",
+  "source_json_git_blob_sha": "40f878d0214783f3b496d4b6ef18a03da416c91c",
+  "source_json_status": "CORRUPT",
+  "row_count": 103,
+  "unique_canonical_keys": 103,
+  "canonical_key_format": "<source_repository>:<item_type>:<item_number>",
+  "source_totals": {
+    "opentibiabr/canary:pull_request": 14,
+    "opentibiabr/canary:issue": 60,
+    "zimbadev/crystalserver:pull_request": 20,
+    "zimbadev/crystalserver:issue": 9
+  },
+  "recovery_nonclaim": "CSV values are preserved as canonical predecessor evidence. This recovery does not claim the unavailable original JSON typing or repair the archived corrupt blob."
+}
