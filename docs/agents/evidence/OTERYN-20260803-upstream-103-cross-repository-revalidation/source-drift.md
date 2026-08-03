@@ -1,6 +1,6 @@
-# Canonical source drift
+# Canonical source and target drift
 
-Audit checkpoint: 2026-08-03T20:57:00Z
+Audit checkpoint: 2026-08-03T21:41:08Z
 
 ## Canonical pull requests
 
@@ -19,9 +19,24 @@ All 69 canonical source issues remain open:
 - CrystalServer: 9/9 open;
 - closed canonical issues: 0.
 
-## Non-canonical drift
+Reliable comment/update delta metadata was unavailable, so no claim is made that Issue discussions are unchanged.
+
+## Non-canonical source drift
 
 Upstream Canary Issue `#4059` opened after the predecessor collection. It is recorded as source drift only and does not replace or expand any canonical row.
+
+## Otheryn target drift
+
+- task-start audited snapshot: `1f316400053f489e58608d13961069835871ab0e`;
+- final drift head integrated into the audit branch: `3186099e69b05ba17966f1ebe8caeedc3302ae51`;
+- drift commit: `feat(resilience): add durable writer-fence CAS repository (#285)`;
+- changed domains: writer-fence repository, migration 60, schema constraint, database integration tests, dedicated workflow and PRS task/architecture documentation;
+- overlap with exact paths supporting the 15 confirmed gaps: none;
+- multiworld consequence: no world identity, account/character routing or topology contract was introduced;
+- binary-persistence consequence: player persistence was not replaced by a binary model;
+- classification changes caused by target drift: none.
+
+The machine-readable rows preserve the exact task-start snapshot in `otheryn_exact_revision`. Final target drift is separately pinned here and in `report.md` rather than silently rewriting the historical analysis revision.
 
 ## Exact-head list
 
