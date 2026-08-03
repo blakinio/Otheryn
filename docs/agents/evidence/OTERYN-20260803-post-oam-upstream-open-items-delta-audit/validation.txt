@@ -1,0 +1,12 @@
+PASS
+audit_id=OTERYN-20260803-post-oam-upstream-open-items-delta-audit
+json_rows=103
+csv_rows=103
+unique_keys=103
+candidate_rows=15
+distinct_target_issues=14
+dispositions={'ADAPT_CANDIDATE': 13, 'DEFER_BLOCKED': 6, 'DO_NOT_MIGRATE': 20, 'NEEDS_REVALIDATION': 61, 'REUSE_CANDIDATE': 1, 'REWRITE_CANDIDATE': 1, 'SUPERSEDED': 1}
+executable_paths_changed=0
+runtime_e2e=NOT_APPLICABLE
+metadata_nulls_preserved_not_invented=true
+errors=[]
