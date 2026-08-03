@@ -120,7 +120,7 @@ end
 	class DurableWriterFenceMigrationTest : public ::testing::Test {
 	protected:
 		static constexpr int32_t previousVersion = 58;
-		static constexpr int32_t durableFenceVersion = 59;
+		static constexpr int32_t durableFenceVersion = 60;
 		static constexpr std::string_view authorityTable = "player_writer_fence";
 		static constexpr std::string_view creationTrigger = "oncreate_player_writer_fence";
 
