@@ -2,7 +2,7 @@
 
 Validator: `agent-20260803-cross-revalidation-validator-001`
 
-Scope: generated evidence only plus exact repository/source references named by the producer. The validator did not accept the producer summary as proof.
+Scope: generated evidence plus exact repository/source references named by the producer. The validator did not accept the producer summary as proof.
 
 ## Challenges performed
 
@@ -18,14 +18,15 @@ Scope: generated evidence only plus exact repository/source references named by 
 - `matrix.md` contains 103 visible item rows;
 - `decision-brief.md` contains 103 unique source-item bullets;
 - canonical source drift is separated from the fixed 103-row scope;
+- Otheryn target drift `1f316400… -> 3186099e…` was inspected: PRS-004C does not overlap confirmed-gap paths and does not resolve multiworld or binary-persistence boundaries;
 - no generated evidence claims unchanged Issue comments because reliable comment-delta metadata was unavailable;
-- changed-path plan contains only the active audit task and audit evidence directory.
+- changed paths contain only the audit task/evidence plus the non-overlapping current-main merge ancestry.
 
 ## Material findings
 
 None open.
 
-During validation, the predecessor JSON corruption remained preserved as a conflict rather than silently repaired. Canonical scope recovery is based on the immutable valid CSV companion and does not claim the lost JSON typing.
+The predecessor JSON corruption remains preserved as a conflict rather than silently repaired. Canonical scope recovery is based on the immutable valid CSV companion and does not claim the lost JSON typing. The per-row Otheryn snapshot remains `1f316400…`; final target drift `3186099e…` is separately pinned and falsified.
 
 ## Result
 
