@@ -1,0 +1,17 @@
+PASS
+audit_id=OTERYN-20260803-post-oam-upstream-open-items-delta-audit
+final_query_timestamp=2026-08-03T18:29:39Z
+json_rows=103
+csv_rows=103
+unique_keys=103
+candidate_rows=15
+distinct_target_issues=14
+final_open_pr_heads_refetched=34
+unchanged_final_pr_heads=33
+reconciled_changed_pr_heads=opentibiabr/canary#4025:c924fdb05b0e8f6f7fccd248eceeb48ff27c7648->38878bd04536ef20a7f2560b56d86dc742f28bfa
+final_otclient_head=2f0bff09cd9f5a9acf2629d7ba080e98d3f5f1ad
+dispositions={'ADAPT_CANDIDATE': 13, 'DEFER_BLOCKED': 6, 'DO_NOT_MIGRATE': 20, 'NEEDS_REVALIDATION': 61, 'REUSE_CANDIDATE': 1, 'REWRITE_CANDIDATE': 1, 'SUPERSEDED': 1}
+executable_paths_changed=0
+runtime_e2e=NOT_APPLICABLE
+metadata_nulls_preserved_not_invented=true
+errors=[]
