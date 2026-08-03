@@ -10,10 +10,10 @@ Audit identity: `OTERYN-20260803-post-oam-upstream-open-items-delta-audit`
 | `blakinio/canary` | `a288bfaf5a3016a9c3b01c4848d242dc7a1fb98f` | historical governance only |
 | `opentibiabr/canary` | `f7ae4d17ed1eb58621a9bed3e0a7d912b9eb9c32` | upstream implementation evidence |
 | `zimbadev/crystalserver` | `8eb99d0583ccb52cc368cb45c65d97ec9fbd181e` | donor/comparison evidence |
-| `blakinio/otclient` | `4fefec3ab3a1b6401cd3b89b6e0bb1dbcb2ce2a7` | read-only client correspondence evidence |
+| `blakinio/otclient` | task start `4fefec3ab3a1b6401cd3b89b6e0bb1dbcb2ce2a7`; final `2f0bff09cd9f5a9acf2629d7ba080e98d3f5f1ad` | read-only client correspondence evidence; drift was CI-workflow-only |
 
 Task-start external query: `2026-08-03T17:31:00Z`.
-Final inventory query represented by this report: `2026-08-03T18:00:30Z`.
+Final inventory and all-open-PR-head re-query represented by this report: `2026-08-03T18:29:39Z`.
 
 ## 2. Coverage reconciliation
 
@@ -80,19 +80,104 @@ The two rows for upstream Issue `#3986` and PR `#4058` represent one underlying 
 | `opentibiabr/canary#4056` | PARTIALLY_PROVEN / NEEDS_REVALIDATION | medium | perform bounded target proof only if the corresponding target capability is authorized |
 | `opentibiabr/canary#4052` | PARTIALLY_PROVEN / NEEDS_REVALIDATION | low | perform bounded target proof only if the corresponding target capability is authorized |
 | `opentibiabr/canary#4033` | BLOCKED / DEFER_BLOCKED | high | do not create an implementation Issue until the named architecture decision exists |
-| `opentibiabr/canary#2826` | BLOCKEDQ‘T—Ð“ÐÒÑQYÚÈ›ÝÜ™X]H[ˆ[\[Y[][Ûˆ\ÜÝYH[[H˜[YY\˜Ú]XÝ\™HXÚ\Ú[Ûˆ^\ÝÈŸÜ[XšXXœ‹ØØ[˜\žHÍMØT•PSWÔ“Õ‘SˆÈ‘QQ×Ô‘USQUSÓˆYY][H™]Z[ˆ\X[›ÛÙŽÈÛÝ\˜ÙK[X\[™^XÝ\™Ù][H›ÛÙˆ\™HÝ[™\]Z\™YŸÜ[XšXXœ‹ØØ[˜\žHÌÍŒXS”“Õ‘SˆÈ‘QQ×Ô‘USQUSÓˆYÚ™]Z[ˆ\È™]š\Ú[Û‹\[›™Y]šY[˜ÙNÈÜ™X]H›È\™Ù]\ÜÝYH[[^XÝ\™Ù]›ÛÙˆ^\ÝÈŸÜ[XšXXœ‹ØØ[˜\žHÌÍLLØS”“Õ‘SˆÈ‘QQ×Ô‘USQUSÓˆYÚ™]Z[ˆ\È™]š\Ú[Û‹\[›™Y]šY[˜ÙNÈÜ™X]H›È\™Ù]\ÜÝYH[[^XÝ\™Ù]›ÛÙˆ^\ÝÈŸÜ[XšXXœ‹ØØ[˜\žHÌÍØS”“Õ‘SˆÈ‘QQ×Ô‘USQUSÓˆYÚ™]Z[ˆ\È™]š\Ú[Û‹\[›™Y]šY[˜ÙNÈÜ™X]H›È\™Ù]\ÜÝYH[[^XÝ\™Ù]›ÛÙˆ^\ÝÈŸÜ[XšXXœ‹ØØ[˜\žHÌÌÍÍS”“Õ‘SˆÈ‘QQ×Ô‘USQUSÓˆYÚ™]Z[ˆ\È™]š\Ú[Û‹\[›™Y]šY[˜ÙNÈÜ™X]H›È\™Ù]\ÜÝYH[[^XÝ\™Ù]›ÛÙˆ^\ÝÈŸš[X˜Y]‹ØÜž\Ý[Ù\™\ˆÎLØT•PSWÔ“Õ‘SˆÈ‘QQ×Ô‘USQUSÓˆYY][H™]Z[ˆ\È™]š\Ú[Û‹\[›™Y]šY[˜ÙNÈÜ™X]H›È\™Ù]\ÜÝYH[[^XÝ\™Ù]›ÛÙˆ^\ÝÈŸš[X˜Y]‹ØÜž\Ý[Ù\™\ˆÎLØ“ÐÒÑQÈQ‘T—Ð“ÐÒÑQYÚY™\ˆÚ]Ý]\™Ù]\ÜÝYHŸš[X˜Y]‹ØÜž\Ý[Ù\™\ˆÍÎXT•PSWÔ“Õ‘SˆÈ‘QQ×Ô‘USQUSÓˆYÚ™]Z[ˆ\È™]š\Ú[Û‹\[›™Y]šY[˜ÙNÈÜ™X]H›È\™Ù]\ÜÝYH[[^XÝ\™Ù]›ÛÙˆ^\ÝÈŸš[X˜Y]‹ØÜž\Ý[Ù\™\ˆÍLX“ÐÒÑQÈQ‘T—Ð“ÐÒÑQYÚY™\ˆÚ]Ý]\™Ù]\ÜÝYHŸš[X˜Y]‹ØÜž\Ý[Ù\™\ˆÍX“ÐÒÑQÈQ‘T—Ð“ÐÒÑQYÚY™\ˆÚ]Ý]\™Ù]\ÜÝYHŸš[X˜Y]‹ØÜž\Ý[Ù\™\ˆÎL˜T•PSWÔ“Õ‘SˆÈ‘QQ×Ô‘USQUSÓˆYÚ™]Z[ˆÚ][šÙYˆ]šY[˜ÙNÈ^XÝ\™Ù]X\ÛY™XÞXÛH›ÛÙˆ™[XZ[œÈ™\]Z\™YŸš[X˜Y]‹ØÜž\Ý[Ù\™\ˆÎL“ÐÒÑQÈQ‘T—Ð“ÐÒÑQYÚ›Ü›X[^™HÚ]H[šÙYˆ˜[Z[NÈÜ™X]H›È\™Ù]\ÜÝYH‚[\ÜÝYK[Û›H[YØ][ÛœÈÚ]Ý]^XÝ\™Ù]™\›ÙXÝ[ÛˆÜˆÝ]XÈ›ÛÙˆ™[XZ[ˆS”“Õ‘SˆÈ‘QQ×Ô‘USQUSÓ˜È›ÈÜXÝ[]]™HÝ\ž[ˆ[\[Y[][Ûˆ\ÜÝYHØ\ÈÜ™X]Y›Üˆ[K‚‚ˆÈÈËˆÜ™X]YÝ\ž[ˆ\ÜÝY\Â‚˜ÌÌLØÌÌMÌÌMXÌÌM˜ÌÌMØÌÌNÌÌNXÌÌŒÌÌŒXÌÌŒ˜ÌÌŒØÌÌÌÌXÌÌ˜‚‚‘XXÚ\ÜÝYH[œÈH^\›˜[™]š\Ú[Ûˆ[™]Y]YÝ\ž[ˆXY˜[Y\È\™Ù][ÝÛ™Y]ËXØÙ\[˜ÙHÜš]\šXK›ØÝ\ÙYÚ[YÜ˜][Û‹ÑL‘H™\]Z\™[Y[Ë›Û‹YÛØ[È[™\[™[˜ÞH›Ý[™\šY\Ë‚‚ˆÈÈˆ™Z™XÝYZYÜ˜][Ûˆ\Ý\Ù\Â‚‹H
-Š˜[ËXÛÛ[]\]NŠŠˆš[X˜Y]‹ØÜž\Ý[Ù\™\ˆÎKš[X˜Y]‹ØÜž\Ý[Ù\™\ˆÍÎM‹H
-Š˜ÛÛX˜]ŠŠˆš[X˜Y]‹ØÜž\Ý[Ù\™\ˆÎÂ‹H
-Š˜Ý\ÝÛKYØ[Y\^NŠŠˆš[X˜Y]‹ØÜž\Ý[Ù\™\ˆÍŒÂ‹H
-Š™Z[K\™]Ø\™ŠŠˆš[X˜Y]‹ØÜž\Ý[Ù\™\ˆÍÍ‚‹H
-Š™\Þ[Y[[Ü\˜][ÛœÎŠŠˆÜ[XšXXœ‹ØØ[˜\žHÍ‹H
-Š›[ÛœÝ\‹Y]\^ÎŠŠˆÜ[XšXXœ‹ØØ[˜\žHÍŽB‹H
-Šœ\ÚXØ[XÛY[YL™NŠŠˆš[X˜Y]‹ØÜž\Ý[Ù\™\ˆÎ‚‹H
-Šœ^Y\‹\\œÚ\Ý[˜ÙNŠŠˆš[X˜Y]‹ØÜž\Ý[Ù\™\ˆÍMB‹H
-Šœ›ÝØÛÛXÛY[Y™X]\™NŠŠˆÜ[XšXXœ‹ØØ[˜\žHÍÎš[X˜Y]‹ØÜž\Ý[Ù\™\ˆÎL‚‹H
-Š[šÛ›ÝÛŽŠŠˆÜ[XšXXœ‹ØØ[˜\žHÍËÜ[XšXXœ‹ØØ[˜\žHÌÎKÜ[XšXXœ‹ØØ[˜\žHÌÍÌÜ[XšXXœ‹ØØ[˜\žHÌÍLËÜ[XšXXœ‹ØØ[˜\žHÌÌÍËÜ[XšXXœ‹ØØ[˜\žHÌÌÌLÜ[XšXXœ‹ØØ[˜\žHÌÌNKÜ[XšXXœ‹ØØ[˜\žHÍŒNÜ[XšXXœ‹ØØ[˜\žHÍŒMB‚Y][Û˜[^XÚ]™Z™XÝ[ÛœÎ‚‚‹H›ÈÐSKLMHØ\ÈÜ™X]YÂ‹HHØ[˜\žH\Ý™X[H[[YÙ[˜ÙHØØ[›™\‹ÛÜšÙ›ÝË™YÚ\ÝžH[™™\ÜX›\Ú\ˆÙ\™H›Ý\XØ]Y[ˆÝ\ž[ŽÂ‹HÚÛKY]\XÚËÚÛK[X\ÚÛK[[Ù[H[™Ù[™\˜]Y[È[\ÜÈÙ\™H™Z™XÝYÂ‹HÜž\Ý[Ù\™\ˆ[™\Ý™X[HØ[˜\žH^™]šY]ÜÈ[™ÒHÙ\™H™X]Y\È]šY[˜ÙHÛZ[\Ë›Ý]]Üš]NÂ‹H[\Ü˜\žHÕÔˆÛÜšØ\›Ý[™È[™^PPPËÙ\Þ[Y[[Û›HÚ[™Ù\ÈÙ\™H›Ý[\ÜY[ÈHÙ\™\ˆ\™Ù]‚‚ˆÈÈKˆÐSH™XÛÛ˜Ú[X][Û‚‚•HÛÛ\]YÐSKLH›ÝYÚÐSKLM˜\Ù[[™H™[XZ[œÈ\›Z[˜[ˆ\È]Y]ÛÛœÝ[YYH\™Ù]\˜Ú]XÝ\™H[™™[]˜[™]Z[™Y›Ý[™\šY\È\Ý[ˆ[YN‚‚‹H]Y\ÝËÙ]\XÚÈš[™[™ÜÈ\™HY\][ÛˆØ[™Y]\ÈÛ›HÚ[ˆ^XÝ\™Ù]ØÜš\È›Ý™HHØ[YHY™XÝÂ‹H›ÝØÛÛØÛY[š[™[™ÜÈ™\]Z\™HXZ[Z[™YXÛY[ÛÜœ™\ÜÛ™[˜ÙH[™\™Ù]XÚÙ]Ü›Ùš[H]šY[˜ÙNÂ‹H\œÚ\Ý[˜ÙHÚ[™Ù\ÈØ[››ÝÜ›ÜÜÈÔSÒÕ‹ÛY™XÞXÛH›Ý[™\šY\ÈžHÛ›ÜˆÚ[Z[\š]NÂ‹H\Þ[Y[Ü\˜][ÛœÈ[™\ÚXØ[XÛY[[™œ˜\ÝXÝ\™H™[XZ[ˆÝ]ÚYH]]ÛX]XÈZYÜ˜][ÛŽÂ‹H\Ý™X[H[[YÙ[˜ÙH™[XZ[œÈØ[˜\žK[ÝÛ™Y[™\ÈÛÛœÝ[YY™XY[Û›K‚‚“›ÈÛÛ\]YÐSHXÚØYÙHØ\È™[Ü[™Y‚‚ˆÈÈLˆÜ[‹Z][HšY‚Üž\Ý[Ù\™\ˆ\ÜÝYHÍLÍX\X\™Y[ˆH]™HÛÛXÝ[ÛˆY\ˆH\ÚË\Ý\ÛÝ[ˆ]\È™\™\Ù[Y\ÈS”“Õ‘SˆÈ‘QQ×Ô‘USQUSÓ˜ˆ›ÈÛÝ\˜ÙHˆXYÚ[™ÙHÜˆÛÜÝ\™HØ\È\ÙYÈ™[[Ý™HH›ÝÈÚ]Ý]™XÛÛ˜Ú[X][Û‹‚‚ˆÈÈLKˆ[™\[™[Ú[[™ÙB‚Hœ™\Ú˜[ÚYšXØ][Ûˆ\ÜÈÚ[[™ÙY‚‚‹HÛÛ\]H›Ý\‹XÛÛXÝ[ÛˆÛÝ™\˜YÙH[™HLˆOˆLØšYÂ‹H]™\žHÜš]XØ[ÚYÚØ[™Y]NÂ‹HHÛÛH‘UTÑWÐÐS‘QUX
-Î‹ÈÌÌNX
-NÂ‹HH]ÛZXÚ]HÛZ[H[ˆÛ›ÜˆˆÌLŒ˜™\Ý[[™È[ˆ‘UÔ’UWÐÐS‘QUX˜]\ˆ[ˆ™]\ÙNÂ‹H™\™\Ù[]]™H™Z™XÝY][\Îˆ^PPPÈØÚÙ\‹[\Ü˜\žHÕÔˆ[Ý[ÛÜšØ\›Ý[™]]ÚX[Ø]]ÜÝ[Û‹[È[ÛœÝ\ˆÛÝ[ÈÙX\ÛÛ˜[ÛÛ[š[˜\žH^Y\ˆØ]™H[™œ›ØYÊÊÈZ[K\™]Ø\™™\XÙ[Y[Â‹H\XØ]H˜[Z[Y\ÎˆÌÎN‹ÈÍNÎLÈÎLËÈÍÌËÈÍXÌŽ‹ÈÍLXÍÎKÈÎL˜ÍÎMÈÎXÂ‹HÛÛ™›XÝÈÚ]ÛÛ\]YÐSHÛÛ˜XÝÈ[™XØÚY[[\XØ][ÛˆÙˆ\Ý™X[H[[YÙ[˜ÙK‚‚“X]\šX[Ú[[™ÙHÝ]ÛÛY\ÈÙ\™H[˜ÛÜœÜ˜]Y[ÈHš[˜[Û\ÜÚYšXØ][ÛœÈ[™\ÜÝYH›Ý[™\šY\Ë‚‚ˆÈÈL‹ˆ˜[Y][Ûˆ[™^XÚ]›Û˜ÛZ[\Â‚•˜[Y]Y‚‚‹HLÈ[š\]YH›ÝÜÎÂ‹HÛÝ\˜ÙHÝ[ÈM
-ÈŒ
-ÈŒ
-ÈXÂ‹H]™\žH›ÝÈ\È[ˆ]šY[˜ÙHÝ]\È[™ZYÜ˜][Ûˆ\ÜÜÚ][ÛŽÂ‹H]™\žHØ[™Y]H›ÝÈ˜[Y\È^XÝ\™Ù]]šY[˜ÙH[™H›Ý[™Y\™Ù]\ÜÝYNÂ‹HM\Ý[˜Ý\™Ù]\ÜÝY\È[šÈ˜XÚÈÈH™\Ü[™[ÜžNÂ‹H\XØ]KÜÝ\\œÙ\ÜÚ[Ûˆ™Y™\™[˜Ù\È™\ÛÛ™HÈ™\™\Ù[Y][\ÎÂ‹H”ÓÓˆ\œÙ\È[™ÔÕˆ›ÝÈÛÝ[X]Ú\È”ÓÓŽÂ‹H]Y]]ÈÛÛZ[ˆØÝ[Y[][Û‹Ù]šY[˜ÙHÛ›NÂ‹H[[YHL‘H›Üˆ\È]Y]ˆ\È“ÕÐTPÐP“X‚‚“Y]Y]H›Û˜ÛZ[NˆHÛÛ›™XÝÜ‰ÜÈÛÛ\]H[È\ÜÝYH]Y\žHÛZ]Y]]Ü‹ØÜ™X]YÝ\]Y˜[Y\È›Üˆ[ÜÝ\ÜÝYH›ÝÜËˆ[È\™H™]Z[™Y[ˆH[™[ÜžH˜]\ˆ[ˆ[™[Yˆ\ÈÙ\È›ÝY™™XÝ][HY[]KÛÝ™\˜YÙKÛÝ\˜ÙH™]š\Ú[Ûˆ›ÜˆœË\™Ù]›ÛÙˆÜˆ\ÜÜÚ][Û‹]H™\ÜÙ\È›ÝÛZ[H[˜]˜Z[X›H\ÜÝYHY]Y]K‚‚’[\[Y[][Ûˆ›Û˜ÛZ[\Î‚‚‹H›È^XÝ]X›HÝ\ž[ˆ™Z]š[ÜˆØ\ÈÚ[™ÙYÂ‹H›ÈØ[™Y]H\ÈXÛ\™Y›ÙXÝ[Û‹\™XYHžH\È]Y]Â‹H›È^\›˜[[\[Y[][Ûˆ\ÈXÛ\™Y]]Üš]]]™NÂ‹H›È[œ›Ý™[ˆ^\›˜[\ÜÝYHØ\ÈÛÛ™\Y[ÈH\™Ù][\[Y[][Ûˆ\ÜÝYNÂ‹H›È›ÝØÛÛ\œÚ\Ý[˜ÙKX\ÜˆÛY[L‘HØ\È\™›Ü›YYÛˆ™Z[ˆÙˆ]\™H[\[Y[][ÛˆXÚØYÙ\Ë‚‚ˆÈÈ™^XÝ[Û‚‚“Y\™ÙH[™\˜Ú]™HHØÝ[Y[][Û‹[Û›H]Y]ˆY\ˆ^XÝZXY™\]Z\™YÒH[™™]šY]Ë]™XYÚXÚÜÈ\ÜË‚
+| `opentibiabr/canary#2826` | BLOCKED / DEFER_BLOCKED | high | do not create an implementation Issue until the named architecture decision exists |
+| `opentibiabr/canary#4057` | PARTIALLY_PROVEN / NEEDS_REVALIDATION | medium | retain partial proof; source-map and exact target tile proof are still required |
+| `opentibiabr/canary#3605` | UNPROVEN / NEEDS_REVALIDATION | high | retain as revision-pinned evidence; create no target Issue until exact target proof exists |
+| `opentibiabr/canary#3513` | UNPROVEN / NEEDS_REVALIDATION | high | retain as revision-pinned evidence; create no target Issue until exact target proof exists |
+| `opentibiabr/canary#3427` | UNPROVEN / NEEDS_REVALIDATION | high | retain as revision-pinned evidence; create no target Issue until exact target proof exists |
+| `opentibiabr/canary#3374` | UNPROVEN / NEEDS_REVALIDATION | high | retain as revision-pinned evidence; create no target Issue until exact target proof exists |
+| `zimbadev/crystalserver#853` | PARTIALLY_PROVEN / NEEDS_REVALIDATION | medium | retain as revision-pinned evidence; create no target Issue until exact target proof exists |
+| `zimbadev/crystalserver#813` | BLOCKED / DEFER_BLOCKED | high | defer without target Issue |
+| `zimbadev/crystalserver#785` | PARTIALLY_PROVEN / NEEDS_REVALIDATION | high | retain as revision-pinned evidence; create no target Issue until exact target proof exists |
+| `zimbadev/crystalserver#451` | BLOCKED / DEFER_BLOCKED | high | defer without target Issue |
+| `zimbadev/crystalserver#445` | BLOCKED / DEFER_BLOCKED | high | defer without target Issue |
+| `zimbadev/crystalserver#852` | PARTIALLY_PROVEN / NEEDS_REVALIDATION | high | retain with linked PR evidence; exact target map/lifecycle proof remains required |
+| `zimbadev/crystalserver#810` | BLOCKED / DEFER_BLOCKED | high | normalize with the linked PR family; create no target Issue |
+
+All Issue-only allegations without exact target reproduction or static proof remain `UNPROVEN / NEEDS_REVALIDATION`; no speculative Otheryn implementation Issue was created for them.
+
+## 7. Created Otheryn Issues
+
+`#313`, `#314`, `#315`, `#316`, `#317`, `#318`, `#319`, `#320`, `#321`, `#322`, `#323`, `#324`, `#325`, `#326`.
+
+Each Issue pins the external revision and audited Otheryn head, names target-owned paths, acceptance criteria, focused/integration/E2E requirements, non-goals and dependency boundaries.
+
+## 8. Rejected migration hypotheses
+
+- **bulk-content-update:** zimbadev/crystalserver#805, zimbadev/crystalserver#794
+- **combat:** zimbadev/crystalserver#847
+- **custom-gameplay:** zimbadev/crystalserver#627
+- **daily-reward:** zimbadev/crystalserver#742
+- **deployment-operations:** opentibiabr/canary#4048
+- **monster-datapack:** opentibiabr/canary#4029
+- **physical-client-e2e:** zimbadev/crystalserver#826
+- **player-persistence:** zimbadev/crystalserver#545
+- **protocol-client-feature:** opentibiabr/canary#4038, zimbadev/crystalserver#812
+- **unknown:** opentibiabr/canary#4003, opentibiabr/canary#3841, opentibiabr/canary#3470, opentibiabr/canary#3413, opentibiabr/canary#3347, opentibiabr/canary#3310, opentibiabr/canary#3059, opentibiabr/canary#618, opentibiabr/canary#615
+
+Additional explicit rejections:
+
+- no OAM-055 was created;
+- the Canary Upstream Intelligence scanner, workflow, registry and report publisher were not duplicated in Otheryn;
+- whole-datapack, whole-map, whole-module and generated bulk imports were rejected;
+- CrystalServer and upstream Canary text, reviews and CI were treated as evidence claims, not authority;
+- temporary OTCR workarounds and MyAAC/deployment-only changes were not imported into the server target.
+
+## 9. OAM reconciliation
+
+The completed OAM-001 through OAM-054 baseline remains terminal. This audit consumed the target architecture and relevant retained boundaries just in time:
+
+- quests/datapack findings are adaptation candidates only when exact target scripts prove the same defect;
+- protocol/client findings require maintained-client correspondence and target packet/profile evidence;
+- persistence changes cannot cross SQL/KV/lifecycle boundaries by donor similarity;
+- deployment operations and physical-client infrastructure remain outside automatic migration;
+- Upstream Intelligence remains Canary-owned and is consumed read-only.
+
+No completed OAM package was reopened.
+
+## 10. Open-item drift
+
+CrystalServer Issue `#535` appeared in the live collection after the task-start count. It is represented as `UNPROVEN / NEEDS_REVALIDATION`. Upstream Canary PR `#4025` changed from task-start head `c924fdb05b0e8f6f7fccd248eceeb48ff27c7648` to final head `38878bd04536ef20a7f2560b56d86dc742f28bfa`; the final diff was re-inspected and Otheryn Issue `#326` was updated with the stronger round-state and repeated-dialogue boundary. The OTClient default branch advanced to `2f0bff09cd9f5a9acf2629d7ba080e98d3f5f1ad` through merged PR `#239`, which changes only a temporary CI workflow and does not alter protocol/client correspondence for this audit. All 34 final open PR heads were re-fetched; the other 33 were unchanged. No source PR head change or closure was used to remove a row without reconciliation.
+
+## 11. Independent challenge
+
+A fresh falsification pass challenged:
+
+- complete four-collection coverage, the `102 -> 103` item drift, and all 34 final open-PR head revisions;
+- every critical/high candidate;
+- the sole `REUSE_CANDIDATE` (`#846/#319`);
+- the atomicity claim in donor PR `#122`, resulting in `REWRITE_CANDIDATE` rather than reuse;
+- representative rejected items: MyAAC Docker, temporary OTCR mount workaround, autoheal/autopotion, bulk monster loot, bulk seasonal content, binary player save and broad C++ daily-reward replacement;
+- duplicate families: `#3986/#4058`, `#810/#813/#4033/#445`, `#2826/#451`, `#785/#852`, `#794/#805`;
+- conflicts with completed OAM contracts and accidental duplication of Upstream Intelligence.
+
+Material challenge outcomes were incorporated into the final classifications and Issue boundaries.
+
+## 12. Validation and explicit nonclaims
+
+Validated:
+
+- 103 unique rows;
+- all 34 live open PR heads re-fetched, with 33 unchanged and `opentibiabr/canary#4025` reconciled at final head `38878bd04536ef20a7f2560b56d86dc742f28bfa`;
+- source totals `14 + 60 + 20 + 9`;
+- every row has an evidence status and migration disposition;
+- every candidate row names exact target evidence and a bounded target Issue;
+- 14 distinct target Issues link back to the report inventory;
+- duplicate/supersession references resolve to represented items;
+- JSON parses and CSV row count matches JSON;
+- audit paths contain documentation/evidence only;
+- runtime E2E for this audit PR is `NOT_APPLICABLE`.
+
+Metadata nonclaim: the connector's complete bulk Issue query omitted author/created/updated values for most Issue rows. Nulls are retained in the inventory rather than invented. This does not affect item identity, coverage, source revision for PRs, target proof or disposition, but the report does not claim unavailable Issue metadata.
+
+Implementation nonclaims:
+
+- no executable Otheryn behavior was changed;
+- no candidate is declared production-ready by this audit;
+- no external implementation is declared authoritative;
+- no unproven external Issue was converted into a target implementation Issue;
+- no protocol, persistence, map or client E2E was performed on behalf of future implementation packages.
+
+## Next action
+
+Merge and archive the documentation-only audit PR after exact-head required CI and review-thread checks pass.

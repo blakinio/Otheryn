@@ -35,3 +35,11 @@ Audit: `OTERYN-20260803-post-oam-upstream-open-items-delta-audit`
 ## External revisions
 
 Every open PR row pins its exact head SHA in `inventory.json`. Issue-only rows pin repository, number, URL and final query timestamp and remain unproven unless exact target evidence is separately named.
+
+## Final live reconciliation
+
+- query timestamp: `2026-08-03T18:29:39Z`;
+- represented rows: 103;
+- final open PR heads re-fetched: 34/34;
+- source-head drift: `opentibiabr/canary#4025` reconciled to `38878bd04536ef20a7f2560b56d86dc742f28bfa`;
+- OTClient read-only head drift: `2f0bff09cd9f5a9acf2629d7ba080e98d3f5f1ad`, CI-workflow-only.
