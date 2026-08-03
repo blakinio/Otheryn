@@ -1,5 +1,8 @@
 PASS
 audit_id=OTERYN-20260803-upstream-103-cross-repository-revalidation
+otheryn_row_snapshot=1f316400053f489e58608d13961069835871ab0e
+otheryn_final_drift_head=3186099e69b05ba17966f1ebe8caeedc3302ae51
+otheryn_target_drift=PRS-004C durable writer-fence CAS; no confirmed-gap path overlap; multiworld and binary-persistence decisions unchanged
 json_gzip_sha256=cfe44b6d084163417c2670c02d8d75825eb3cc7dc38ce00e9ce995a250159f00
 csv_gzip_sha256=837e825380a4669758e2797ac29f26918e6ed196f458f9dbcdd87c7e0fb59c6b
 json_rows=103
@@ -24,10 +27,11 @@ confirmed_gaps_exact_path_proof=PASS
 critical_high_direct_challenge=PASS
 duplicate_family_preservation=PASS
 classification_change_reasons=PASS
+target_drift_falsification=PASS
 independent_audit=PASS
 independent_validator=agent-20260803-cross-revalidation-validator-001
 material_findings_open=0
-executable_paths_changed=0
+executable_audit_paths_changed=0
 runtime_e2e=NOT_APPLICABLE
 runtime_e2e_reason=Documentation/evidence-only cross-repository audit; no runtime behavior was changed.
 exact_head_ci=NOT_RUN
