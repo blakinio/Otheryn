@@ -4,7 +4,7 @@ lane: otheryn-runtime
 status: validating
 owner: agent-20260803-cross-revalidation
 created: 2026-08-03T19:58:00Z
-updated: 2026-08-03T21:46:32Z
+updated: 2026-08-03T22:57:00Z
 policy_version: 2
 prompting_standard_version: 2.1
 task_kind: audit
@@ -25,12 +25,6 @@ ownership_released: false
 ## Objective
 
 Independently revalidate all 103 canonical rows through a symmetric, revision-pinned comparison of upstream Canary, CrystalServer, `blakinio/canary`, Otheryn and OTClient where relevant. Produce evidence only; do not implement or mutate Issues `#313`–`#326`.
-
-## Owned paths
-
-- `docs/agents/tasks/active/OTERYN-20260803-upstream-103-cross-repository-revalidation.md`
-- `docs/agents/tasks/archive/OTERYN-20260803-upstream-103-cross-repository-revalidation.md`
-- `docs/agents/evidence/OTERYN-20260803-upstream-103-cross-repository-revalidation/**`
 
 ## Exact baselines and drift
 
@@ -55,7 +49,8 @@ The predecessor `inventory.json.gz` is corrupt and remains an explicit conflict.
 - final buckets: 15 gap, 21 no action, 49 reproduce, 4 architecture, 1 client, 2 persistence, 11 insufficient evidence;
 - deterministic JSON/CSV validation PASS;
 - independent falsification PASS, material findings open: 0;
-- audit changed paths restricted to task/evidence; current-main integration is non-overlapping ancestry;
+- content CI PASS on `8accf753c798ec001cf1efb6987746fada75d49b`, run `30856074701`;
+- review threads 0, reviews 0, comments 0;
 - runtime E2E `NOT_APPLICABLE`: Documentation/evidence-only cross-repository audit; no runtime behavior was changed.
 
 ## Context checkpoint
@@ -63,10 +58,10 @@ The predecessor `inventory.json.gz` is corrupt and remains an explicit conflict.
 ```yaml
 checkpoint_version: 1
 policy_version: 2
-updated_at: 2026-08-03T21:46:32Z
+updated_at: 2026-08-03T22:57:00Z
 invocation_started_at: 2026-08-03T20:57:00Z
-last_progress_at: 2026-08-03T21:46:32Z
-head: 55f7d8ae21ef1e6e0f16ebccc3a10c15736ab5c3
+last_progress_at: 2026-08-03T22:57:00Z
+head: afbad4d58c109516c6c986a8ff777fb1a1297e2a
 branch: audit/otheryn-upstream-103-cross-repository-revalidation-20260803
 pr: 330
 status: validating
@@ -74,8 +69,8 @@ phase: validate
 session_id: agent-20260803-cross-revalidation-002
 session_role: producer
 execution_mode: work
-execution_reason: final evidence and target-drift falsification are persisted; exact-head PR validation and lifecycle remain
-lease_expires_at: 2026-08-03T22:31:32Z
+execution_reason: content and review gates pass; this final checkpoint head requires exact-head CI before merge
+lease_expires_at: 2026-08-03T23:42:00Z
 context_pressure: high
 context_growth: stable
 context_score: 12
@@ -106,16 +101,18 @@ proven:
   - all 34 canonical PR heads are unchanged and all 69 canonical Issues remain open
   - independent validator agent-20260803-cross-revalidation-validator-001 passed with zero open material findings
   - Otheryn final target drift was integrated and did not change conclusions
+  - content CI run 30856074701 passed on head 8accf753c798ec001cf1efb6987746fada75d49b
+  - PR 330 has zero comments, reviews and review threads
   - runtime E2E is NOT_APPLICABLE because no executable audit behavior changed
 derived:
-  - PR 330 is ready for exact-head required CI and review hygiene
+  - the final checkpoint head is ready for exact-head required CI and authorized merge
 unknown:
-  - exact-head required CI result and final review state
+  - exact-head required CI result for the final checkpoint head
 conflicts:
   - predecessor inventory.json.gz is corrupt while its immutable CSV companion and report reconcile to 103 rows
 first_failure:
   marker: none
-  evidence: all current content and independent audit gates pass
+  evidence: all content, audit and review gates pass
 rejected_hypotheses:
   - current open-item lists may reconstruct scope: rejected
   - source Issue prose alone proves a target defect: rejected
@@ -129,16 +126,19 @@ validation:
   - command: independent falsification
     result: PASS
     evidence: independent-audit.md; zero open material findings
-  - command: final target drift falsification
+  - command: target drift falsification
     result: PASS
     evidence: source-drift.md and report.md
+  - command: content CI and review hygiene
+    result: PASS
+    evidence: Required run 30856074701 on 8accf753c798ec001cf1efb6987746fada75d49b; zero discussions
   - command: runtime E2E
     result: NOT_APPLICABLE
     evidence: Documentation/evidence-only cross-repository audit; no runtime behavior was changed.
-  - command: exact-head required CI
+  - command: final exact-head required CI
     result: NOT_RUN
-    evidence: new final PR head requires check generation
+    evidence: final checkpoint commit triggers a new Required generation
 blockers:
   - none
-next_action: verify exact-head required CI and clean review state for PR 330, then merge the audit PR
+next_action: verify final exact-head Required CI for PR 330 and merge the unchanged head
 ```
