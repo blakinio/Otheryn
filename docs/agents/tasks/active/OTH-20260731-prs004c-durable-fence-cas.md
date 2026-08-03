@@ -12,7 +12,7 @@ context_growth: stable
 context_score: 9
 estimate_confidence: high
 phase: validate
-session_id: chat-github-20260731-prs004c-01
+session_id: chat-github-20260803-prs004c-recovery
 session_role: implementer
 execution_mode: chat-github
 branch: dudantas/prs-004c-durable-fence-cas
@@ -21,8 +21,16 @@ start_sha: 049c79f36752adc812b62bcdf0b293e7abafc705
 issue: "284"
 feature_pr: "285"
 created: 2026-07-31
-updated: 2026-08-01T21:52:44+02:00
-lease_expires_at: 2026-08-01T23:52:44+02:00
+updated: 2026-08-03T23:05:00+02:00
+lease_expires_at: 2026-08-04T01:05:00+02:00
+invocation_started_at: 2026-08-03T22:57:00+02:00
+last_progress_at: 2026-08-03T23:05:00+02:00
+ci_checks_for_current_head: 0
+unchanged_state_checks: 0
+identical_failure_retries: 0
+repair_cycles_for_current_gate: 0
+context_reconstruction_attempts: 0
+stall_warnings: 0
 owned_paths:
   - schema.sql
   - data-otservbr-global/migrations/60.lua
@@ -38,27 +46,19 @@ owned_paths:
 
 # PRS-004C durable writer-fence CAS repository
 
-## First failure
-
-Live comparison with the terminal PRS-004B schema and accepted PRS-004A model found a released-state mismatch. Resetting generation to zero on release would erase durable monotonic history and allow a stale generation to reacquire authority. The contained correction is schema version 60: released rows retain positive generation and revision while token is null.
-
-Candidate `database.hpp` and `database.cpp` paths were released before modification. A transaction-scoped conditional update and `SELECT ROW_COUNT()` use the existing recursive connection lock, avoiding broad database plumbing.
-
-Exact-head disposable-MariaDB validation then compiled and ran the CAS integration cases successfully but exposed a historical PRS-004B migration assertion that still treated version 59 as the terminal repository schema. The frozen ownership was amended by the single compatibility path `tests/integration/database/database_migrations_it.cpp`; its terminal expectation now follows the complete durable-fence chain through version 60.
-
 ## Scope and invariants
 
-Exactly ten paths. MariaDB is authority. Acquire, transfer, release and exact-next revision advance return applied, stale, malformed or database-failure outcomes. Each operation is attempted once. No save, handoff, Redis, retry/replay, credentials, deployment or later-package behavior is included.
+Exactly ten paths. MariaDB is the durable authority. Acquire, transfer, release and exact-next revision advance return applied, stale, malformed or database-failure outcomes. Each operation is attempted once. No save wiring, handoff, Redis authority, retry/replay, credentials, deployment or later-package behavior is included.
 
 ## Context checkpoint
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-08-01T21:52:44+02:00
+updated_at: 2026-08-03T23:05:00+02:00
 status: validating
 phase: validate
-head: 3dfe4e2e0d6778e35ed912ed93bbdc86d4686871
-head_scope: exact ten-path candidate after containing the historical version-59 migration assertion
+head: ca71c383eae2690abe5850f4cf0badbcf3bcab70
+head_scope: exact ten-path implementation after non-overlapping current-main integration; this checkpoint-only commit follows it
 branch: dudantas/prs-004c-durable-fence-cas
 pr: 285
 owned_paths:
@@ -73,29 +73,27 @@ owned_paths:
   - docs/architecture/prs-004c-durable-writer-fence-cas.md
   - docs/agents/tasks/active/OTH-20260731-prs004c-durable-fence-cas.md
 proven:
-  - PRS-004B is terminal through PR 283
-  - one canonical PRS-004C issue, branch, task and feature PR exist
-  - schema diff contains only version 59 to 60 and the released-state-compatible check constraint
-  - candidate database.hpp and database.cpp were released before modification
-  - the committed workflow is read-only and contains no branch-writing bootstrap
-  - run 30690330628 job 91343782173 compiled the repository and executed disposable-MariaDB tests
-  - PRS-004C repository integration cases passed in that run
-  - the sole full-suite failure was the historical migration test expecting terminal schema version 59 instead of 60
-  - issue 284 records the explicit exact-ten-path containment amendment
+  - PRS-004B is terminal through PRs 279, 281, 282 and 283
+  - PR 328 merged current main 1f316400053f489e58608d13961069835871ab0e into the canonical feature branch without path conflicts
+  - compare main to ca71c383eae2690abe5850f4cf0badbcf3bcab70 reports behind_by 0 and exactly the frozen ten paths
+  - intervening main changes were governance and audit documentation only and did not overlap PRS-004C ownership
+  - PR 285 has zero comments, zero reviews and zero review threads
+  - historical exact-head run generation on a43e14a330bd311fc55442305baa0daf39678fe0 passed dedicated, CI, Required, Repository Audit, MySQL Schema Check and autofix
+  - schema version 60 preserves released generation and revision while clearing only the writer token
+  - repository operations classify one-row applied, zero-row stale, malformed context and database failure without retry or replay
 unknown:
-  - exact-final-head compile, integration, CI, Required, Repository Audit, schema and autofix outcomes after the compatibility correction
+  - fresh exact-final-head workflow outcomes after current-main integration and checkpoint refresh
   - feature merge and lifecycle metadata
 conflicts: []
 first_failure:
-  marker: historical-migration-terminal-version
-  result: CONTAINED
-  evidence: tests/integration/database/database_migrations_it.cpp now expects the complete version-58-to-60 durable-fence migration chain; no production behavior changed
+  marker: stale-base-and-checkpoint
+  evidence: contained by PR 328 branch integration and this refreshed checkpoint
 rejected_hypotheses:
-  - reset durable generation to zero on release
-  - add broad affected-row API to Database
+  - merge the stale head directly
+  - force-update or rewrite the canonical branch
+  - broaden Database affected-row plumbing
   - use Redis or process memory as writer authority
-  - retry a zero-row or failed CAS
-  - exclude or bypass the historical migration integration test
+  - retry a stale or failed CAS
 changed_paths:
   - schema.sql
   - data-otservbr-global/migrations/60.lua
@@ -108,12 +106,12 @@ changed_paths:
   - docs/architecture/prs-004c-durable-writer-fence-cas.md
   - docs/agents/tasks/active/OTH-20260731-prs004c-durable-fence-cas.md
 validation:
-  - command: run 30690330628 job 91343782173 artifact linux-debug-test-logs
-    result: FIRST_FAILURE_CONTAINED
-    evidence: build passed; CAS integration tests passed; only DurableWriterFenceMigrationTest expected 59 while current schema was 60
-  - command: exact-final-head validation
-    result: IN_PROGRESS
-    evidence: compatibility correction requires fresh dedicated, CI, Required, Repository Audit, MySQL Schema Check and autofix runs
+  - command: compare main...dudantas/prs-004c-durable-fence-cas
+    result: PASS
+    evidence: behind_by 0; exact ten changed paths; merge base current main
+  - command: fresh exact-final-head validation
+    result: NOT_RUN
+    evidence: new check generation begins after this checkpoint commit
 blockers: []
-next_action: complete exact-final-head validation, discussion audit and base freshness before expected-head merge
+next_action: verify fresh exact-final-head checks, unchanged ten-path scope, clean discussion and mergeability, then squash-merge PR 285 with expected-head protection
 ```
