@@ -1,2 +1,2 @@
 trigger: apply bounded PRS-004D final-save fence-release repair
-activation: synchronize-1
+activation: pull-request-target-1
