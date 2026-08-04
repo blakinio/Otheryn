@@ -1,0 +1,107 @@
+name: PRS-004D Materializer Bootstrap
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - .github/workflows/prs-004d-materialize.yml
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: prs-004d-materializer-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  materialize:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'dudantas/prs-004d-protected-player-save'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Verify exact materializer and current state
+        id: gate
+        run: |
+          expected=d63370e028ee2d5d5d4546ce12038c8a0582c2d0
+          actual=$(git hash-object .github/workflows/prs-004d-materialize.yml)
+          if [[ "$actual" != "$expected" ]]; then
+            echo "materializer blob mismatch: expected $expected, got $actual" >&2
+            exit 1
+          fi
+          if [[ -f src/database/player_writer_fenced_save_transaction.hpp ]]; then
+            echo "already=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "already=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Extract and execute verified materializer
+        if: steps.gate.outputs.already == 'false'
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          source = Path('.github/workflows/prs-004d-materialize.yml').read_text(encoding='utf-8').splitlines()
+          marker = '      - name: Materialize protected player-save integration'
+          try:
+              start = source.index(marker)
+          except ValueError as exc:
+              raise SystemExit('verified materializer step marker missing') from exc
+
+          run_index = start + 1
+          while run_index < len(source) and source[run_index].strip() != 'run: |':
+              run_index += 1
+          if run_index >= len(source):
+              raise SystemExit('verified materializer run block missing')
+
+          block = []
+          for line in source[run_index + 1:]:
+              if line.startswith('      - name:'):
+                  break
+              if line.startswith('          '):
+                  block.append(line[10:])
+              elif not line.strip():
+                  block.append('')
+              else:
+                  raise SystemExit(f'unexpected materializer indentation: {line!r}')
+
+          if not block or not block[0].startswith("python3 - <<'PY'"):
+              raise SystemExit('verified materializer payload shape mismatch')
+          Path('/tmp/prs-004d-materialize.sh').write_text('\n'.join(block) + '\n', encoding='utf-8')
+          PY
+          bash /tmp/prs-004d-materialize.sh
+
+      - name: Commit exact generated scope
+        if: steps.gate.outputs.already == 'false'
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add \
+            src/database/player_writer_fence_repository.hpp \
+            src/database/player_writer_fence_repository.cpp \
+            src/database/player_writer_fenced_save_transaction.hpp \
+            src/game/scheduling/save_manager.hpp \
+            src/game/scheduling/save_manager.cpp \
+            src/io/iologindata.hpp \
+            src/io/iologindata.cpp \
+            src/server/network/protocol/protocolgame.cpp \
+            tests/integration/database/CMakeLists.txt \
+            tests/integration/database/player_writer_fenced_save_it.cpp \
+            .github/workflows/prs-004d-protected-player-save.yml \
+            docs/architecture/prs-004d-protected-player-save.md \
+            docs/agents/tasks/active/OTH-20260804-prs004d-protected-player-save.md
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "feat(resilience): protect player saves with writer fencing"
+          git push origin "HEAD:${HEAD_REF}"
