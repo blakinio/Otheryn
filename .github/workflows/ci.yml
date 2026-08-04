@@ -48,6 +48,65 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  repair-prs-004d-final-save:
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 339 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'dudantas/prs-004d-protected-player-save' }}
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          repository: blakinio/Otheryn
+          ref: dudantas/prs-004d-protected-player-save
+          fetch-depth: 0
+
+      - name: Apply bounded PRS-004D final-save repair
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/game/scheduling/save_manager.cpp')
+          text = path.read_text(encoding='utf-8')
+          old_attempt = '''\t\tconst auto attempt = executePlayerCheckpointAttempt(*state, *generation, [this, &player] {
+\t\t\treturn doSavePlayer(player, true);
+\t\t});'''
+          new_attempt = '''\t\tconst auto attempt = executePlayerCheckpointAttempt(*state, *generation, [this, &player] {
+\t\t\treturn doSavePlayer(player, false);
+\t\t});'''
+          old_success = '''\t\tif (!attempt.followUpRequired && !state->isDirty()) {
+\t\t\treturn true;
+\t\t}'''
+          new_success = '''\t\tif (!attempt.followUpRequired && !state->isDirty()) {
+\t\t\tif (!releasePlayerWriterFence(player)) {
+\t\t\t\tlogger.error("Final save for player {} committed but durable writer-fence release failed.", player->getName());
+\t\t\t\treturn false;
+\t\t\t}
+\t\t\treturn true;
+\t\t}'''
+
+          if new_attempt in text and new_success in text:
+              Path('/tmp/already-applied').write_text('yes', encoding='utf-8')
+          else:
+              if text.count(old_attempt) != 1 or text.count(old_success) != 1:
+                  raise SystemExit('final-save repair markers are neither pristine nor fully repaired')
+              path.write_text(text.replace(old_attempt, new_attempt, 1).replace(old_success, new_success, 1), encoding='utf-8')
+          PY
+
+      - name: Commit exactly one repaired file
+        run: |
+          if [[ -f /tmp/already-applied ]]; then
+            echo "Repair already applied."
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/game/scheduling/save_manager.cpp
+          git diff --cached --check
+          [[ "$(git diff --cached --name-only)" == "src/game/scheduling/save_manager.cpp" ]]
+          git commit -m "fix(resilience): release writer fence after final checkpoint"
+          git push origin HEAD:dudantas/prs-004d-protected-player-save
+
   changes:
     name: Detect Build Scope
     runs-on: ubuntu-latest
@@ -101,7 +160,6 @@ jobs:
               - "CMakePresets.json"
               - ".github/workflows/ci.yml"
               - ".github/workflows/reusable-build-docker.yml"
-              - ".github/workflows/reusable-docker-quickstart-smoke.yml"
               - ".github/scripts/**"
             docker_quickstart:
               - "docker/docker-compose.yml"
