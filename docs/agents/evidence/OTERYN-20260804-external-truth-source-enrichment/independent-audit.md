@@ -14,7 +14,7 @@ This review uses a separate parser and invariant set from `validate_evidence.py`
 - owner actions: {'NO_ACTION': 2, 'OPEN_ARCHITECTURE_DECISION': 3, 'OPEN_FIX_PROGRAM': 8, 'OPEN_PROTOCOL_DECISION': 2, 'RESEARCH_REQUIRED': 45};
 - plans: {'BLOCKED_INFEASIBLE': 42, 'BLOCKED_REFERENCE': 5, 'NOT_APPLICABLE': 13};
 - executions: {'BLOCKED': 47, 'NOT_RUN': 13};
-- changed paths reviewed: 77; product/runtime paths: 0;
+- changed paths reviewed: 79; product/runtime paths: 0;
 - matrices and both compressed registries: exact 60-key equality checked;
 - runtime feasibility claim: checked against item-level conclusion/plan/execution consistency.
 
