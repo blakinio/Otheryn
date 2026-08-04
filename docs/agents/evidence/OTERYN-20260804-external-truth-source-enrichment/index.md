@@ -11,69 +11,87 @@ Task: `OTERYN-20260804-external-truth-source-enrichment`
 - CrystalServer: **9** items, including three pull requests;
 - duplicates: **0**.
 
-The scope was recovered from the predecessor 103-row matrix and refreshed with the live source titles of every canonical Issue and pull request. The source type is preserved so pull requests are not silently treated as Issues.
+The scope is the immutable 60-row subset inherited from the completed 103-item cross-repository revalidation. Live source discovery did not expand it.
 
-## Evidence files
-
-- `canonical-scope.json` — exact 60-key scope, predecessor row, live source title, prior bucket/status/reason, source URL and pinned source revision;
-- `source-policy.md` — provenance hierarchy, version discipline, conclusion enums, five-repository comparison and runtime gate;
-- `dossier-template.md` — normalized per-item evidence schema;
-- `dossiers/` — completed per-item research and reproduction records;
-- `source-registry.json.gz` and `source-registry.csv.gz` — final normalized source records, not yet generated;
-- `expected-behavior-matrix.md` — pending final aggregation;
-- `reproduction-matrix.md` — pending final aggregation;
-- `decision-matrix.md` — pending final aggregation;
-- `validation.txt` — pending;
-- `independent-audit.md` — pending.
-
-## Current coverage
+## Final coverage
 
 | Gate | Result |
 |---|---:|
 | Canonical keys recovered | 60/60 |
 | Unique keys | 60/60 |
-| Source titles resolved | 60/60 |
+| Source titles and types resolved | 60/60 |
 | Pinned source revisions recorded | 60/60 |
-| Per-item dossiers | 14/60 |
-| Five-repository comparisons | 14/60 |
-| Expected-behavior conclusions | 14/60 |
-| Runtime plans or explicit reference blockers | 14/60 |
-| Runtime executions | 0/60 |
-| Final item decisions | 14/60 |
-| `INSUFFICIENT` rows fully researched | 11/11 |
-| `REPRO` rows fully researched | 3/49 |
+| Per-item dossiers | 60/60 |
+| Five-repository comparisons | 60/60 |
+| Expected-behavior conclusions | 60/60 |
+| Runtime plans or explicit terminal blockers | 60/60 |
+| Final item decisions | 60/60 |
+| `INSUFFICIENT` rows researched | 11/11 |
+| `REPRO` rows researched | 49/49 |
+| Canonical gameplay/client executions | 0/60 |
+| Product/runtime paths changed | 0 |
 
-## Completed insufficient-evidence dispositions
+## Evidence-stage conclusions
 
-| Item | Truth | Static | Runtime | Owner action |
-|---|---|---|---|---|
-| `opentibiabr/canary#4052` | PARTIALLY_PROVEN | TARGET_AFFECTED | NOT_APPLICABLE | OPEN_ARCHITECTURE_DECISION |
-| `opentibiabr/canary#3742` | PARTIALLY_PROVEN | TARGET_AFFECTED | PENDING | OPEN_FIX_PROGRAM |
-| `opentibiabr/canary#3599` | PARTIALLY_PROVEN | STATIC_INCONCLUSIVE | PENDING | RESEARCH_REQUIRED |
-| `opentibiabr/canary#3430` | PROVEN | TARGET_NOT_AFFECTED | PENDING | NO_ACTION |
-| `opentibiabr/canary#3427` | UNKNOWN | STATIC_INCONCLUSIVE | NOT_RUN_REFERENCE_INSUFFICIENT | RESEARCH_REQUIRED |
-| `opentibiabr/canary#3407` | UNKNOWN | STATIC_INCONCLUSIVE | NOT_RUN_REFERENCE_INSUFFICIENT | RESEARCH_REQUIRED |
-| `opentibiabr/canary#3374` | PROVEN | TARGET_AFFECTED | PENDING | OPEN_FIX_PROGRAM |
-| `opentibiabr/canary#2272` | UNKNOWN | STATIC_INCONCLUSIVE | NOT_RUN_REFERENCE_INSUFFICIENT | RESEARCH_REQUIRED |
-| `opentibiabr/canary#917` | UNKNOWN | STATIC_INCONCLUSIVE | NOT_RUN_REFERENCE_INSUFFICIENT | RESEARCH_REQUIRED |
-| `opentibiabr/canary#560` | PROVEN | TARGET_AFFECTED | PENDING | OPEN_FIX_PROGRAM |
-| `zimbadev/crystalserver#206` | PARTIALLY_PROVEN | STATIC_INCONCLUSIVE | PENDING | OPEN_ARCHITECTURE_DECISION |
+### Truth status
 
-## Completed reproduction-row research
+- `PROVEN`: **31**;
+- `PARTIALLY_PROVEN`: **24**;
+- `UNKNOWN`: **5**.
 
-- `opentibiabr/canary#3513` — official-client zone-login speed crash: source path present, maintained client is tolerant, deterministic packet-order reproduction pending;
-- `zimbadev/crystalserver#785` — live map cache retention: architecture present, quantitative swap soak pending;
-- `zimbadev/crystalserver#852` — occupied live map swap/client crash: exact script path present, deterministic map/client reproduction pending.
+### Static target conclusion
+
+- `TARGET_AFFECTED`: **9**;
+- `TARGET_NOT_AFFECTED`: **2**;
+- `TARGET_PATH_ABSENT`: **2**;
+- `STATIC_INCONCLUSIVE`: **47**.
+
+### Runtime disposition
+
+- `NOT_APPLICABLE`: **13** — pinned static evidence already determines the target disposition;
+- `NOT_RUN_REFERENCE_INSUFFICIENT`: **5** — no deterministic expected result is supported;
+- `NOT_RUN_INFEASIBLE`: **42** — the repository lacks a deterministic game-protocol/client driver and isolated scenario fixtures, and building them is outside audit-only authority.
+
+No canonical gameplay/client scenario was executed. `runtime-feasibility.md` records the exact existing Docker/login boundary and why it cannot truthfully execute these 42 scenarios.
+
+### Owner action
+
+- `OPEN_FIX_PROGRAM`: **8**;
+- `OPEN_ARCHITECTURE_DECISION`: **3**;
+- `OPEN_PROTOCOL_DECISION`: **2**;
+- `NO_ACTION`: **2**;
+- `RESEARCH_REQUIRED`: **45**.
+
+These are evidence-stage recommendations only. No row authorizes implementation.
+
+## Durable artifacts
+
+- `canonical-scope.json` — exact canonical identity and predecessor metadata;
+- `source-policy.md` — source hierarchy, version discipline and conclusion contracts;
+- `dossier-template.md` — normalized evidence schema;
+- `dossiers/` — 60 complete per-item records;
+- `source-registry.json.gz` and `source-registry.csv.gz` — normalized 60-row registries with matching identities and dispositions;
+- `expected-behavior-matrix.md` — exact 60-key expected-behavior aggregation;
+- `reproduction-matrix.md` — exact 60-key terminal runtime disposition aggregation;
+- `decision-matrix.md` — exact 60-key truth/static/runtime/owner-action aggregation;
+- `runtime-feasibility.md` — executable-boundary and authority closeout;
+- `validate_evidence.py` — deterministic primary invariant validator;
+- `independent_falsification.py` — separate falsification implementation;
+- `validation.txt` and `validation.json` — persisted primary validation result;
+- `independent-audit.md` and `independent-audit.json` — persisted fresh independent result.
 
 ## Scope integrity
 
 Authoritative predecessor evidence:
 
-- matrix blob SHA: `006a790c143ea16acaaaefe09a8a2a2ea526b2d8`;
+- predecessor matrix blob SHA: `006a790c143ea16acaaaefe09a8a2a2ea526b2d8`;
 - predecessor task: `docs/agents/tasks/archive/OTERYN-20260803-upstream-103-cross-repository-revalidation.md`;
 - predecessor valid inventory CSV blob: `8ae3ddb89cebe581d236fcd0d4c6c74420bd9b30`;
-- predecessor JSON corruption remains a recorded historic conflict and is not used to redefine scope.
+- predecessor JSON corruption remains an explicit historic conflict and was not used to redefine scope.
 
-## Next bounded phase
+## Validation
 
-Research the remaining 46 `REPRO` rows in coherent behavior families. Prioritize rows with exact source steps and shared quest/map/protocol paths, then build runtime harnesses only after expected behavior and safety boundaries are complete.
+- deterministic primary validation: **PASS** on evidence head `1cf8d74d10805156bc63c26416ce0a6d2bce0154`, workflow run `30932195423`;
+- independent falsification: **PASS**, zero open material findings on evidence head `ab8ea10db6bab03a7bc611c5cde1c8dcdfc29a8f`, workflow run `30932913247`;
+- exact-final-head Required CI: pending;
+- runtime E2E: item-level terminal dispositions recorded above; no product behavior changed.
