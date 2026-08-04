@@ -12,16 +12,17 @@ issue: "284"
 feature_pr: "285"
 feature_head_sha: 5c84b591dc00626190b1cc6c58149379529694b1
 feature_merge_sha: 3186099e69b05ba17966f1ebe8caeedc3302ae51
-lifecycle_pr: pending
-lifecycle_head_sha: pending
-lifecycle_required_run: pending
-lifecycle_merge_sha: pending
+lifecycle_pr: "329"
+lifecycle_head_sha: f1356152458d3196047de050726bfcb5769ac448
+lifecycle_required_run: 30882954122
+lifecycle_dedicated_run: 30882954141
+lifecycle_merge_sha: 8125f9bbc1c41b44bddd726c336e98d720ceabd4
 finalizer_pr: pending
 finalizer_head_sha: pending
 finalizer_required_run: pending
 finalizer_merge_sha: pending
 created: 2026-07-31
-updated: 2026-08-03T23:38:00+02:00
+updated: 2026-08-04T08:25:00+02:00
 owned_paths:
   - schema.sql
   - data-otservbr-global/migrations/60.lua
@@ -57,6 +58,16 @@ Schema version 60 preserves ownership generation and state revision after releas
 - MySQL Schema Check run `30853159385`: PASS;
 - autofix run `30853157097`: PASS with no replacement commit.
 
+## Lifecycle evidence
+
+- lifecycle PR #329 exact head `f1356152458d3196047de050726bfcb5769ac448`;
+- lifecycle Required run `30882954122`: PASS;
+- lifecycle dedicated run `30882954141`: PASS;
+- lifecycle merge `8125f9bbc1c41b44bddd726c336e98d720ceabd4`;
+- lifecycle scope exactly the active-record deletion and matching archive addition;
+- lifecycle comments, reviews and review threads: empty;
+- lifecycle branch was refreshed from current `main` through merged synchronization PR #332 before exact-head validation.
+
 ## Validation and audit evidence
 
 - disposable MariaDB integration proves monotonic acquire/transfer/release/reacquire history, exact-next revision, zero-row stale classification, one-winner concurrent acquisition and rollback preservation;
@@ -66,19 +77,18 @@ Schema version 60 preserves ownership generation and state revision after releas
 
 ## Recovery and PR hygiene
 
-- stale-base defect was contained by integration PR #328, which merged current `main` into the canonical feature branch without overlapping the ten owned paths;
+- stale-base defects were contained by synchronization PRs #328 and #332 without overlap with owned implementation or lifecycle paths;
 - historical bootstrap/synchronization PRs #286, #287, #288, #289, #290, #291, #293 and #295 are closed merged and intentionally terminal;
-- PR #328 is closed merged and intentionally terminal;
-- canonical feature PR #285 is closed merged;
-- `dudantas/prs-004c-refresh-base-20260803` is a redundant non-owning staging branch retained only because no authorized branch-delete action was available; it must not be reused.
+- PRs #285, #328, #329 and #332 are closed merged;
+- redundant non-owning staging branches must not be reused; branch deletion is unavailable through the connected GitHub actions.
 
 ## Context checkpoint
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-08-03T23:38:00+02:00
+updated_at: 2026-08-04T08:25:00+02:00
 status: completed
-phase: archive
+phase: finalizer
 feature_pr: 285
 feature_head_sha: 5c84b591dc00626190b1cc6c58149379529694b1
 feature_merge_sha: 3186099e69b05ba17966f1ebe8caeedc3302ae51
@@ -89,18 +99,23 @@ feature_checks:
   repository_audit: PASS:30853158231
   mysql_schema_check: PASS:30853159385
   autofix: PASS:30853157097
-lifecycle_pr: pending
+lifecycle_pr: 329
+lifecycle_head_sha: f1356152458d3196047de050726bfcb5769ac448
+lifecycle_checks:
+  required: PASS:30882954122
+  dedicated: PASS:30882954141
+lifecycle_merge_sha: 8125f9bbc1c41b44bddd726c336e98d720ceabd4
 finalizer_pr: pending
 proven:
-  - exact ten-path scope and base freshness
-  - complete exact-head validation and clean discussion
-  - issue completed and feature merged with expected-head protection
+  - exact ten-path feature scope and complete exact-head validation
+  - issue completed and expected-head feature merge
+  - exact two-path active-to-archive lifecycle and exact-head lifecycle validation
+  - active task absent on main after lifecycle merge
   - durable CAS semantics and applicable disposable-MariaDB integration evidence
 unknown:
-  - lifecycle PR exact head, Required and merge
   - finalizer PR exact head, Required and merge
   - historical terminal-evidence repair after finalizer
 conflicts: []
 blockers: []
-next_action: merge the two-path active-to-archive lifecycle PR, then complete one-file finalizer and terminal-evidence metadata
+next_action: merge the one-file finalizer, then record its historical terminal evidence with empty unknown, conflicts and blockers
 ```
