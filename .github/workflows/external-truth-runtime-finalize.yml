@@ -7,6 +7,11 @@ on:
     paths:
       - docs/agents/evidence/OTERYN-20260804-external-truth-source-enrichment/finalize_runtime_feasibility.py
       - .github/workflows/external-truth-runtime-finalize.yml
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - docs/agents/evidence/OTERYN-20260804-external-truth-source-enrichment/finalize_runtime_feasibility.py
+      - .github/workflows/external-truth-runtime-finalize.yml
 
 permissions:
   contents: write
@@ -17,6 +22,7 @@ concurrency:
 
 jobs:
   finalize:
+    if: github.event_name == 'push' || github.event.pull_request.head.ref == 'audit/otheryn-external-truth-source-enrichment-20260804'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
