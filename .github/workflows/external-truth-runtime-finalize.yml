@@ -17,8 +17,8 @@ permissions:
   contents: write
 
 concurrency:
-  group: external-truth-runtime-finalize
-  cancel-in-progress: false
+  group: external-truth-runtime-finalize-${{ github.event_name }}
+  cancel-in-progress: true
 
 jobs:
   finalize:
