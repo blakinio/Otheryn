@@ -3,8 +3,6 @@ name: PRS-004D Guarded Final Save Repair
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - docs/agents/triggers/prs-004d-final-save-repair.txt
 
 permissions:
   contents: write
