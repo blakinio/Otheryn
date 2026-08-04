@@ -2,9 +2,9 @@
 task_id: OTERYN-20260804-external-truth-source-enrichment
 lane: otheryn-runtime
 status: investigating
-owner: agent-20260804-external-truth-source-enrichment-001
+owner: agent-20260804-external-truth-source-enrichment-002
 created: 2026-08-04T09:35:00Z
-updated: 2026-08-04T09:35:00Z
+updated: 2026-08-04T12:25:00Z
 policy_version: 2
 prompting_standard_version: 2.1
 task_kind: audit
@@ -39,7 +39,7 @@ Trusted instructions are the owner request and repository governance on base `7d
 
 ## Acceptance inventory
 
-- [ ] exact canonical set of 60 unique keys recovered;
+- [x] exact canonical set of 60 unique keys recovered;
 - [ ] 60 per-item dossiers;
 - [ ] one required truth-status, static conclusion, runtime conclusion and owner action per item;
 - [ ] active internet research and source provenance for all 60;
@@ -58,42 +58,62 @@ Trusted instructions are the owner request and repository governance on base `7d
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-08-04T09:35:00Z
-head: 7d9843b66731a0b62d916b2867f320726de55921
+updated_at: 2026-08-04T12:25:00Z
+head: d8a83d905747eb89388ff8344e22f037679910ba
 branch: audit/otheryn-external-truth-source-enrichment-20260804
 pr: none
 status: investigating
 context_routes:
   - docs/agents/evidence/OTERYN-20260803-upstream-103-cross-repository-revalidation/
   - docs/agents/tasks/archive/OTERYN-20260803-upstream-103-cross-repository-revalidation.md
+  - docs/agents/evidence/OTERYN-20260804-external-truth-source-enrichment/index.md
+  - docs/agents/evidence/OTERYN-20260804-external-truth-source-enrichment/canonical-scope.json
+  - docs/agents/evidence/OTERYN-20260804-external-truth-source-enrichment/source-policy.md
 owned_paths:
   - docs/agents/tasks/active/OTERYN-20260804-external-truth-source-enrichment.md
   - docs/agents/evidence/OTERYN-20260804-external-truth-source-enrichment/**
 proven:
   - predecessor audit is complete with 103 unique canonical rows
-  - primary scope is 49 REPRO plus 11 INSUFFICIENT rows
-  - no existing matching branch or PR existed at task start
+  - canonical scope is exactly 60 unique keys: 49 REPRO plus 11 INSUFFICIENT
+  - source type and current title are resolved for all 60 canonical items
+  - scope includes 51 upstream Canary items and 9 CrystalServer items
   - pinned predecessor revisions are Otheryn 1f316400053f489e58608d13961069835871ab0e, upstream Canary f7ae4d17ed1eb58621a9bed3e0a7d912b9eb9c32, CrystalServer 8eb99d0583ccb52cc368cb45c65d97ec9fbd181e, blakinio/canary a288bfaf5a3016a9c3b01c4848d242dc7a1fb98f, OTClient 2f0bff09cd9f5a9acf2629d7ba080e98d3f5f1ad
+  - source hierarchy, conclusion enums, five-repository comparison requirements and runtime safety gate are persisted
+  - no matching audit PR exists
+  - Otheryn Issues 313 through 326 remain untouched
 derived:
-  - task shape is phased single-task because claims share one canonical inventory, evidence schema and final aggregation
+  - task shape remains phased single-task because claims share one canonical inventory, evidence schema and final aggregation
+  - per-item research should be processed in coherent behavior families while preserving one final 60-row aggregation
 unknown:
   - exact source-derived expected behavior and runtime feasibility for each of 60 items
+  - final truth status, static conclusion, runtime conclusion and owner action for every item
 conflicts:
   - predecessor JSON corruption is retained as an explicit historic evidence conflict; valid predecessor CSV/blob and rendered matrix control scope
+  - working branch is diverged from main and was six commits behind at continuation preflight; integration is required before PR closeout
 first_failure:
   marker: none
   evidence: none
 rejected_hypotheses:
   - existing matching programme already active: branch and PR searches returned none
+  - canonical scope could be recovered from issue-only search: four canonical items are pull requests and are preserved as pull requests
 changed_paths:
   - docs/agents/tasks/active/OTERYN-20260804-external-truth-source-enrichment.md
+  - docs/agents/evidence/OTERYN-20260804-external-truth-source-enrichment/canonical-scope.json
+  - docs/agents/evidence/OTERYN-20260804-external-truth-source-enrichment/source-policy.md
+  - docs/agents/evidence/OTERYN-20260804-external-truth-source-enrichment/index.md
 validation:
-  - command: live repository/branch/PR and predecessor evidence preflight
+  - command: canonical scope generation invariants
     result: PASS
-    evidence: main 7d9843b66731a0b62d916b2867f320726de55921; predecessor archive and matrix recovered
+    evidence: 60 rows, 60 unique keys, 49 REPRO, 11 INSUFFICIENT
+  - command: live source identity refresh
+    result: PASS
+    evidence: titles and source types resolved for all 60 canonical keys; four pull requests not misclassified as issues
+  - command: branch and PR preflight
+    result: PASS
+    evidence: uniquely named working branch exists; no related PR exists
 blockers:
   - none
-next_action: recover the exact 60-item canonical inventory with source titles, prior reasons and pinned revisions, then persist the initial evidence index and source policy
+next_action: create the normalized dossier template and complete the first coherent truth-source/static-comparison batch before any runtime execution
 ```
 
 ## Recovery checkpoint
@@ -101,40 +121,40 @@ next_action: recover the exact 60-item canonical inventory with source titles, p
 ```yaml
 recovery:
   policy_version: 1
-  generation: 1
-  session_id: agent-20260804-external-truth-source-enrichment-001
-  session_started_at: 2026-08-04T09:28:00Z
-  checkpointed_at: 2026-08-04T09:35:00Z
-  last_progress_at: 2026-08-04T09:35:00Z
+  generation: 2
+  session_id: agent-20260804-external-truth-source-enrichment-002
+  session_started_at: 2026-08-04T12:25:00Z
+  checkpointed_at: 2026-08-04T12:25:00Z
+  last_progress_at: 2026-08-04T12:25:00Z
   phase: investigate
-  exact_head: 7d9843b66731a0b62d916b2867f320726de55921
+  exact_head: d8a83d905747eb89388ff8344e22f037679910ba
   pull_request: none
-  active_operation: external source and canonical inventory research
+  active_operation: per-item truth-source research and static repository comparison
   external_run_ids: []
-  operation_started_at: 2026-08-04T09:35:00Z
+  operation_started_at: 2026-08-04T12:25:00Z
   wait_deadline_at: null
   check_generation: null
   checks_used: 0
   status: active
   safe_to_resume: true
-  resume_condition: branch remains uniquely owned and canonical predecessor evidence remains available
-  next_action: recover and persist the exact 60-item canonical inventory and initial evidence scaffolding
+  resume_condition: branch remains uniquely owned and canonical scope files remain unchanged
+  next_action: create the dossier template and complete the first coherent research batch
 ```
 
 ## Anti-stall counters
 
 ```yaml
-invocation_started_at: 2026-08-04T09:28:00Z
-last_progress_at: 2026-08-04T09:35:00Z
+invocation_started_at: 2026-08-04T12:25:00Z
+last_progress_at: 2026-08-04T12:25:00Z
 ci_checks_for_current_head: 0
 unchanged_state_checks: 0
 identical_failure_retries: 0
 repair_cycles_for_current_gate: 0
-context_reconstruction_attempts: 0
+context_reconstruction_attempts: 1
 stall_warnings: 0
 context_pressure: high
-context_score: 12
-context_growth: increasing
+context_score: 11
+context_growth: stable
 estimate_confidence: high
 decomposition_decision: phased
 decomposition_reason: one canonical 60-row evidence programme with shared schemas and aggregation; rotate sessions rather than split ownership
