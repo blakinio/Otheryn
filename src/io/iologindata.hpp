@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include "database/player_writer_fence_repository.hpp"
+
 class Player;
 class Item;
 class DBResult;
@@ -26,37 +28,11 @@ public:
 	static bool loadPlayerByName(const std::shared_ptr<Player> &player, const std::string &name, bool disableIrrelevantInfo = true);
 	static bool loadPlayer(const std::shared_ptr<Player> &player, const std::shared_ptr<DBResult> &result, bool disableIrrelevantInfo = false);
 
-	/**
-	 * @brief Loads data components that are only relevant when the player is online.
-	 *
-	 * This function is responsible for initializing systems that are not needed when the player is offline,
-	 * such as the forge history, bosstiary, and various runtime systems.
-	 *
-	 * If the player is offline, this function returns early and avoids loading these systems.
-	 * This helps optimize memory usage and prevents unnecessary initialization of unused features.
-	 *
-	 * @param player A shared pointer to the Player instance. Must not be nullptr.
-	 * @param result The database result containing the player's data.
-	 */
 	static void loadOnlyDataForOnlinePlayer(const std::shared_ptr<Player> &player, const std::shared_ptr<DBResult> &result);
 
 	static bool savePlayer(const std::shared_ptr<Player> &player);
+	static bool savePlayer(const std::shared_ptr<Player> &player, PlayerWriterFenceContext &writerFenceContext);
 
-	/**
-	 * @brief Saves data components that are only relevant when the player is online.
-	 *
-	 * This function is responsible for persisting player-related systems that are only loaded
-	 * when the player is online, such as the forge history, bosstiary progress, and wheel data.
-	 *
-	 * If the player is offline, this function will return immediately without performing any save operations.
-	 * This prevents overwriting existing database values with empty or uninitialized data that may result
-	 * from partial player loading (common during offline operations).
-	 *
-	 * @note This function throws DatabaseException if any of the internal save operations fail.
-	 * It should be called after all always-loaded data has been saved.
-	 *
-	 * @param player A shared pointer to the Player instance. Must not be nullptr.
-	 */
 	static void saveOnlyDataForOnlinePlayer(const std::shared_ptr<Player> &player);
 	static uint32_t getGuidByName(const std::string &name);
 	static bool getGuidByNameEx(uint32_t &guid, bool &specialVip, std::string &name);

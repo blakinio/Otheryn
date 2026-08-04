@@ -10,6 +10,7 @@
 #include "game/scheduling/save_manager.hpp"
 
 #include "config/configmanager.hpp"
+#include "database/player_writer_fence_repository.hpp"
 #include "creatures/players/grouping/guild.hpp"
 #include "game/game.hpp"
 #include "game/scheduling/player_checkpoint_attempt.hpp"
@@ -21,9 +22,64 @@
 #include "lib/metrics/metrics.hpp"
 #include "creatures/players/player.hpp"
 
+#include <mbedtls/ctr_drbg.h>
+#include <mbedtls/entropy.h>
+
 namespace {
 	constexpr auto PLAYER_FINAL_SAVE_WAIT_TIMEOUT = std::chrono::seconds(5);
 	constexpr uint8_t PLAYER_FINAL_SAVE_MAX_ATTEMPTS = 2;
+	constexpr std::array<unsigned char, 24> PLAYER_WRITER_FENCE_PERSONALIZATION = {
+		'o', 't', 'h', 'e', 'r', 'y', 'n', '-', 'w', 'r', 'i', 't', 'e', 'r', '-',
+		'f', 'e', 'n', 'c', 'e', '-', '0', '0', '4'
+	};
+
+	class PlayerWriterFenceTokenSource final {
+	public:
+		PlayerWriterFenceTokenSource() {
+			mbedtls_entropy_init(&entropy_);
+			mbedtls_ctr_drbg_init(&drbg_);
+			seeded_ = mbedtls_ctr_drbg_seed(
+				&drbg_,
+				mbedtls_entropy_func,
+				&entropy_,
+				PLAYER_WRITER_FENCE_PERSONALIZATION.data(),
+				PLAYER_WRITER_FENCE_PERSONALIZATION.size()
+			) == 0;
+			if (!seeded_) {
+				g_logger().error("Failed to seed player writer-fence CSPRNG; acquisition will fail closed.");
+			}
+		}
+
+		~PlayerWriterFenceTokenSource() {
+			mbedtls_ctr_drbg_free(&drbg_);
+			mbedtls_entropy_free(&entropy_);
+		}
+
+		[[nodiscard]] std::optional<PlayerWriterFenceToken> next() {
+			std::scoped_lock lock(mutex_);
+			if (!seeded_) {
+				return std::nullopt;
+			}
+
+			PlayerWriterFenceToken token {};
+			if (mbedtls_ctr_drbg_random(&drbg_, token.data(), token.size()) != 0
+			    || !PlayerWriterFenceRepository::isValidToken(token)) {
+				return std::nullopt;
+			}
+			return token;
+		}
+
+	private:
+		std::mutex mutex_;
+		mbedtls_entropy_context entropy_ {};
+		mbedtls_ctr_drbg_context drbg_ {};
+		bool seeded_ = false;
+	};
+
+	PlayerWriterFenceTokenSource &playerWriterFenceTokenSource() {
+		static PlayerWriterFenceTokenSource source;
+		return source;
+	}
 }
 
 SaveManager::SaveManager(ThreadPool &threadPool, KVStore &kvStore, Logger &logger, Game &game) :
@@ -180,6 +236,94 @@ std::vector<std::shared_ptr<PlayerPersistenceState>> SaveManager::persistenceSta
 		++it;
 	}
 	return states;
+}
+
+std::optional<PlayerWriterFenceContext> SaveManager::writerFenceContextFor(const std::shared_ptr<Player> &player) {
+	if (!player) {
+		return std::nullopt;
+	}
+
+	std::lock_guard lock(m_playerPersistenceMutex);
+	const std::weak_ptr<Player> owner = player;
+	const auto it = m_playerWriterFenceContexts.find(owner);
+	return it == m_playerWriterFenceContexts.end() ? std::nullopt : std::optional<PlayerWriterFenceContext> { it->second };
+}
+
+void SaveManager::storeWriterFenceContext(
+	const std::shared_ptr<Player> &player,
+	const PlayerWriterFenceContext &context
+) {
+	if (!player) {
+		return;
+	}
+
+	std::lock_guard lock(m_playerPersistenceMutex);
+	m_playerWriterFenceContexts[std::weak_ptr<Player> { player }] = context;
+}
+
+void SaveManager::eraseWriterFenceContext(const std::shared_ptr<Player> &player) {
+	if (!player) {
+		return;
+	}
+
+	std::lock_guard lock(m_playerPersistenceMutex);
+	m_playerWriterFenceContexts.erase(std::weak_ptr<Player> { player });
+}
+
+bool SaveManager::acquirePlayerWriterFence(const std::shared_ptr<Player> &player) {
+	if (!player || player->getGUID() == 0) {
+		logger.error("Player writer-fence acquisition failed because the player subject is missing.");
+		return false;
+	}
+	if (writerFenceContextFor(player).has_value()) {
+		logger.error("Player {} already owns a process-local writer-fence context.", player->getName());
+		return false;
+	}
+
+	PlayerWriterFenceRepository repository;
+	const auto loaded = repository.load(player->getGUID());
+	if (loaded.result != PlayerWriterFenceResult::Applied
+	    || PlayerWriterFenceRepository::isValidToken(loaded.context.writerToken)
+	    || loaded.context.ownershipGeneration == std::numeric_limits<PlayerWriterFenceGeneration>::max()) {
+		logger.error("Player {} durable writer-fence is unavailable for a new initial owner.", player->getName());
+		return false;
+	}
+
+	const auto token = playerWriterFenceTokenSource().next();
+	if (!token.has_value()) {
+		logger.error("Player {} writer-fence token generation failed closed.", player->getName());
+		return false;
+	}
+
+	PlayerWriterFenceContext desired {
+		.playerId = player->getGUID(),
+		.ownershipGeneration = loaded.context.ownershipGeneration + 1,
+		.writerToken = *token,
+		.stateRevision = loaded.context.stateRevision,
+	};
+	if (repository.acquire(desired) != PlayerWriterFenceResult::Applied) {
+		logger.error("Player {} durable writer-fence acquisition was rejected.", player->getName());
+		return false;
+	}
+
+	storeWriterFenceContext(player, desired);
+	return true;
+}
+
+bool SaveManager::releasePlayerWriterFence(const std::shared_ptr<Player> &player) {
+	const auto context = writerFenceContextFor(player);
+	if (!context.has_value()) {
+		logger.error("Player writer-fence release failed because no exact owner context exists.");
+		return false;
+	}
+
+	if (PlayerWriterFenceRepository().release(*context) != PlayerWriterFenceResult::Applied) {
+		logger.error("Player {} durable writer-fence release was rejected.", player->getName());
+		return false;
+	}
+
+	eraseWriterFenceContext(player);
+	return true;
 }
 
 void SaveManager::publishPlayerDirtyGauges() {
@@ -373,7 +517,7 @@ bool SaveManager::scheduleDirtyPlayer(std::weak_ptr<Player> playerPtr, std::shar
 	}
 }
 
-bool SaveManager::doSavePlayer(std::shared_ptr<Player> player) {
+bool SaveManager::doSavePlayer(std::shared_ptr<Player> player, bool releaseWriterFence) {
 	if (!player) {
 		logger.debug("Failed to save player because player is null.");
 		return false;
@@ -385,7 +529,25 @@ bool SaveManager::doSavePlayer(std::shared_ptr<Player> player) {
 		logger.debug("Saving player {}.", player->getName());
 	}
 
-	bool saveSuccess = IOLoginData::savePlayer(player);
+	auto writerFenceContext = writerFenceContextFor(player);
+	if (!writerFenceContext.has_value()) {
+		logger.error("Refusing player {} save because the durable writer-fence context is missing.", player->getName());
+		return false;
+	}
+
+	bool saveSuccess = IOLoginData::savePlayer(player, *writerFenceContext);
+	storeWriterFenceContext(player, *writerFenceContext);
+
+	if (saveSuccess && releaseWriterFence) {
+		const auto releaseResult = PlayerWriterFenceRepository().release(*writerFenceContext);
+		if (releaseResult != PlayerWriterFenceResult::Applied) {
+			logger.error("Failed to release player {} durable writer fence after protected save.", player->getName());
+			saveSuccess = false;
+		} else {
+			eraseWriterFenceContext(player);
+		}
+	}
+
 	if (!saveSuccess) {
 		logger.error("Failed to save player {}.", player->getName());
 	}
@@ -412,7 +574,7 @@ bool SaveManager::savePlayer(std::shared_ptr<Player> player) {
 		if (player->isOnline() && g_game().getGameState() != GAME_STATE_SHUTDOWN) {
 			return schedulePlayer(player);
 		}
-		return doSavePlayer(player);
+		return doSavePlayer(player, true);
 	};
 
 	const bool saveSucceeded = dispatchSave();
@@ -496,7 +658,7 @@ bool SaveManager::savePlayerFinal(std::shared_ptr<Player> player) {
 		g_metrics().addCounter("player_checkpoint_attempts", 1);
 		metrics::method_latency checkpointLatency("player_checkpoint_save");
 		const auto attempt = executePlayerCheckpointAttempt(*state, *generation, [this, &player] {
-			return doSavePlayer(player);
+			return doSavePlayer(player, true);
 		});
 
 		if (attempt.outcome != PlayerCheckpointAttemptOutcome::saved) {

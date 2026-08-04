@@ -38,6 +38,7 @@
 #include "game/game.hpp"
 #include "game/modal_window/modal_window.hpp"
 #include "game/scheduling/dispatcher.hpp"
+#include "game/scheduling/save_manager.hpp"
 #include "io/functions/iologindata_load_player.hpp"
 #include "io/io_bosstiary.hpp"
 #include "io/iobestiary.hpp"
@@ -1054,6 +1055,11 @@ void ProtocolGame::login(const std::string &name, uint32_t accountId, OperatingS
 			}
 		}
 
+		if (!g_saveManager().acquirePlayerWriterFence(player)) {
+			disconnectClient("Your character persistence owner could not be acquired. Please try again later.");
+			return;
+		}
+
 		const bool suppressPreLoginPacketsBeforePlacement = isCipsoft860Profile(protocolProfile);
 		const bool previousSuppressPreLoginPackets = suppressPreLoginPackets;
 		if (suppressPreLoginPacketsBeforePlacement) {
@@ -1063,6 +1069,9 @@ void ProtocolGame::login(const std::string &name, uint32_t accountId, OperatingS
 		const bool placedCreature = g_game().placeCreature(player, player->getLoginPosition()) || g_game().placeCreature(player, player->getTemplePosition(), false, true);
 		suppressPreLoginPackets = previousSuppressPreLoginPackets;
 		if (!placedCreature) {
+			if (!g_saveManager().releasePlayerWriterFence(player)) {
+				g_logger().error("Failed to release player {} writer fence after placement rejection.", player->getName());
+			}
 			disconnectClient("Temple position is wrong. Please, contact the administrator.");
 			g_logger().warn("Player {} temple position is wrong", player->getName());
 			return;
