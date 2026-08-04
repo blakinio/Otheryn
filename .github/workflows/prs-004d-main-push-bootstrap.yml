@@ -1,7 +1,7 @@
-name: PRS-004D Observable Final Save Repair
+name: PRS-004D Guarded Final Save Repair
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - docs/agents/triggers/prs-004d-final-save-repair.txt
@@ -11,12 +11,15 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: prs-004d-observable-final-save-repair
+  group: prs-004d-guarded-final-save-repair
   cancel-in-progress: false
 
 jobs:
   repair:
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: >-
+      github.event.pull_request.number == 347 &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'dudantas/prs-004d-final-save-repair-trigger'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
