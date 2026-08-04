@@ -135,11 +135,12 @@ namespace it_player_writer_fenced_save {
 		const auto attempt = executePlayerCheckpointAttempt(state, *generation, [&] {
 			++attempts;
 			return PlayerWriterFencedSaveTransaction::execute(staleContext, [&] {
-				return g_database().executeQuery(fmt::format(
-					"UPDATE `players` SET `level` = 99 WHERE `id` = {}",
-					playerId
-				));
-			}) == PlayerWriterFenceResult::Applied;
+					   return g_database().executeQuery(fmt::format(
+						   "UPDATE `players` SET `level` = 99 WHERE `id` = {}",
+						   playerId
+					   ));
+				   })
+				== PlayerWriterFenceResult::Applied;
 		});
 
 		EXPECT_EQ(1, attempts);

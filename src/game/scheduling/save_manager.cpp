@@ -39,12 +39,13 @@ namespace {
 			mbedtls_entropy_init(&entropy_);
 			mbedtls_ctr_drbg_init(&drbg_);
 			seeded_ = mbedtls_ctr_drbg_seed(
-				&drbg_,
-				mbedtls_entropy_func,
-				&entropy_,
-				PLAYER_WRITER_FENCE_PERSONALIZATION.data(),
-				PLAYER_WRITER_FENCE_PERSONALIZATION.size()
-			) == 0;
+						  &drbg_,
+						  mbedtls_entropy_func,
+						  &entropy_,
+						  PLAYER_WRITER_FENCE_PERSONALIZATION.data(),
+						  PLAYER_WRITER_FENCE_PERSONALIZATION.size()
+					  )
+				== 0;
 			if (!seeded_) {
 				g_logger().error("Failed to seed player writer-fence CSPRNG; acquisition will fail closed.");
 			}
