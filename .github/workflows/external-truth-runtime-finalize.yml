@@ -1,0 +1,47 @@
+name: External Truth Runtime Finalize
+
+on:
+  push:
+    branches:
+      - audit/otheryn-external-truth-source-enrichment-20260804
+    paths:
+      - docs/agents/evidence/OTERYN-20260804-external-truth-source-enrichment/finalize_runtime_feasibility.py
+      - .github/workflows/external-truth-runtime-finalize.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: external-truth-runtime-finalize
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: audit/otheryn-external-truth-source-enrichment-20260804
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Install parser dependency
+        run: python -m pip install --disable-pip-version-check PyYAML==6.0.2
+      - name: Finalize runtime feasibility dispositions
+        run: python docs/agents/evidence/OTERYN-20260804-external-truth-source-enrichment/finalize_runtime_feasibility.py
+      - name: Validate finalized evidence
+        run: python docs/agents/evidence/OTERYN-20260804-external-truth-source-enrichment/validate_evidence.py
+      - name: Commit deterministic closeout
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add docs/agents/evidence/OTERYN-20260804-external-truth-source-enrichment
+          if git diff --cached --quiet; then
+            echo "No finalization changes to commit"
+            exit 0
+          fi
+          git diff --cached --check
+          git commit -m "audit: close runtime feasibility for 60 items"
+          git push origin HEAD:audit/otheryn-external-truth-source-enrichment-20260804
