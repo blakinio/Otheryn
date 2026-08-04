@@ -17,12 +17,12 @@ lifecycle_head_sha: f1356152458d3196047de050726bfcb5769ac448
 lifecycle_required_run: 30882954122
 lifecycle_dedicated_run: 30882954141
 lifecycle_merge_sha: 8125f9bbc1c41b44bddd726c336e98d720ceabd4
-finalizer_pr: pending
-finalizer_head_sha: pending
-finalizer_required_run: pending
-finalizer_merge_sha: pending
+finalizer_pr: "334"
+finalizer_head_sha: 8d9ac17e7ec472ef675f4c3bbc7c37a6061aa577
+finalizer_required_run: 30884149235
+finalizer_merge_sha: 27cbb0933c780a44088ab15ce1c7ba0e753914af
 created: 2026-07-31
-updated: 2026-08-04T08:25:00+02:00
+updated: 2026-08-04T08:31:00+02:00
 owned_paths:
   - schema.sql
   - data-otservbr-global/migrations/60.lua
@@ -36,7 +36,7 @@ owned_paths:
   - docs/agents/tasks/active/OTH-20260731-prs004c-durable-fence-cas.md
 ---
 
-# PRS-004C durable writer-fence CAS repository — completed
+# PRS-004C durable writer-fence CAS repository — terminal
 
 ## Delivered contract
 
@@ -44,29 +44,16 @@ MariaDB is the durable writer-fence authority. The repository provides typed acq
 
 Schema version 60 preserves ownership generation and state revision after release while clearing only the writer token. No player-save integration, handoff, Redis authority, reconnect, retry, SQL replay, production credential/data access, deployment or later-package behavior is included.
 
-## Exact feature evidence
+## Exact terminal evidence
 
 - issue #284: closed completed;
-- feature PR #285 exact head `5c84b591dc00626190b1cc6c58149379529694b1`;
-- expected-head squash merge `3186099e69b05ba17966f1ebe8caeedc3302ae51`;
-- exact ten declared paths, `behind_by=0`, merge base current `main` and clean mergeability;
-- comments, reviews and review threads: empty;
-- dedicated PRS-004C run `30853158644`: PASS;
-- CI run `30853158985`: PASS;
-- Required run `30853158315`: PASS;
-- Repository Audit run `30853158231`: PASS;
-- MySQL Schema Check run `30853159385`: PASS;
-- autofix run `30853157097`: PASS with no replacement commit.
-
-## Lifecycle evidence
-
-- lifecycle PR #329 exact head `f1356152458d3196047de050726bfcb5769ac448`;
-- lifecycle Required run `30882954122`: PASS;
-- lifecycle dedicated run `30882954141`: PASS;
-- lifecycle merge `8125f9bbc1c41b44bddd726c336e98d720ceabd4`;
-- lifecycle scope exactly the active-record deletion and matching archive addition;
-- lifecycle comments, reviews and review threads: empty;
-- lifecycle branch was refreshed from current `main` through merged synchronization PR #332 before exact-head validation.
+- feature PR #285 exact head `5c84b591dc00626190b1cc6c58149379529694b1`, expected-head squash merge `3186099e69b05ba17966f1ebe8caeedc3302ae51`;
+- feature checks: dedicated `30853158644`, CI `30853158985`, Required `30853158315`, Repository Audit `30853158231`, MySQL Schema Check `30853159385`, autofix `30853157097`: PASS;
+- lifecycle PR #329 exact head `f1356152458d3196047de050726bfcb5769ac448`, Required `30882954122`, dedicated `30882954141`, merge `8125f9bbc1c41b44bddd726c336e98d720ceabd4`;
+- finalizer PR #334 exact head `8d9ac17e7ec472ef675f4c3bbc7c37a6061aa577`, Required `30884149235`, merge `27cbb0933c780a44088ab15ce1c7ba0e753914af`;
+- feature scope exactly ten declared paths; lifecycle exactly active deletion plus archive addition; finalizer exactly one archive path;
+- feature, lifecycle and finalizer discussions, reviews and review threads: empty;
+- feature and lifecycle branches were refreshed from current `main` through synchronization PRs #328, #332 and #335 before their accepted exact-head validation.
 
 ## Validation and audit evidence
 
@@ -77,18 +64,18 @@ Schema version 60 preserves ownership generation and state revision after releas
 
 ## Recovery and PR hygiene
 
-- stale-base defects were contained by synchronization PRs #328 and #332 without overlap with owned implementation or lifecycle paths;
-- historical bootstrap/synchronization PRs #286, #287, #288, #289, #290, #291, #293 and #295 are closed merged and intentionally terminal;
-- PRs #285, #328, #329 and #332 are closed merged;
+- historical bootstrap/synchronization PRs #286, #287, #288, #289, #290, #291, #293, #295, #328, #332 and #335 are closed merged and intentionally terminal;
+- feature PR #285, lifecycle PR #329 and finalizer PR #334 are closed merged;
+- active task record is absent from `main`;
 - redundant non-owning staging branches must not be reused; branch deletion is unavailable through the connected GitHub actions.
 
-## Context checkpoint
+## Terminal checkpoint
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-08-04T08:25:00+02:00
+updated_at: 2026-08-04T08:31:00+02:00
 status: completed
-phase: finalizer
+phase: terminal
 feature_pr: 285
 feature_head_sha: 5c84b591dc00626190b1cc6c58149379529694b1
 feature_merge_sha: 3186099e69b05ba17966f1ebe8caeedc3302ae51
@@ -105,17 +92,19 @@ lifecycle_checks:
   required: PASS:30882954122
   dedicated: PASS:30882954141
 lifecycle_merge_sha: 8125f9bbc1c41b44bddd726c336e98d720ceabd4
-finalizer_pr: pending
+finalizer_pr: 334
+finalizer_head_sha: 8d9ac17e7ec472ef675f4c3bbc7c37a6061aa577
+finalizer_required_run: PASS:30884149235
+finalizer_merge_sha: 27cbb0933c780a44088ab15ce1c7ba0e753914af
 proven:
   - exact ten-path feature scope and complete exact-head validation
-  - issue completed and expected-head feature merge
-  - exact two-path active-to-archive lifecycle and exact-head lifecycle validation
-  - active task absent on main after lifecycle merge
+  - completed issue and expected-head feature merge
+  - exact active-to-archive lifecycle and lifecycle validation
+  - exact one-file finalizer and finalizer validation
+  - active task absent and no unresolved discussion
   - durable CAS semantics and applicable disposable-MariaDB integration evidence
-unknown:
-  - finalizer PR exact head, Required and merge
-  - historical terminal-evidence repair after finalizer
+unknown: []
 conflicts: []
 blockers: []
-next_action: merge the one-file finalizer, then record its historical terminal evidence with empty unknown, conflicts and blockers
+next_action: none
 ```
