@@ -1,15 +1,16 @@
-name: PRS-004D Guarded Final Save Repair
+name: PRS-004D One-Shot Final Save Repair
 
 on:
-  pull_request_target:
-    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/prs-004d-main-push-bootstrap.yml
 
 permissions:
   contents: write
-  pull-requests: read
 
 concurrency:
-  group: prs-004d-guarded-final-save-repair
+  group: prs-004d-one-shot-final-save-repair
   cancel-in-progress: false
 
 jobs:
@@ -17,22 +18,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Verify trusted trigger
+      - name: Verify trusted main push
         env:
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
-          HEAD_REF: ${{ github.event.pull_request.head.ref }}
-          EXPECTED_REPOSITORY: ${{ github.repository }}
+          ACTUAL_REPOSITORY: ${{ github.repository }}
+          ACTUAL_REF: ${{ github.ref }}
         run: |
           set -euo pipefail
-          printf 'pr=%s head_repo=%s head_ref=%s expected_repo=%s\n' "$PR_NUMBER" "$HEAD_REPOSITORY" "$HEAD_REF" "$EXPECTED_REPOSITORY"
-          [[ "$PR_NUMBER" == "347" ]]
-          [[ "$HEAD_REPOSITORY" == "$EXPECTED_REPOSITORY" ]]
-          [[ "$HEAD_REF" == "dudantas/prs-004d-final-save-repair-trigger" ]]
+          printf 'repository=%s ref=%s\n' "$ACTUAL_REPOSITORY" "$ACTUAL_REF"
+          [[ "$ACTUAL_REPOSITORY" == "blakinio/Otheryn" ]]
+          [[ "$ACTUAL_REF" == "refs/heads/main" ]]
 
       - uses: actions/checkout@v6
         with:
-          repository: ${{ github.repository }}
+          repository: blakinio/Otheryn
           ref: dudantas/prs-004d-protected-player-save
           fetch-depth: 0
 
@@ -66,7 +64,8 @@ jobs:
           else:
               if text.count(old_attempt) != 1 or text.count(old_success) != 1:
                   raise SystemExit('final-save repair markers are neither pristine nor fully repaired')
-              path.write_text(text.replace(old_attempt, new_attempt, 1).replace(old_success, new_success, 1), encoding='utf-8')
+              repaired = text.replace(old_attempt, new_attempt, 1).replace(old_success, new_success, 1)
+              path.write_text(repaired, encoding='utf-8')
           PY
 
       - name: Commit repair when needed
@@ -79,5 +78,6 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add src/game/scheduling/save_manager.cpp
           git diff --cached --check
+          [[ "$(git diff --cached --name-only)" == "src/game/scheduling/save_manager.cpp" ]]
           git commit -m "fix(resilience): release writer fence after final checkpoint"
           git push origin HEAD:dudantas/prs-004d-protected-player-save
