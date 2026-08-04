@@ -1,0 +1,34 @@
+name: PRS-004D Protected Player Save
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - src/database/player_writer_fence_repository.*
+      - src/database/player_writer_fenced_save_transaction.hpp
+      - src/game/scheduling/save_manager.*
+      - src/io/iologindata.*
+      - src/server/network/protocol/protocolgame.cpp
+      - tests/integration/database/**
+      - .github/workflows/prs-004d-protected-player-save.yml
+      - docs/architecture/prs-004d-protected-player-save.md
+      - docs/agents/tasks/active/OTH-20260804-prs004d-protected-player-save.md
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    permissions:
+      contents: write
+      packages: write
+    uses: ./.github/workflows/reusable-build-linux.yml
+    with:
+      buildtypes: '["linux-debug"]'
+      run_canary_smoke: false
+      run_global_smoke: false
+    secrets: inherit
