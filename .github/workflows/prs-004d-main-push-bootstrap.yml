@@ -16,13 +16,22 @@ concurrency:
 
 jobs:
   repair:
-    if: >-
-      github.event.pull_request.number == 347 &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.head.ref == 'dudantas/prs-004d-final-save-repair-trigger'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Verify trusted trigger
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          EXPECTED_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          printf 'pr=%s head_repo=%s head_ref=%s expected_repo=%s\n' "$PR_NUMBER" "$HEAD_REPOSITORY" "$HEAD_REF" "$EXPECTED_REPOSITORY"
+          [[ "$PR_NUMBER" == "347" ]]
+          [[ "$HEAD_REPOSITORY" == "$EXPECTED_REPOSITORY" ]]
+          [[ "$HEAD_REF" == "dudantas/prs-004d-final-save-repair-trigger" ]]
+
       - uses: actions/checkout@v6
         with:
           repository: ${{ github.repository }}
