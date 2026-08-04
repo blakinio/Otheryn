@@ -1,0 +1,65 @@
+name: PRS-004D Final Save Repair Executor
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - .github/workflows/prs-004d-final-save-repair-executor.yml
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  repair:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository }}
+          ref: dudantas/prs-004d-protected-player-save
+          fetch-depth: 0
+
+      - name: Repair final release boundary
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/game/scheduling/save_manager.cpp')
+          text = path.read_text(encoding='utf-8')
+
+          old_attempt = '''\t\tconst auto attempt = executePlayerCheckpointAttempt(*state, *generation, [this, &player] {
+\t\t\treturn doSavePlayer(player, true);
+\t\t});'''
+          new_attempt = '''\t\tconst auto attempt = executePlayerCheckpointAttempt(*state, *generation, [this, &player] {
+\t\t\treturn doSavePlayer(player, false);
+\t\t});'''
+          if text.count(old_attempt) != 1:
+              raise SystemExit('expected exactly one final-save attempt marker')
+          text = text.replace(old_attempt, new_attempt, 1)
+
+          old_success = '''\t\tif (!attempt.followUpRequired && !state->isDirty()) {
+\t\t\treturn true;
+\t\t}'''
+          new_success = '''\t\tif (!attempt.followUpRequired && !state->isDirty()) {
+\t\t\tif (!releasePlayerWriterFence(player)) {
+\t\t\t\tlogger.error("Final save for player {} committed but durable writer-fence release failed.", player->getName());
+\t\t\t\treturn false;
+\t\t\t}
+\t\t\treturn true;
+\t\t}'''
+          if text.count(old_success) != 1:
+              raise SystemExit('expected exactly one final-save success marker')
+          path.write_text(text.replace(old_success, new_success, 1), encoding='utf-8')
+          PY
+
+      - name: Commit repair
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/game/scheduling/save_manager.cpp
+          git diff --cached --check
+          git commit -m "fix(resilience): release writer fence after final checkpoint"
+          git push origin HEAD:dudantas/prs-004d-protected-player-save
