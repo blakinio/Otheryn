@@ -1,5 +1,6 @@
 #pragma once
 
+// Temporary PRS-004D synchronize marker; remove after bounded repair materializes.
 #ifndef USE_PRECOMPILED_HEADERS
 	#include <array>
 	#include <cstdint>
