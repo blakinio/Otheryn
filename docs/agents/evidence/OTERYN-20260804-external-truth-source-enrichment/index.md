@@ -91,7 +91,7 @@ Authoritative predecessor evidence:
 
 ## Validation
 
-- deterministic primary validation: **PASS** on evidence head `1cf8d74d10805156bc63c26416ce0a6d2bce0154`, workflow run `30932195423`;
-- independent falsification: **PASS**, zero open material findings on evidence head `ab8ea10db6bab03a7bc611c5cde1c8dcdfc29a8f`, workflow run `30932913247`;
+- deterministic primary validation: **PASS** on evidence head `d7fcbcbe8819860cb5d3902255694a9738e49e27`, workflow run `30933366341`;
+- independent falsification: **PASS**, zero open material findings on evidence head `d7fcbcbe8819860cb5d3902255694a9738e49e27`, workflow run `30933366180`;
 - exact-final-head Required CI: pending;
 - runtime E2E: item-level terminal dispositions recorded above; no product behavior changed.
