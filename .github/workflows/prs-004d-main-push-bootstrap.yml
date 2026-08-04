@@ -1,22 +1,22 @@
-# activation: final-save-repair-1
-name: PRS-004D Final Save Main Repair
+name: PRS-004D Observable Final Save Repair
 
 on:
-  push:
-    branches:
-      - main
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
-      - .github/workflows/prs-004d-main-push-bootstrap.yml
+      - docs/agents/triggers/prs-004d-final-save-repair.txt
 
 permissions:
   contents: write
+  pull-requests: read
 
 concurrency:
-  group: prs-004d-final-save-main-repair
+  group: prs-004d-observable-final-save-repair
   cancel-in-progress: false
 
 jobs:
   repair:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -40,10 +40,6 @@ jobs:
           new_attempt = '''\t\tconst auto attempt = executePlayerCheckpointAttempt(*state, *generation, [this, &player] {
 \t\t\treturn doSavePlayer(player, false);
 \t\t});'''
-          if text.count(old_attempt) != 1:
-              raise SystemExit('expected exactly one final-save attempt marker')
-          text = text.replace(old_attempt, new_attempt, 1)
-
           old_success = '''\t\tif (!attempt.followUpRequired && !state->isDirty()) {
 \t\t\treturn true;
 \t\t}'''
@@ -54,13 +50,21 @@ jobs:
 \t\t\t}
 \t\t\treturn true;
 \t\t}'''
-          if text.count(old_success) != 1:
-              raise SystemExit('expected exactly one final-save success marker')
-          path.write_text(text.replace(old_success, new_success, 1), encoding='utf-8')
+
+          if new_attempt in text and new_success in text:
+              Path('/tmp/already-applied').write_text('yes', encoding='utf-8')
+          else:
+              if text.count(old_attempt) != 1 or text.count(old_success) != 1:
+                  raise SystemExit('final-save repair markers are neither pristine nor fully repaired')
+              path.write_text(text.replace(old_attempt, new_attempt, 1).replace(old_success, new_success, 1), encoding='utf-8')
           PY
 
-      - name: Commit repair to canonical feature branch
+      - name: Commit repair when needed
         run: |
+          if [[ -f /tmp/already-applied ]]; then
+            echo "Repair already applied."
+            exit 0
+          fi
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add src/game/scheduling/save_manager.cpp
