@@ -7,124 +7,128 @@ Local architecture boundary: `docs/architecture/oteryn-native-gameplay-protocol.
 
 ## Status
 
-Contract correspondence only. This document does not implement or enable native gameplay framing, a TLS listener, protobuf generation, Game Session v2, action results, snapshots, deltas or automatic selection.
+Contract correspondence only. This PR implements no Game Session v2 storage, listener, TLS, protobuf, action result, snapshot, delta, readiness or automatic selection behavior.
 
-Current Otheryn remains the authoritative gameplay server with existing ASIO networking and profile-driven Canary-compatible protocol/transport behavior. Native `oteryn.native.v1` is a separate future producer family.
+Current Otheryn remains the authoritative gameplay server with ASIO networking and profile-driven Canary-compatible protocol/transport behavior. Native `oteryn.native.v1` is a separate future producer family.
 
 ## Normative adoption
 
-Otheryn adopts the meanings and limits in the canonical contract for:
+Otheryn adopts the canonical definitions for:
 
-- Gateway-selected candidate and World Registry policy revision;
-- Game Session contract version 2;
-- bind-on-first-admission character/session semantics;
+- one Gateway-selected candidate and bound World Registry policy revision;
+- opaque hashed-at-rest Game Session v2 bearer reference with server-side claims;
+- exact `game_account_id`, generation, world, initial `channel_id = 1`, endpoint audience and atomic bind-on-first-character-admission;
 - family `oteryn`, profile `oteryn.native.v1`, transport `tcp.tls13.protobuf.be32.v1`;
-- TLS 1.3 and ALPN `oteryn-game/1`;
-- 32-bit big-endian length framing and protobuf schema revision 1;
-- exact frame/message/string/collection/snapshot bounds;
-- stream sequence, command ID, client sequence, server tick and state revision semantics;
-- action result state machine and stable reason vocabulary;
-- full snapshot, ordered delta and bounded resync behavior;
-- no session resume, command replay or in-session adapter switch;
-- downgrade, replay, cross-character/world/profile and log-redaction requirements.
+- deterministic schema and sorted-capability digest rules;
+- TLS 1.3, ALPN `oteryn-game/1`, BE32 framing and protobuf schema revision 1;
+- exact frame/message/string/collection/snapshot limits and no v1 compression;
+- stream/command sequences, command ID, exact received-command byte hash, server tick and state revision;
+- action lifecycle and stable reasons including `STALE_COMMAND`;
+- full digest-checked snapshot, strict deltas, movement reconciliation and one bounded resync;
+- no resume, reconnect replay, password fallback, byte sniffing or in-session adapter switch;
+- replay, cross-character/world/channel/profile/endpoint and redaction requirements.
 
-If this document and the canonical contract differ, the canonical merged revision controls. A local implementation task must pin the exact canonical commit and review IDL SHA-256 before mutation.
+If correspondence differs from the merged canonical contract, the exact canonical revision controls. The implementation package must pin that commit, the exact IDL SHA-256 and Platform producer fixture manifest.
 
-## Current source correspondence
+## Existing source correspondence
 
-| Existing Otheryn boundary | Current role | Native target relationship |
+| Current boundary | Current role | Native target |
 |---|---|---|
-| `src/server/network/protocol/protocol_profile.hpp` | enumerates Canary-compatible protocol, feature, login and transport profiles | remains compatibility-only; native identifiers are not added until the producer package |
-| `src/server/network/protocol/transport_codec.hpp` | owns current profile-selected length/encryption/checksum/sequence/compression behavior | native uses a separate codec and TLS boundary; it must not reuse XTEA/Canary framing by familiarity |
-| `src/server/network/protocol/protocolgame.cpp` | decodes current client packets and dispatches authoritative game actions | native adapter maps semantic commands to the same authoritative game/domain operations through bounded explicit adapters |
-| ASIO connection/service architecture | owns asynchronous sockets and lifecycle | retained; no Tokio/server runtime replacement is authorized |
-| current Game Session-compatible admission path | accepts current Gateway-issued world-entry authorization | later extended to contract v2 and exact native selection binding |
-| current profile/port configuration | chooses current/legacy Canary-compatible listeners | native listener is separate, disabled by default and readiness-advertised only after exact deployment proof |
-| `vcpkg.json` protobuf dependency | available build capability | permits later generated schema use but creates no runtime behavior in this task |
+| `src/server/network/protocol/protocol_profile.hpp` | Canary-compatible protocol/login/transport profiles | remains compatibility-only; native is not a fake Tibia client version |
+| `src/server/network/protocol/transport_codec.hpp` | current length/XTEA/checksum/sequence/compression behavior | separate TLS + BE32 + protobuf codec; no reuse by familiarity |
+| `src/server/network/protocol/protocolgame.cpp` | packet decode and authoritative action dispatch | native semantic commands converge only at explicit authoritative game/domain seams |
+| ASIO connection/service architecture | asynchronous sockets/lifecycle | retained; no Tokio/server runtime replacement |
+| current Game Session-compatible admission | current Gateway world-entry authorization | extended later with opaque v2 claims and exact selection binding |
+| profile/port configuration | current/legacy Canary listeners | separate native listener, disabled by default and exact-readiness gated |
+| existing protobuf dependency | build capability | permits later generated bindings but creates no runtime behavior now |
 
-## Otheryn producer responsibilities
+## Future producer responsibilities
 
-The future Otheryn implementation package solely owns:
+### Admission
 
-1. **Admission**
-   - validate credential version, expiry, generation, audience, world/channel, policy revision, family/profile/transport/schema/capability digest;
-   - validate selected character ownership;
-   - atomically bind and consume one session for one connection and character;
-   - reject replay/cross-binding before gameplay state is exposed.
+- look up the opaque credential by repository-approved hash;
+- validate v2 version, expiry, generation, exact audience/endpoint, world/channel, policy revision and profile/transport/schema/list/digest;
+- load current ownership of `selected_character_id` for `game_account_id`;
+- atomically transition `ISSUED_UNBOUND` to `ACTIVE_BOUND(character_id, connection_id)` once;
+- expose no gameplay state before success;
+- make replay, wrong binding and ambiguous consume/bind outcomes terminal.
 
-2. **Native transport**
-   - separate configurable TCP listener;
-   - TLS 1.3, certificate/service identity and ALPN `oteryn-game/1`;
-   - exact bounded framing and protobuf parsing;
-   - deterministic cancellation, close and resource limits using existing ASIO ownership.
+Otheryn does not receive the raw Identity subject. Account authority comes from Platform ticket redeem and the stored `game_account_id`/generation claims.
 
-3. **Command handling**
-   - validate monotonic stream/command sequences and deduplicate exact commands;
-   - map native semantic intent into existing authoritative movement, target, spell, item, loot, chat and logout operations;
-   - emit the canonical action lifecycle without claiming effects before authoritative state changes.
+### Native transport
 
-4. **State production**
-   - assign monotonic server sequence/tick and state revision;
-   - emit canonical initial snapshot records and ordered deltas;
-   - correlate reversible movement reconciliation to command ID;
-   - remain authoritative for inventory, containers, loot, combat, resources and cooldowns;
-   - provide one bounded resync path and no v1 resume/replay.
+- separate configurable TCP listener disabled by default;
+- TLS 1.3, certificate/service identity and ALPN `oteryn-game/1`;
+- bounded BE32 frame and protobuf parser using existing ASIO lifecycle ownership;
+- deterministic cancellation/shutdown and finite handshake/frame/rate limits;
+- no native/Canary first-byte sniffing.
 
-5. **Security/operations**
-   - enforce handshake, frame, rate, command and resync limits independently;
-   - redact credentials, IDs, payloads and chat from logs;
-   - expose low-cardinality readiness/metrics for exact contract/profile/schema/capability identity;
-   - preserve Canary behavior and keep native disabled until exact integrated evidence.
+### Commands and results
 
-## Prohibited implementation shortcuts
+- validate exact stream and command sequences;
+- use SHA-256 of exact received serialized `CommandEnvelope` submessage bytes for bounded duplicate-result identity;
+- return cached exact duplicate results without reapplying, reject expired-cache duplicates as `STALE_COMMAND`, and close on same ID/sequence with different payload;
+- map movement, target, spell, item, loot, chat and logout intent directly to existing authoritative operations;
+- eventually emit one terminal action result for every admitted command unless session termination prevents delivery;
+- never report TCP receipt as gameplay success.
+
+### State production
+
+- emit monotonic server sequence/tick/revision;
+- emit a bounded initial snapshot whose digest covers the exact on-wire `SnapshotChunk` envelope payload bytes;
+- emit only `base_revision -> base_revision + 1` deltas;
+- treat duplicate/regressed/conflicting deltas as protocol faults and gaps as one bounded replacement-snapshot resync;
+- correlate reversible movement prediction by command ID;
+- retain sole authority for inventory, containers, loot, combat, resources, cooldowns and persistence;
+- provide no native v1 resume or reconnect replay.
+
+### Policy/readiness and rollback
+
+- readiness reports exact family/profile/transport/schema/list/digest and listener state;
+- Gateway stops new issuance when advertisement/readiness is disabled;
+- Otheryn does not query World Registry live during admission; it validates stored session tuple against local listener/readiness identity;
+- already-issued unexpired sessions may bind/drain after normal advertisement disablement unless explicit admission revocation or emergency listener shutdown applies;
+- emergency shutdown closes native sessions and never migrates them to Canary.
+
+### Security/operations
+
+- independent finite handshake, frame, command, heartbeat and resync limits;
+- logs/artifacts exclude credentials, session/command IDs, account/character IDs, chat and payloads;
+- metrics use low-cardinality contract/profile/reason/deployment labels;
+- current Canary behavior remains unchanged and native remains disabled until integrated evidence.
+
+## Prohibited shortcuts
 
 Otheryn must not:
 
-- add native opcodes to an existing Canary profile;
-- translate native protobuf messages into synthetic Canary packets before dispatch;
-- sniff the first bytes and fall back to another profile;
-- accept a family/profile/schema/capability tuple not bound to Game Session;
-- use client-supplied account/world/character/profile claims without authoritative validation;
-- acknowledge TCP receipt as gameplay success;
-- replay a command after disconnect or ambiguous persistence outcome;
-- allow native compression in profile v1;
-- log raw credentials, session/command IDs, account/character IDs, chat text or frames;
-- enable the listener or advertise native in this contract task.
+- add native opcodes to a Canary profile;
+- translate native protobuf through synthetic Canary packets;
+- accept a tuple not stored in Game Session;
+- trust client account/world/character/profile authority;
+- add password, OAuth-token or Game Login Ticket authentication;
+- enable v1 compression, resume or command replay;
+- advertise/enable native in the contract task.
 
-## Core action mapping obligations
+## Action authority map
 
-| Native command | Otheryn authoritative seam |
+| Native command | Authoritative seam |
 |---|---|
-| `Step`, `StopMovement` | movement admission, collision/speed/path and final position |
-| attack/follow set/clear | target visibility/rules/path and target state |
-| `CastSpell` | spell knowledge, cooldown, resource, range/LOS and effects |
-| `Use`, `UseWith`, `MoveItem` | item identity/location/ownership/quantity/capacity/scripts and committed mutations |
-| `QuickLoot`, `LootCorpse` | corpse ownership/rules/range/capacity/destination and transfers |
-| `Say` | channel/private permission, moderation and delivery |
-| `Logout` | fight/condition/lifecycle checks, final save/close policy |
+| step/stop | movement admission, collision/speed/path and final position |
+| attack/follow | target visibility/rules/path and target state |
+| spell | knowledge, cooldown, resources, range/LOS and effects |
+| use/use-with/move | identity, location, ownership, quantity, capacity, scripts and committed mutations |
+| quick/corpse loot | corpse ownership/rules/range/capacity/destination and transfers |
+| chat | permission, moderation and delivery |
+| logout | fight/condition/save/session lifecycle |
 
-The implementation package must identify exact current source functions and prove that no native path bypasses their authority.
+The implementation task must name exact source functions and prove that native paths do not bypass their authority.
 
 ## Fixture ownership
 
-Otheryn owns:
+Otheryn owns Game Session v2 admission fixtures, cross-language producer golden frames, action/revision tests, malformed parser/fuzz regressions and exact generated-schema provenance. Fixtures are synthetic and contain no real credential, identity, endpoint, chat or proprietary capture.
 
-- canonical native producer golden frames for every message it emits;
-- Game Session v2 admission fixtures and replay/cross-binding negatives;
-- action lifecycle and state revision tests;
-- malformed frame/parser/fuzz regression fixtures;
-- exact schema SHA-256 and generated-code provenance.
+## Rollout and later task
 
-Synthetic fixtures only. No real credential, account, character, endpoint, chat or packet capture enters Git.
+A native-capable Otheryn may merge server-first only with listener/advertisement disabled. Canary profiles remain independent. Enablement is atomic-required with exact Platform/Gateway and Rust revisions. Rollback disables advertisement first, drains/closes native sessions and then disables the listener; no active native session switches adapters.
 
-## Compatibility and rollout
-
-- A native-capable Otheryn may merge before the Rust adapter only with listener and World Registry advertisement disabled.
-- Canary-compatible profiles remain unchanged and independently selectable.
-- Readiness must report the exact native profile, schema hash and capability digest; Gateway must not advertise contradictory readiness.
-- Enablement is atomic-required with exact Platform/Gateway, Otheryn and Rust revisions.
-- Rollback disables advertisement first, drains/closes native sessions and then disables the listener. Active native sessions never switch to Canary.
-
-## Later task
-
-Use `blakinio/Oteryn-Platform/docs/agents/prompts/OTS_OTHERYN_NATIVE_PROTOCOL_IMPLEMENTATION.md` only after the canonical contract and all three correspondence PRs are merged and archived.
+Use `blakinio/Oteryn-Platform/docs/agents/prompts/OTS_OTHERYN_NATIVE_PROTOCOL_IMPLEMENTATION.md` only after all contract PRs merge and archive.
