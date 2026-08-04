@@ -48,66 +48,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  repair-prs-004d-final-save:
-    permissions:
-      contents: write
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Evaluate bounded repair gate
-        id: gate
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
-          HEAD_REF: ${{ github.event.pull_request.head.ref }}
-          EXPECTED_REPOSITORY: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          if [[ "$EVENT_NAME" == "pull_request" && "$PR_NUMBER" == "339" && "$HEAD_REPOSITORY" == "$EXPECTED_REPOSITORY" && "$HEAD_REF" == "dudantas/prs-004d-protected-player-save" ]]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Checkout trusted repair tool
-        if: steps.gate.outputs.run == 'true'
-        uses: actions/checkout@v6
-        with:
-          repository: blakinio/Otheryn
-          ref: main
-          path: trusted
-          fetch-depth: 1
-
-      - name: Checkout canonical PRS-004D branch
-        if: steps.gate.outputs.run == 'true'
-        uses: actions/checkout@v6
-        with:
-          repository: blakinio/Otheryn
-          ref: dudantas/prs-004d-protected-player-save
-          path: feature
-          fetch-depth: 0
-
-      - name: Apply bounded PRS-004D final-save repair
-        if: steps.gate.outputs.run == 'true'
-        run: python3 trusted/.github/scripts/prs-004d-final-save-repair.py feature/src/game/scheduling/save_manager.cpp
-
-      - name: Commit exactly one repaired file
-        if: steps.gate.outputs.run == 'true'
-        working-directory: feature
-        run: |
-          if git diff --quiet -- src/game/scheduling/save_manager.cpp; then
-            echo "Repair already applied."
-            exit 0
-          fi
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add src/game/scheduling/save_manager.cpp
-          git diff --cached --check
-          [[ "$(git diff --cached --name-only)" == "src/game/scheduling/save_manager.cpp" ]]
-          git commit -m "fix(resilience): release writer fence after final checkpoint"
-          git push origin HEAD:dudantas/prs-004d-protected-player-save
-
   changes:
     name: Detect Build Scope
     runs-on: ubuntu-latest
