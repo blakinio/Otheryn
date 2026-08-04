@@ -47,30 +47,32 @@ conflicts: []
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
+plan_status: NOT_APPLICABLE
 system_boundary: clean quest player and source map -> ordered shrine traversal/use -> storage progression and rewards
 preconditions:
-  - isolated clean Otheryn map/database
-  - test monk at required levels with ShrinesCount initialized
+- isolated clean Otheryn map/database
+- test monk at required levels with ShrinesCount initialized
 steps:
-  - dump exact tiles/items at every source coordinate and compare with the supplied official-minimap expectations
-  - perform bounded reachability checks to Respect, Serenity and Eternity
-  - attempt each shrine in order and record action dispatch, storage transition and reward
-  - verify Empathy at z=13 and Power at z=15 while confirming no action is bound at the erroneous z=1 positions
+- dump exact tiles/items at every source coordinate and compare with the supplied official-minimap expectations
+- perform bounded reachability checks to Respect, Serenity and Eternity
+- attempt each shrine in order and record action dispatch, storage transition and reward
+- verify Empathy at z=13 and Power at z=15 while confirming no action is bound at the erroneous z=1 positions
 expected_observations:
-  - pinned target fails the two action registrations and any source-confirmed map obstacles
+- pinned target fails the two action registrations and any source-confirmed map obstacles
 artifacts:
-  - shrine-tile-dump.json
-  - reachability.json
-  - shrine-sequence.jsonl
-  - server.log
+- shrine-tile-dump.json
+- reachability.json
+- shrine-sequence.jsonl
+- server.log
+- runtime-feasibility.md
 cleanup:
-  - discard quest player/database state
+- discard quest player/database state
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: map-binary inspection/runtime harness not yet executed
+blocker: 'not applicable: pinned static evidence already reaches a target disposition; runtime execution would not change
+  the audit decision'
 ```
 
 ## Runtime execution
@@ -79,9 +81,11 @@ blocker: map-binary inspection/runtime harness not yet executed
 execution_status: NOT_RUN
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- static comparison is sufficient for the target disposition; no game-world state was created
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not applicable
 ```
 
 ## Conclusions
@@ -89,10 +93,12 @@ cleanup_result: not run
 ```yaml
 truth_status: PROVEN
 static_conclusion: TARGET_AFFECTED
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_APPLICABLE
 owner_action: OPEN_FIX_PROGRAM
 confidence: high
-rationale: Otheryn contains the two objectively wrong shrine floors, while the source provides exact map/item evidence for three additional blockers; runtime/map dump should determine the complete repair set without changing this audit task
+rationale: Otheryn contains the two objectively wrong shrine floors, while the source provides exact map/item evidence for
+  three additional blockers; runtime/map dump should determine the complete repair set without changing this audit task Runtime
+  execution is not applicable because the pinned static comparison already determines the target disposition.
 ```
 
 ## Drift and unresolved questions

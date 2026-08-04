@@ -41,34 +41,44 @@ conflicts:
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
+plan_status: BLOCKED_INFEASIBLE
 system_boundary: pick item + exact crack/action ID + quest storage -> transform/teleport/progression
 preconditions:
-  - tile dump of every Beregar item 6298/action ID and canonical pick 3456
+- tile dump of every Beregar item 6298/action ID and canonical pick 3456
 steps:
-  - use pick 3456 on each configured crack at valid and invalid quest states
-  - repeat with common noncanonical pick variants
-  - record transform, decay, teleport, messages and storage
+- use pick 3456 on each configured crack at valid and invalid quest states
+- repeat with common noncanonical pick variants
+- record transform, decay, teleport, messages and storage
 expected_observations:
-  - canonical configured target works; invalid items/states fail deterministically
-artifacts: [beregar-cracks.json, pick-matrix.jsonl, server.log]
-cleanup: [restore/discard map and player state]
+- canonical configured target works; invalid items/states fail deterministically
+artifacts:
+- beregar-cracks.json
+- pick-matrix.jsonl
+- server.log
+- runtime-feasibility.md
+cleanup:
+- restore/discard map and player state
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: none after tile/action-ID inventory is generated
+blocker: the repository can start the server and validate the seeded HTTP login response, but it has no deterministic game-protocol/client
+  driver and no isolated per-scenario world fixture for map, quest, combat, store, boss, persistence or client-rendering actions;
+  adding that infrastructure would be implementation outside this audit-only authorization
 ```
 
 ## Runtime execution
 
 ```yaml
-execution_status: NOT_RUN
+execution_status: BLOCKED
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- Docker quickstart validates server startup and the seeded HTTP login response only
+- no deterministic game-protocol/client driver or per-scenario world fixture exists in the repository
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not started; no state created
 ```
 
 ## Conclusions
@@ -76,10 +86,12 @@ cleanup_result: not run
 ```yaml
 truth_status: PARTIALLY_PROVEN
 static_conclusion: STATIC_INCONCLUSIVE
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_RUN_INFEASIBLE
 owner_action: RESEARCH_REQUIRED
 confidence: high
-rationale: the report omits the item and coordinate, while later evidence says the canonical pick works; a bounded map/action inventory can resolve whether any legitimate crack remains broken
+rationale: 'the report omits the item and coordinate, while later evidence says the canonical pick works; a bounded map/action
+  inventory can resolve whether any legitimate crack remains broken Runtime execution is infrastructure-blocked: the repository
+  has no deterministic game/client driver and adding one is outside audit-only authority.'
 ```
 
 ## Drift and unresolved questions

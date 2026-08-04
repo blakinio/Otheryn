@@ -59,45 +59,54 @@ conflicts:
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
-system_boundary: scripted burst of player state mutations -> emitted packet sequence and client final state -> latency/packet/work comparison
+plan_status: BLOCKED_INFEASIBLE
+system_boundary: scripted burst of player state mutations -> emitted packet sequence and client final state -> latency/packet/work
+  comparison
 preconditions:
-  - isolated Otheryn and maintained OTClient
-  - deterministic scenarios for condition add/remove, damage/mana, skill/level gain, equipment/imbuement, mount/outfit, death/relog and logout-before-next-think
-  - audit-only packet decoder and server counters
+- isolated Otheryn and maintained OTClient
+- deterministic scenarios for condition add/remove, damage/mana, skill/level gain, equipment/imbuement, mount/outfit, death/relog
+  and logout-before-next-think
+- audit-only packet decoder and server counters
 steps:
-  - run each scenario on pinned immediate-send target and record packet counts/order, CPU and final server/client state
-  - build the donor PR head separately and run the same matrix without copying it into Otheryn
-  - compare final state equivalence and maximum update latency
-  - stress repeated mutations within one tick and lifecycle boundaries where deferred updates may be lost
+- run each scenario on pinned immediate-send target and record packet counts/order, CPU and final server/client state
+- build the donor PR head separately and run the same matrix without copying it into Otheryn
+- compare final state equivalence and maximum update latency
+- stress repeated mutations within one tick and lifecycle boundaries where deferred updates may be lost
 expected_observations:
-  - candidate is beneficial only if packet/work reduction is material and every final state/lifecycle assertion is equivalent within an accepted latency budget
-  - any missing pre-disconnect/death/callback update rejects direct adoption
+- candidate is beneficial only if packet/work reduction is material and every final state/lifecycle assertion is equivalent
+  within an accepted latency budget
+- any missing pre-disconnect/death/callback update rejects direct adoption
 artifacts:
-  - scenario-matrix.json
-  - immediate-packets.jsonl
-  - donor-scheduled-packets.jsonl
-  - final-state-diff.json
-  - update-latency.csv
-  - server-work-counters.csv
+- scenario-matrix.json
+- immediate-packets.jsonl
+- donor-scheduled-packets.jsonl
+- final-state-diff.json
+- update-latency.csv
+- server-work-counters.csv
+- runtime-feasibility.md
 cleanup:
-  - terminate isolated builds and discard test state
+- terminate isolated builds and discard test state
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: no product runtime blocker; donor build and benchmark remain to be executed
+blocker: the repository can start the server and validate the seeded HTTP login response, but it has no deterministic game-protocol/client
+  driver and no isolated per-scenario world fixture for map, quest, combat, store, boss, persistence or client-rendering actions;
+  adding that infrastructure would be implementation outside this audit-only authorization
 ```
 
 ## Runtime execution
 
 ```yaml
-execution_status: NOT_RUN
+execution_status: BLOCKED
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- Docker quickstart validates server startup and the seeded HTTP login response only
+- no deterministic game-protocol/client driver or per-scenario world fixture exists in the repository
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not started; no state created
 ```
 
 ## Conclusions
@@ -105,10 +114,13 @@ cleanup_result: not run
 ```yaml
 truth_status: PARTIALLY_PROVEN
 static_conclusion: STATIC_INCONCLUSIVE
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_RUN_INFEASIBLE
 owner_action: OPEN_ARCHITECTURE_DECISION
 confidence: high
-rationale: the draft demonstrates a concrete coalescing design but supplies no benchmark, correctness suite or clean scope, and Otheryn has no proven packet-volume breach; evaluate the concept through an independent architecture/benchmark programme rather than migrate the PR
+rationale: 'the draft demonstrates a concrete coalescing design but supplies no benchmark, correctness suite or clean scope,
+  and Otheryn has no proven packet-volume breach; evaluate the concept through an independent architecture/benchmark programme
+  rather than migrate the PR Runtime execution is infrastructure-blocked: the repository has no deterministic game/client
+  driver and adding one is outside audit-only authority.'
 ```
 
 ## Drift and unresolved questions

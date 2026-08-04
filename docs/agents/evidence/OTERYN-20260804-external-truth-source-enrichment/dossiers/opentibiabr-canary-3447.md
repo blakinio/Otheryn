@@ -44,23 +44,28 @@ conflicts:
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
+plan_status: NOT_APPLICABLE
 system_boundary: WyrdinKeyword/Wyrdin storage + spoken word -> NPC response and quest state
 preconditions:
-  - isolated players for every keyword value and mission state
+- isolated players for every keyword value and mission state
 steps:
-  - test plea, bluff, flatter and impress against each generated keyword value
-  - test one wrong word followed by the correct word
-  - relog and repeat to detect persisted lockout
+- test plea, bluff, flatter and impress against each generated keyword value
+- test one wrong word followed by the correct word
+- relog and repeat to detect persisted lockout
 expected_observations:
-  - exactly one valid word per generated value completes the NPC step and wrong input follows authoritative retry semantics
-artifacts: [wyrdin-dialogue-matrix.json, storage-transitions.jsonl]
-cleanup: [discard players]
+- exactly one valid word per generated value completes the NPC step and wrong input follows authoritative retry semantics
+artifacts:
+- wyrdin-dialogue-matrix.json
+- storage-transitions.jsonl
+- runtime-feasibility.md
+cleanup:
+- discard players
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: authoritative mapping for `impress` must be sourced before implementation, but current lockout is reproducible
+blocker: 'not applicable: pinned static evidence already reaches a target disposition; runtime execution would not change
+  the audit decision'
 ```
 
 ## Runtime execution
@@ -69,9 +74,11 @@ blocker: authoritative mapping for `impress` must be sourced before implementati
 execution_status: NOT_RUN
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- static comparison is sufficient for the target disposition; no game-world state was created
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not applicable
 ```
 
 ## Conclusions
@@ -79,10 +86,12 @@ cleanup_result: not run
 ```yaml
 truth_status: PROVEN
 static_conclusion: TARGET_AFFECTED
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_APPLICABLE
 owner_action: OPEN_FIX_PROGRAM
 confidence: high
-rationale: the target lacks one advertised word branch and changes mission state so subsequent correct words can never satisfy their guard, directly matching the report
+rationale: the target lacks one advertised word branch and changes mission state so subsequent correct words can never satisfy
+  their guard, directly matching the report Runtime execution is not applicable because the pinned static comparison already
+  determines the target disposition.
 ```
 
 ## Drift and unresolved questions

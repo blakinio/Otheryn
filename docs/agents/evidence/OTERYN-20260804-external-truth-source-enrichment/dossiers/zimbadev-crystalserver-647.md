@@ -41,34 +41,44 @@ conflicts:
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
+plan_status: BLOCKED_INFEASIBLE
 system_boundary: Ab'Dendriel library map shelves -> readable item/text inventory -> client look/read result
 preconditions:
-  - authoritative coordinate/shelf/book list for the chosen map version
+- authoritative coordinate/shelf/book list for the chosen map version
 steps:
-  - extract every shelf/tile/book/text in Ab'Dendriel library polygons from all compared map snapshots
-  - log in and look/use each expected book and intentional empty shelf
-  - compare later Crystal map commit only after its immutable revision is identified
+- extract every shelf/tile/book/text in Ab'Dendriel library polygons from all compared map snapshots
+- log in and look/use each expected book and intentional empty shelf
+- compare later Crystal map commit only after its immutable revision is identified
 expected_observations:
-  - target inventory matches the versioned reference with no missing/duplicate/misplaced texts
-artifacts: [abdendriel-library-inventory.json, map-diff.json, look-results.jsonl]
-cleanup: [none beyond isolated world]
+- target inventory matches the versioned reference with no missing/duplicate/misplaced texts
+artifacts:
+- abdendriel-library-inventory.json
+- map-diff.json
+- look-results.jsonl
+- runtime-feasibility.md
+cleanup:
+- none beyond isolated world
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: authoritative versioned shelf/book coordinate list and claimed fix commit remain required for final pass/fail
+blocker: the repository can start the server and validate the seeded HTTP login response, but it has no deterministic game-protocol/client
+  driver and no isolated per-scenario world fixture for map, quest, combat, store, boss, persistence or client-rendering actions;
+  adding that infrastructure would be implementation outside this audit-only authorization
 ```
 
 ## Runtime execution
 
 ```yaml
-execution_status: NOT_RUN
+execution_status: BLOCKED
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- Docker quickstart validates server startup and the seeded HTTP login response only
+- no deterministic game-protocol/client driver or per-scenario world fixture exists in the repository
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not started; no state created
 ```
 
 ## Conclusions
@@ -76,10 +86,12 @@ cleanup_result: not run
 ```yaml
 truth_status: PARTIALLY_PROVEN
 static_conclusion: STATIC_INCONCLUSIVE
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_RUN_INFEASIBLE
 owner_action: RESEARCH_REQUIRED
 confidence: medium
-rationale: the source establishes an all-empty library symptom and a later unverified repair claim; Otheryn must be checked by extracting its actual map/text inventory against a versioned reference
+rationale: 'the source establishes an all-empty library symptom and a later unverified repair claim; Otheryn must be checked
+  by extracting its actual map/text inventory against a versioned reference Runtime execution is infrastructure-blocked: the
+  repository has no deterministic game/client driver and adding one is outside audit-only authority.'
 ```
 
 ## Drift and unresolved questions

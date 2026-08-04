@@ -48,23 +48,29 @@ conflicts:
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
+plan_status: NOT_APPLICABLE
 system_boundary: quest storage/item/mast use -> effects, storage transition and jug consumption
-preconditions: [isolated player at Questline 6 with item 7244]
+preconditions:
+- isolated player at Questline 6 with item 7244
 steps:
-  - use 7244 on item 4940 at the exact mast
-  - record return, effects, messages, storage and inventory
-  - run wrong-coordinate, wrong-item and wrong-storage controls
+- use 7244 on item 4940 at the exact mast
+- record return, effects, messages, storage and inventory
+- run wrong-coordinate, wrong-item and wrong-storage controls
 expected_observations:
-  - valid case advances to 7/3; controls do not
-  - verify whether 7244 is consumed or remains because code removes 7243
-artifacts: [ice-islands-anthill.jsonl, server.log]
-cleanup: [discard quest player]
+- valid case advances to 7/3; controls do not
+- verify whether 7244 is consumed or remains because code removes 7243
+artifacts:
+- ice-islands-anthill.jsonl
+- server.log
+- runtime-feasibility.md
+cleanup:
+- discard quest player
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: none
+blocker: 'not applicable: pinned static evidence already reaches a target disposition; runtime execution would not change
+  the audit decision'
 ```
 
 ## Runtime execution
@@ -73,9 +79,11 @@ blocker: none
 execution_status: NOT_RUN
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- static comparison is sufficient for the target disposition; no game-world state was created
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not applicable
 ```
 
 ## Conclusions
@@ -83,10 +91,11 @@ cleanup_result: not run
 ```yaml
 truth_status: PROVEN
 static_conclusion: TARGET_NOT_AFFECTED
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_APPLICABLE
 owner_action: NO_ACTION
 confidence: high
-rationale: Otheryn already contains the exact corrected mast branch reported as merged; only a separate filled-jug consumption check remains
+rationale: Otheryn already contains the exact corrected mast branch reported as merged; only a separate filled-jug consumption
+  check remains Runtime execution is not applicable because the pinned static comparison already determines the target disposition.
 ```
 
 ## Drift and unresolved questions

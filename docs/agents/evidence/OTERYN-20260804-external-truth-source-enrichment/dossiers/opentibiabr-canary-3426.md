@@ -40,34 +40,44 @@ conflicts:
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
+plan_status: BLOCKED_INFEASIBLE
 system_boundary: field ownership/state + monster step-in/stay -> combat condition and damage attribution
-preconditions: [representative fire/energy/poison bombs and susceptible/immune monsters]
+preconditions:
+- representative fire/energy/poison bombs and susceptible/immune monsters
 steps:
-  - create each field through player and environment sources
-  - force monsters to enter, remain and re-enter
-  - record HP, conditions, field decay and attacker attribution
-  - compare immune, summon and boss controls
+- create each field through player and environment sources
+- force monsters to enter, remain and re-enter
+- record HP, conditions, field decay and attacker attribution
+- compare immune, summon and boss controls
 expected_observations:
-  - susceptible monsters receive the defined damage sequence exactly once per trigger policy
-artifacts: [bomb-field-matrix.jsonl, combat-events.jsonl]
-cleanup: [remove fields and discard monsters]
+- susceptible monsters receive the defined damage sequence exactly once per trigger policy
+artifacts:
+- bomb-field-matrix.jsonl
+- combat-events.jsonl
+- runtime-feasibility.md
+cleanup:
+- remove fields and discard monsters
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: exact screenshot vector is missing, but representative matrix is feasible
+blocker: the repository can start the server and validate the seeded HTTP login response, but it has no deterministic game-protocol/client
+  driver and no isolated per-scenario world fixture for map, quest, combat, store, boss, persistence or client-rendering actions;
+  adding that infrastructure would be implementation outside this audit-only authorization
 ```
 
 ## Runtime execution
 
 ```yaml
-execution_status: NOT_RUN
+execution_status: BLOCKED
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- Docker quickstart validates server startup and the seeded HTTP login response only
+- no deterministic game-protocol/client driver or per-scenario world fixture exists in the repository
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not started; no state created
 ```
 
 ## Conclusions
@@ -75,10 +85,12 @@ cleanup_result: not run
 ```yaml
 truth_status: PARTIALLY_PROVEN
 static_conclusion: STATIC_INCONCLUSIVE
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_RUN_INFEASIBLE
 owner_action: RESEARCH_REQUIRED
 confidence: medium
-rationale: the symptom is testable across a bounded field/immunity matrix, but the source omits the exact item and target
+rationale: 'the symptom is testable across a bounded field/immunity matrix, but the source omits the exact item and target
+  Runtime execution is infrastructure-blocked: the repository has no deterministic game/client driver and adding one is outside
+  audit-only authority.'
 ```
 
 ## Drift and unresolved questions

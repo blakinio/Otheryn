@@ -58,50 +58,58 @@ conflicts:
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
-system_boundary: Misguided item action -> live OTBM replacement with player in area -> server map/cache and packet stream -> client movement result
+plan_status: BLOCKED_INFEASIBLE
+system_boundary: Misguided item action -> live OTBM replacement with player in area -> server map/cache and packet stream
+  -> client movement result
 preconditions:
-  - isolated Otheryn world and database
-  - both Misguided OTBM variants present
-  - GOD test player at or near 32562,32377,10
-  - item 25297 and Misguided Bully/Thief fixture
-  - maintained OTClient instrumented for packet and crash capture
+- isolated Otheryn world and database
+- both Misguided OTBM variants present
+- GOD test player at or near 32562,32377,10
+- item 25297 and Misguided Bully/Thief fixture
+- maintained OTClient instrumented for packet and crash capture
 steps:
-  - record baseline tile IDs/checksums around the player and process RSS/cache counters
-  - trigger the exact action while the player remains in the replaced area
-  - record server tile IDs/checksums immediately after Game.loadMap and after lazy tile access
-  - move one square in each valid direction and record client/server outcome
-  - repeat the illusion/reality cycle 50 times to distinguish immediate desync from accumulation
-  - run a control with the player outside the replaced rectangle
+- record baseline tile IDs/checksums around the player and process RSS/cache counters
+- trigger the exact action while the player remains in the replaced area
+- record server tile IDs/checksums immediately after Game.loadMap and after lazy tile access
+- move one square in each valid direction and record client/server outcome
+- repeat the illusion/reality cycle 50 times to distinguish immediate desync from accumulation
+- run a control with the player outside the replaced rectangle
 expected_observations:
-  - a defect is reproduced if occupied-area swaps produce stale tile identity, movement/client failure, or monotonic retained-state growth not present in the outside-area control
-  - a safe implementation keeps map checksums coherent, movement succeeds and memory stabilizes after warm-up
+- a defect is reproduced if occupied-area swaps produce stale tile identity, movement/client failure, or monotonic retained-state
+  growth not present in the outside-area control
+- a safe implementation keeps map checksums coherent, movement succeeds and memory stabilizes after warm-up
 artifacts:
-  - misguided-fixture.md
-  - map-checksums.jsonl
-  - packet-trace.jsonl
-  - client-results.json
-  - rss-series.csv
-  - server.log
-  - client-crash/
+- misguided-fixture.md
+- map-checksums.jsonl
+- packet-trace.jsonl
+- client-results.json
+- rss-series.csv
+- server.log
+- client-crash/
+- runtime-feasibility.md
 cleanup:
-  - stop isolated processes and discard fixture database/map state
+- stop isolated processes and discard fixture database/map state
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: none for maintained-client reproduction; exact unnamed source client cannot be matched without additional source metadata
+blocker: the repository can start the server and validate the seeded HTTP login response, but it has no deterministic game-protocol/client
+  driver and no isolated per-scenario world fixture for map, quest, combat, store, boss, persistence or client-rendering actions;
+  adding that infrastructure would be implementation outside this audit-only authorization
 ```
 
 ## Runtime execution
 
 ```yaml
-execution_status: NOT_RUN
+execution_status: BLOCKED
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- Docker quickstart validates server startup and the seeded HTTP login response only
+- no deterministic game-protocol/client driver or per-scenario world fixture exists in the repository
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not started; no state created
 ```
 
 ## Conclusions
@@ -109,10 +117,13 @@ cleanup_result: not run
 ```yaml
 truth_status: PARTIALLY_PROVEN
 static_conclusion: STATIC_INCONCLUSIVE
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_RUN_INFEASIBLE
 owner_action: RESEARCH_REQUIRED
 confidence: medium-high
-rationale: Otheryn contains the exact live-swap action and map/cache architecture implicated by the source, but neither the Issue nor static code proves the immediate client-crash mechanism; the supplied steps support a deterministic isolated reproduction
+rationale: 'Otheryn contains the exact live-swap action and map/cache architecture implicated by the source, but neither the
+  Issue nor static code proves the immediate client-crash mechanism; the supplied steps support a deterministic isolated reproduction
+  Runtime execution is infrastructure-blocked: the repository has no deterministic game/client driver and adding one is outside
+  audit-only authority.'
 ```
 
 ## Drift and unresolved questions

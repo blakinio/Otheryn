@@ -40,34 +40,44 @@ conflicts:
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
+plan_status: BLOCKED_INFEASIBLE
 system_boundary: field-rune cast -> immediate combat result + created field/condition -> monster health and attribution
 preconditions:
-  - deterministic caster and neutral monsters with known resistances
+- deterministic caster and neutral monsters with known resistances
 steps:
-  - cast fire, energy and poison field runes directly on a monster and on an empty tile later entered by a monster
-  - record immediate HP delta, periodic ticks, field item, attacker attribution and loot/raid tag
-  - compare PvP/non-PvP field variants and immune target controls
+- cast fire, energy and poison field runes directly on a monster and on an empty tile later entered by a monster
+- record immediate HP delta, periodic ticks, field item, attacker attribution and loot/raid tag
+- compare PvP/non-PvP field variants and immune target controls
 expected_observations:
-  - direct cast follows authoritative immediate-damage rule and periodic condition remains correct
-artifacts: [field-rune-matrix.jsonl, combat-events.jsonl, server.log]
-cleanup: [remove fields and discard actors]
+- direct cast follows authoritative immediate-damage rule and periodic condition remains correct
+artifacts:
+- field-rune-matrix.jsonl
+- combat-events.jsonl
+- server.log
+- runtime-feasibility.md
+cleanup:
+- remove fields and discard actors
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: official initial-damage formula remains to be sourced; reproduction of zero/nonzero behavior is feasible
+blocker: the repository can start the server and validate the seeded HTTP login response, but it has no deterministic game-protocol/client
+  driver and no isolated per-scenario world fixture for map, quest, combat, store, boss, persistence or client-rendering actions;
+  adding that infrastructure would be implementation outside this audit-only authorization
 ```
 
 ## Runtime execution
 
 ```yaml
-execution_status: NOT_RUN
+execution_status: BLOCKED
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- Docker quickstart validates server startup and the seeded HTTP login response only
+- no deterministic game-protocol/client driver or per-scenario world fixture exists in the repository
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not started; no state created
 ```
 
 ## Conclusions
@@ -75,10 +85,12 @@ cleanup_result: not run
 ```yaml
 truth_status: PARTIALLY_PROVEN
 static_conclusion: STATIC_INCONCLUSIVE
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_RUN_INFEASIBLE
 owner_action: RESEARCH_REQUIRED
 confidence: medium-high
-rationale: the source supplies a simple cross-element reproduction and a working but non-authoritative workaround; run the target and source the intended damage formula before opening a fix
+rationale: 'the source supplies a simple cross-element reproduction and a working but non-authoritative workaround; run the
+  target and source the intended damage formula before opening a fix Runtime execution is infrastructure-blocked: the repository
+  has no deterministic game/client driver and adding one is outside audit-only authority.'
 ```
 
 ## Drift and unresolved questions

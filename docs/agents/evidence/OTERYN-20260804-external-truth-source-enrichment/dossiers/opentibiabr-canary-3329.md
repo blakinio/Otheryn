@@ -40,34 +40,43 @@ conflicts:
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
+plan_status: BLOCKED_INFEASIBLE
 system_boundary: player position around wall lamp -> use request -> item transform/state
 preconditions:
-  - inventory of all wall-lamp item pairs and wall orientation metadata
+- inventory of all wall-lamp item pairs and wall orientation metadata
 steps:
-  - build north/south/east/west wall fixtures and test all eight adjacent player offsets
-  - rotate identical geometry and compare return values/transforms
-  - record blocked line-of-sight and distance controls
+- build north/south/east/west wall fixtures and test all eight adjacent player offsets
+- rotate identical geometry and compare return values/transforms
+- record blocked line-of-sight and distance controls
 expected_observations:
-  - rotationally equivalent valid positions succeed and invalid wall-side positions fail consistently
-artifacts: [wall-lamp-orientation-matrix.json, use-packets.jsonl]
-cleanup: [discard fixtures]
+- rotationally equivalent valid positions succeed and invalid wall-side positions fail consistently
+artifacts:
+- wall-lamp-orientation-matrix.json
+- use-packets.jsonl
+- runtime-feasibility.md
+cleanup:
+- discard fixtures
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: exact screenshot lamp ID must be recovered, but full item-pair matrix is feasible
+blocker: the repository can start the server and validate the seeded HTTP login response, but it has no deterministic game-protocol/client
+  driver and no isolated per-scenario world fixture for map, quest, combat, store, boss, persistence or client-rendering actions;
+  adding that infrastructure would be implementation outside this audit-only authorization
 ```
 
 ## Runtime execution
 
 ```yaml
-execution_status: NOT_RUN
+execution_status: BLOCKED
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- Docker quickstart validates server startup and the seeded HTTP login response only
+- no deterministic game-protocol/client driver or per-scenario world fixture exists in the repository
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not started; no state created
 ```
 
 ## Conclusions
@@ -75,10 +84,12 @@ cleanup_result: not run
 ```yaml
 truth_status: PARTIALLY_PROVEN
 static_conclusion: STATIC_INCONCLUSIVE
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_RUN_INFEASIBLE
 owner_action: RESEARCH_REQUIRED
 confidence: medium-high
-rationale: the orientation asymmetry is precise enough for a rotational test matrix, but item metadata and failing validation layer are not identified statically
+rationale: 'the orientation asymmetry is precise enough for a rotational test matrix, but item metadata and failing validation
+  layer are not identified statically Runtime execution is infrastructure-blocked: the repository has no deterministic game/client
+  driver and adding one is outside audit-only authority.'
 ```
 
 ## Drift and unresolved questions

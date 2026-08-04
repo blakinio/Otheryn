@@ -40,34 +40,45 @@ conflicts:
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
-system_boundary: hireling context action -> server target/ownership validation -> customization packet/UI -> persisted hireling outfit
+plan_status: BLOCKED_INFEASIBLE
+system_boundary: hireling context action -> server target/ownership validation -> customization packet/UI -> persisted hireling
+  outfit
 preconditions:
-  - owned house/hireling and non-owner control
+- owned house/hireling and non-owner control
 steps:
-  - customize hireling and player separately and capture target identifiers/packets
-  - change colors/outfit, close/reopen and relog
-  - test outside house, non-owner and multiple-hireling controls
+- customize hireling and player separately and capture target identifiers/packets
+- change colors/outfit, close/reopen and relog
+- test outside house, non-owner and multiple-hireling controls
 expected_observations:
-  - only selected owned hireling changes and state persists; player never changes
-artifacts: [hireling-customize-packets.jsonl, outfit-state.json, authorization-matrix.json]
-cleanup: [restore/discard house and character state]
+- only selected owned hireling changes and state persists; player never changes
+artifacts:
+- hireling-customize-packets.jsonl
+- outfit-state.json
+- authorization-matrix.json
+- runtime-feasibility.md
+cleanup:
+- restore/discard house and character state
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: none for maintained-client testing; official packet layout must be confirmed before implementation
+blocker: the repository can start the server and validate the seeded HTTP login response, but it has no deterministic game-protocol/client
+  driver and no isolated per-scenario world fixture for map, quest, combat, store, boss, persistence or client-rendering actions;
+  adding that infrastructure would be implementation outside this audit-only authorization
 ```
 
 ## Runtime execution
 
 ```yaml
-execution_status: NOT_RUN
+execution_status: BLOCKED
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- Docker quickstart validates server startup and the seeded HTTP login response only
+- no deterministic game-protocol/client driver or per-scenario world fixture exists in the repository
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not started; no state created
 ```
 
 ## Conclusions
@@ -75,10 +86,12 @@ cleanup_result: not run
 ```yaml
 truth_status: PROVEN
 static_conclusion: STATIC_INCONCLUSIVE
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_RUN_INFEASIBLE
 owner_action: OPEN_PROTOCOL_DECISION
 confidence: high
-rationale: source and discussion establish missing target-specific customization, but the only candidate PR was rejected/unmerged and cannot be migrated wholesale
+rationale: 'source and discussion establish missing target-specific customization, but the only candidate PR was rejected/unmerged
+  and cannot be migrated wholesale Runtime execution is infrastructure-blocked: the repository has no deterministic game/client
+  driver and adding one is outside audit-only authority.'
 ```
 
 ## Drift and unresolved questions

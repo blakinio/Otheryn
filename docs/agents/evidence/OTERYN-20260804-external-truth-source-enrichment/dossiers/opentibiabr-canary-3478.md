@@ -41,35 +41,45 @@ conflicts:
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
+plan_status: BLOCKED_INFEASIBLE
 system_boundary: freequests stage/config/file inventory -> player storages -> Quest Log response
 preconditions:
-  - clean old and new database fixtures and one canonical freequests file
+- clean old and new database fixtures and one canonical freequests file
 steps:
-  - apply the posted Secret Library rows with and without top-level Questlog storage
-  - increment stage, restart, capture active script paths and storage writes
-  - repeat with an intentionally duplicated stale file as a diagnostic control
-  - decode Quest Log visibility for new and migrated players
+- apply the posted Secret Library rows with and without top-level Questlog storage
+- increment stage, restart, capture active script paths and storage writes
+- repeat with an intentionally duplicated stale file as a diagnostic control
+- decode Quest Log visibility for new and migrated players
 expected_observations:
-  - one active file applies each row exactly once and Quest Log visibility follows documented storage dependencies
-artifacts: [freequests-loaded-files.json, storage-writes.jsonl, questlog-results.json]
-cleanup: [discard databases/players]
+- one active file applies each row exactly once and Quest Log visibility follows documented storage dependencies
+artifacts:
+- freequests-loaded-files.json
+- storage-writes.jsonl
+- questlog-results.json
+- runtime-feasibility.md
+cleanup:
+- discard databases/players
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: none
+blocker: the repository can start the server and validate the seeded HTTP login response, but it has no deterministic game-protocol/client
+  driver and no isolated per-scenario world fixture for map, quest, combat, store, boss, persistence or client-rendering actions;
+  adding that infrastructure would be implementation outside this audit-only authorization
 ```
 
 ## Runtime execution
 
 ```yaml
-execution_status: NOT_RUN
+execution_status: BLOCKED
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- Docker quickstart validates server startup and the seeded HTTP login response only
+- no deterministic game-protocol/client driver or per-scenario world fixture exists in the repository
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not started; no state created
 ```
 
 ## Conclusions
@@ -77,10 +87,12 @@ cleanup_result: not run
 ```yaml
 truth_status: PARTIALLY_PROVEN
 static_conclusion: STATIC_INCONCLUSIVE
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_RUN_INFEASIBLE
 owner_action: RESEARCH_REQUIRED
 confidence: high
-rationale: evidence points to stale script duplication and possibly incomplete grant data rather than a universal loader failure; clean migration and storage-dependency tests must separate them
+rationale: 'evidence points to stale script duplication and possibly incomplete grant data rather than a universal loader
+  failure; clean migration and storage-dependency tests must separate them Runtime execution is infrastructure-blocked: the
+  repository has no deterministic game/client driver and adding one is outside audit-only authority.'
 ```
 
 ## Drift and unresolved questions

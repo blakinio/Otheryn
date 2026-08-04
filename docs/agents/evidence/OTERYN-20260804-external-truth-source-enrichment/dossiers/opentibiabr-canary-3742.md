@@ -58,34 +58,37 @@ conflicts:
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
-system_boundary: deterministic all-owned-mount category -> Otheryn GameStore packet bytes -> decoded reason table, offer indexes and balance packet count
+plan_status: NOT_APPLICABLE
+system_boundary: deterministic all-owned-mount category -> Otheryn GameStore packet bytes -> decoded reason table, offer indexes
+  and balance packet count
 preconditions:
-  - isolated account owning every mount in a small audit-only category
-  - packet capture/decoder for the negotiated maintained-client profile
-  - one deterministic successful low-cost purchase fixture
+- isolated account owning every mount in a small audit-only category
+- packet capture/decoder for the negotiated maintained-client profile
+- one deterministic successful low-cost purchase fixture
 steps:
-  - request the category with N offers sharing one disabled reason and capture the complete response
-  - decode reason count, strings and every offer reason index
-  - repeat with two distinct disabled reasons as an index-order control
-  - execute one successful purchase and count balance-related opcodes from request through stable post-purchase state
-  - repeat five times and compare byte-identical results
+- request the category with N offers sharing one disabled reason and capture the complete response
+- decode reason count, strings and every offer reason index
+- repeat with two distinct disabled reasons as an index-order control
+- execute one successful purchase and count balance-related opcodes from request through stable post-purchase state
+- repeat five times and compare byte-identical results
 expected_observations:
-  - current static defect predicts N repeated strings rather than one shared string for the all-owned category
-  - purchase path either emits one required balance sequence or reproduces the reported duplicate packet
+- current static defect predicts N repeated strings rather than one shared string for the all-owned category
+- purchase path either emits one required balance sequence or reproduces the reported duplicate packet
 artifacts:
-  - category-fixture.lua
-  - shared-reason.pcap.json
-  - two-reason-control.pcap.json
-  - purchase-balance-opcodes.jsonl
-  - decoder-version.txt
+- category-fixture.lua
+- shared-reason.pcap.json
+- two-reason-control.pcap.json
+- purchase-balance-opcodes.jsonl
+- decoder-version.txt
+- runtime-feasibility.md
 cleanup:
-  - discard isolated account/category state
+- discard isolated account/category state
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: none for maintained-client profile; official-client parity needs a lawful reference capture
+blocker: 'not applicable: pinned static evidence already reaches a target disposition; runtime execution would not change
+  the audit decision'
 ```
 
 ## Runtime execution
@@ -94,9 +97,11 @@ blocker: none for maintained-client profile; official-client parity needs a lawf
 execution_status: NOT_RUN
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- static comparison is sufficient for the target disposition; no game-world state was created
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not applicable
 ```
 
 ## Conclusions
@@ -104,10 +109,12 @@ cleanup_result: not run
 ```yaml
 truth_status: PARTIALLY_PROVEN
 static_conclusion: TARGET_AFFECTED
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_APPLICABLE
 owner_action: OPEN_FIX_PROGRAM
 confidence: high
-rationale: Otheryn statically contains a value/type mismatch that prevents disabled-reason deduplication; the separate duplicate balance-packet claim remains pending packet capture and must not be treated as proven by association
+rationale: Otheryn statically contains a value/type mismatch that prevents disabled-reason deduplication; the separate duplicate
+  balance-packet claim remains pending packet capture and must not be treated as proven by association Runtime execution is
+  not applicable because the pinned static comparison already determines the target disposition.
 ```
 
 ## Drift and unresolved questions

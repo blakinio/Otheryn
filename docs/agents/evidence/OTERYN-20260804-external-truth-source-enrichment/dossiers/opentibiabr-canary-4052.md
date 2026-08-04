@@ -66,15 +66,17 @@ preconditions: []
 steps: []
 expected_observations: []
 artifacts:
-  - supported-platform configure-build-test matrix
-  - dependency resolution lock report
-  - clean-host bootstrap transcript
+- supported-platform configure-build-test matrix
+- dependency resolution lock report
+- clean-host bootstrap transcript
+- runtime-feasibility.md
 cleanup: []
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: product runtime reproduction is not applicable; an architecture decision and build validation programme are required instead
+blocker: 'not applicable: pinned static evidence already reaches a target disposition; runtime execution would not change
+  the audit decision'
 ```
 
 ## Runtime execution
@@ -83,8 +85,10 @@ blocker: product runtime reproduction is not applicable; an architecture decisio
 execution_status: NOT_RUN
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
+observations:
+- static comparison is sufficient for the target disposition; no game-world state was created
+artifacts:
+- runtime-feasibility.md
 cleanup_result: not applicable
 ```
 
@@ -96,7 +100,10 @@ static_conclusion: TARGET_AFFECTED
 runtime_conclusion: NOT_APPLICABLE
 owner_action: OPEN_ARCHITECTURE_DECISION
 confidence: high
-rationale: Otheryn already has deterministic vcpkg and protobuf source pins, but it does not express the complete host toolchain contract proposed by the PR; because the upstream change remains open and incompletely validated, adoption should be decided and tested as Otheryn build architecture rather than copied as a bug fix
+rationale: Otheryn already has deterministic vcpkg and protobuf source pins, but it does not express the complete host toolchain
+  contract proposed by the PR; because the upstream change remains open and incompletely validated, adoption should be decided
+  and tested as Otheryn build architecture rather than copied as a bug fix Runtime execution is not applicable because the
+  pinned static comparison already determines the target disposition.
 ```
 
 ## Drift and unresolved questions

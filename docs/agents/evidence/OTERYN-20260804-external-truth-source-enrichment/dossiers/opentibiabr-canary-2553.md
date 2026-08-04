@@ -40,22 +40,31 @@ conflicts:
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
+plan_status: NOT_APPLICABLE
 system_boundary: tagged eligible kills + controlled RNG/counters -> pod/fungisaur/patriarch spawns and cooldown state
-preconditions: [isolated Garden zone, deterministic RNG, hazard levels 0/1/12]
+preconditions:
+- isolated Garden zone
+- deterministic RNG
+- hazard levels 0/1/12
 steps:
-  - reuse #3549 tag matrix and kill eligible monsters at forced probability boundaries
-  - record spawn count/location, pod transform, patriarch uniqueness and reset/cooldown
-  - test excluded areas, untagged monsters, simultaneous kills and restart persistence
+- reuse
+- record spawn count/location, pod transform, patriarch uniqueness and reset/cooldown
+- test excluded areas, untagged monsters, simultaneous kills and restart persistence
 expected_observations:
-  - eligible tagged kills trigger bounded rewards according to configured rules; no duplicates or permanent disablement
-artifacts: [gnomprona-reward-events.jsonl, counters.json, spawn-state.jsonl]
-cleanup: [remove rewards and discard player/monsters]
+- eligible tagged kills trigger bounded rewards according to configured rules; no duplicates or permanent disablement
+artifacts:
+- gnomprona-reward-events.jsonl
+- counters.json
+- spawn-state.jsonl
+- runtime-feasibility.md
+cleanup:
+- remove rewards and discard player/monsters
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: none; share one runtime harness with #3549
+blocker: 'not applicable: pinned static evidence already reaches a target disposition; runtime execution would not change
+  the audit decision'
 ```
 
 ## Runtime execution
@@ -64,9 +73,11 @@ blocker: none; share one runtime harness with #3549
 execution_status: NOT_RUN
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- static comparison is sufficient for the target disposition; no game-world state was created
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not applicable
 ```
 
 ## Conclusions
@@ -74,10 +85,12 @@ cleanup_result: not run
 ```yaml
 truth_status: PROVEN
 static_conclusion: TARGET_AFFECTED
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_APPLICABLE
 owner_action: OPEN_FIX_PROGRAM
 confidence: high
-rationale: the target's hazard-dependent death gate directly controls the rewards named here; one deterministic hazard/reward run can prove both canonical items without conflating their decisions
+rationale: the target's hazard-dependent death gate directly controls the rewards named here; one deterministic hazard/reward
+  run can prove both canonical items without conflating their decisions Runtime execution is not applicable because the pinned
+  static comparison already determines the target disposition.
 ```
 
 ## Drift and unresolved questions

@@ -40,35 +40,45 @@ conflicts:
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
+plan_status: BLOCKED_INFEASIBLE
 system_boundary: forced winning lever roll -> door tile state/collision -> passage and timed reset
 preconditions:
-  - isolated map at 33122,32765,14 and deterministic RNG
+- isolated map at 33122,32765,14 and deterministic RNG
 steps:
-  - dump full tile stack before, during and after the four-second event
-  - force success, assert door transform and attempt movement through both directions
-  - wait for reset and verify lever, carrot and door restoration
-  - run failure control
+- dump full tile stack before, during and after the four-second event
+- force success, assert door transform and attempt movement through both directions
+- wait for reset and verify lever, carrot and door restoration
+- run failure control
 expected_observations:
-  - success creates a temporarily walkable path and restores every puzzle object exactly once
-artifacts: [oasis-door-timeline.jsonl, tile-dumps.json, movement-results.json]
-cleanup: [restore/discard map/player state]
+- success creates a temporarily walkable path and restores every puzzle object exactly once
+artifacts:
+- oasis-door-timeline.jsonl
+- tile-dumps.json
+- movement-results.json
+- runtime-feasibility.md
+cleanup:
+- restore/discard map/player state
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: none
+blocker: the repository can start the server and validate the seeded HTTP login response, but it has no deterministic game-protocol/client
+  driver and no isolated per-scenario world fixture for map, quest, combat, store, boss, persistence or client-rendering actions;
+  adding that infrastructure would be implementation outside this audit-only authorization
 ```
 
 ## Runtime execution
 
 ```yaml
-execution_status: NOT_RUN
+execution_status: BLOCKED
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- Docker quickstart validates server startup and the seeded HTTP login response only
+- no deterministic game-protocol/client driver or per-scenario world fixture exists in the repository
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not started; no state created
 ```
 
 ## Conclusions
@@ -76,10 +86,12 @@ cleanup_result: not run
 ```yaml
 truth_status: PROVEN
 static_conclusion: STATIC_INCONCLUSIVE
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_RUN_INFEASIBLE
 owner_action: RESEARCH_REQUIRED
 confidence: high
-rationale: exact coordinates, IDs and code make the puzzle falsifiable; tile collision and missing door reset must be observed before defining the repair
+rationale: 'exact coordinates, IDs and code make the puzzle falsifiable; tile collision and missing door reset must be observed
+  before defining the repair Runtime execution is infrastructure-blocked: the repository has no deterministic game/client
+  driver and adding one is outside audit-only authority.'
 ```
 
 ## Drift and unresolved questions

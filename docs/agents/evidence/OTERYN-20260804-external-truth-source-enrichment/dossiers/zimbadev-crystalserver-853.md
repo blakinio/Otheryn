@@ -41,26 +41,33 @@ conflicts:
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
+plan_status: NOT_APPLICABLE
 system_boundary: ordered recipe dialogue/items/calendar state -> quest progression/rewards/achievement
 preconditions:
-  - isolated players before first dish, before Zaoan Sauce and after completion
-  - controlled clock across August/year boundaries
+- isolated players before first dish, before Zaoan Sauce and after completion
+- controlled clock across August/year boundaries
 steps:
-  - complete all recipes in order and verify ingredient/reward conservation
-  - attempt out-of-order recipes before completion
-  - exercise same-year bonus and following-year repeats for every dish
-  - cook each dish once/twice and verify Culinary Master threshold
-  - relog/restart at each boundary
+- complete all recipes in order and verify ingredient/reward conservation
+- attempt out-of-order recipes before completion
+- exercise same-year bonus and following-year repeats for every dish
+- cook each dish once/twice and verify Culinary Master threshold
+- relog/restart at each boundary
 expected_observations:
-  - exact order, recurrence and achievement invariants hold without duplicate rewards or calendar lockout
-artifacts: [hot-cuisine-dialogue.jsonl, recipe-ledger.json, calendar-matrix.json, achievements.json]
-cleanup: [discard players/items/database]
+- exact order, recurrence and achievement invariants hold without duplicate rewards or calendar lockout
+artifacts:
+- hot-cuisine-dialogue.jsonl
+- recipe-ledger.json
+- calendar-matrix.json
+- achievements.json
+- runtime-feasibility.md
+cleanup:
+- discard players/items/database
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: official recurrence/achievement semantics require a primary source before implementation; donor behavior is testable
+blocker: 'not applicable: pinned static evidence already reaches a target disposition; runtime execution would not change
+  the audit decision'
 ```
 
 ## Runtime execution
@@ -69,9 +76,11 @@ blocker: official recurrence/achievement semantics require a primary source befo
 execution_status: NOT_RUN
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- static comparison is sufficient for the target disposition; no game-world state was created
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not applicable
 ```
 
 ## Conclusions
@@ -79,10 +88,12 @@ cleanup_result: not run
 ```yaml
 truth_status: PARTIALLY_PROVEN
 static_conclusion: TARGET_PATH_ABSENT
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_APPLICABLE
 owner_action: RESEARCH_REQUIRED
 confidence: high
-rationale: the donor patch clearly adds content absent from bounded Otheryn search, but it remains an unmerged, unvalidated interpretation of annual and achievement rules
+rationale: the donor patch clearly adds content absent from bounded Otheryn search, but it remains an unmerged, unvalidated
+  interpretation of annual and achievement rules Runtime execution is not applicable because the pinned static comparison
+  already determines the target disposition.
 ```
 
 ## Drift and unresolved questions

@@ -56,30 +56,33 @@ conflicts:
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
+plan_status: NOT_APPLICABLE
 system_boundary: login prelude/version/assets -> profile resolution -> authentication -> character-list or precise rejection
 preconditions:
-  - isolated Otheryn account with one character
-  - valid credentials and deterministic fixtures for every enabled account-login profile
-  - invalid version, invalid asset signature and disabled-legacy controls
+- isolated Otheryn account with one character
+- valid credentials and deterministic fixtures for every enabled account-login profile
+- invalid version, invalid asset signature and disabled-legacy controls
 steps:
-  - execute successful login for each enabled profile and decode the full character-list response
-  - execute disabled legacy, unknown version and invalid asset-signature controls
-  - assert exactly one rejection at the profile-resolution boundary and no modern request reaches the historic unconditional message path
+- execute successful login for each enabled profile and decode the full character-list response
+- execute disabled legacy, unknown version and invalid asset-signature controls
+- assert exactly one rejection at the profile-resolution boundary and no modern request reaches the historic unconditional
+  message path
 expected_observations:
-  - enabled modern and legacy profiles succeed according to configuration
-  - unsupported controls fail with profile-specific messages and no authentication side effects
+- enabled modern and legacy profiles succeed according to configuration
+- unsupported controls fail with profile-specific messages and no authentication side effects
 artifacts:
-  - login-profile-matrix.json
-  - account-login-packets.jsonl
-  - server-login.log
+- login-profile-matrix.json
+- account-login-packets.jsonl
+- server-login.log
+- runtime-feasibility.md
 cleanup:
-  - discard isolated account/database state
+- discard isolated account/database state
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: none
+blocker: 'not applicable: pinned static evidence already reaches a target disposition; runtime execution would not change
+  the audit decision'
 ```
 
 ## Runtime execution
@@ -88,9 +91,11 @@ blocker: none
 execution_status: NOT_RUN
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- static comparison is sufficient for the target disposition; no game-world state was created
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not applicable
 ```
 
 ## Conclusions
@@ -98,10 +103,12 @@ cleanup_result: not run
 ```yaml
 truth_status: PROVEN
 static_conclusion: TARGET_NOT_AFFECTED
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_APPLICABLE
 owner_action: NO_ACTION
 confidence: high
-rationale: the defect is real in the pinned upstream and Crystal code, but Otheryn removed the unconditional modern rejection and replaced version gating with explicit profile/layout resolution; only regression coverage remains
+rationale: the defect is real in the pinned upstream and Crystal code, but Otheryn removed the unconditional modern rejection
+  and replaced version gating with explicit profile/layout resolution; only regression coverage remains Runtime execution
+  is not applicable because the pinned static comparison already determines the target disposition.
 ```
 
 ## Drift and unresolved questions

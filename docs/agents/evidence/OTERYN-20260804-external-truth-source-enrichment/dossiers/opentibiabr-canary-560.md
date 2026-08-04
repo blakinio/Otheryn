@@ -63,34 +63,37 @@ conflicts:
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
-system_boundary: isolated Otheryn configuration with IPv6 loopback input -> ServicePort listener creation -> observable IPv6 TCP connection or bind-retry failure
+plan_status: NOT_APPLICABLE
+system_boundary: isolated Otheryn configuration with IPv6 loopback input -> ServicePort listener creation -> observable IPv6
+  TCP connection or bind-retry failure
 preconditions:
-  - Linux GitHub Actions runner with IPv6 loopback enabled
-  - disposable Otheryn configuration and database/services required for startup
-  - exact audited Otheryn head or a recorded later drift head
+- Linux GitHub Actions runner with IPv6 loopback enabled
+- disposable Otheryn configuration and database/services required for startup
+- exact audited Otheryn head or a recorded later drift head
 steps:
-  - verify `::1` is present and create an isolated configuration with IP set to `::1` and bindOnlyGlobalAddress enabled
-  - start Otheryn under a finite timeout and capture structured startup logs
-  - inspect the game/login ports with `ss -lnt6`
-  - attempt a TCP connection to `[::1]:<configured-port>` with an IPv6-capable probe
-  - repeat the control case on `127.0.0.1` using otherwise identical configuration
+- verify `::1` is present and create an isolated configuration with IP set to `::1` and bindOnlyGlobalAddress enabled
+- start Otheryn under a finite timeout and capture structured startup logs
+- inspect the game/login ports with `ss -lnt6`
+- attempt a TCP connection to `[::1]:<configured-port>` with an IPv6-capable probe
+- repeat the control case on `127.0.0.1` using otherwise identical configuration
 expected_observations:
-  - current target rejects or fails to parse `::1`, schedules the 15-second acceptor retry and exposes no IPv6 listener
-  - IPv4 control binds and accepts the TCP probe
+- current target rejects or fails to parse `::1`, schedules the 15-second acceptor retry and exposes no IPv6 listener
+- IPv4 control binds and accepts the TCP probe
 artifacts:
-  - ipv6-loopback.txt
-  - otheryn-ipv6-startup.log
-  - listeners-ipv6.txt
-  - ipv6-probe.txt
-  - ipv4-control.txt
+- ipv6-loopback.txt
+- otheryn-ipv6-startup.log
+- listeners-ipv6.txt
+- ipv6-probe.txt
+- ipv4-control.txt
+- runtime-feasibility.md
 cleanup:
-  - terminate the isolated process and remove disposable configuration/database state
+- terminate the isolated process and remove disposable configuration/database state
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: none; runtime harness has not yet been executed in this audit
+blocker: 'not applicable: pinned static evidence already reaches a target disposition; runtime execution would not change
+  the audit decision'
 ```
 
 ## Runtime execution
@@ -99,9 +102,11 @@ blocker: none; runtime harness has not yet been executed in this audit
 execution_status: NOT_RUN
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- static comparison is sufficient for the target disposition; no game-world state was created
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not applicable
 ```
 
 ## Conclusions
@@ -109,10 +114,13 @@ cleanup_result: not run
 ```yaml
 truth_status: PROVEN
 static_conclusion: TARGET_AFFECTED
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_APPLICABLE
 owner_action: OPEN_FIX_PROGRAM
 confidence: high
-rationale: the target constructs only IPv4 addresses and wildcard endpoints, while the transport standard and Asio explicitly support IPv6 endpoints and the pinned CrystalServer line contains a concrete IPv6-aware listener implementation; an isolated runtime run remains required to complete the audit gate and characterize platform/client behavior
+rationale: the target constructs only IPv4 addresses and wildcard endpoints, while the transport standard and Asio explicitly
+  support IPv6 endpoints and the pinned CrystalServer line contains a concrete IPv6-aware listener implementation; an isolated
+  runtime run remains required to complete the audit gate and characterize platform/client behavior Runtime execution is not
+  applicable because the pinned static comparison already determines the target disposition.
 ```
 
 ## Drift and unresolved questions

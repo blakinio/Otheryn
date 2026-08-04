@@ -60,13 +60,15 @@ system_boundary: cannot be selected without knowing the triggering movement oper
 preconditions: []
 steps: []
 expected_observations: []
-artifacts: []
+artifacts:
+- runtime-feasibility.md
 cleanup: []
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: source lacks client build, map position/tile stack, exact input sequence, network conditions, authoritative server position and packet/log evidence; unbounded movement fuzzing would not test the stated claim
+blocker: source lacks client build, map position/tile stack, exact input sequence, network conditions, authoritative server
+  position and packet/log evidence; unbounded movement fuzzing would not test the stated claim
 ```
 
 ## Runtime execution
@@ -75,9 +77,11 @@ blocker: source lacks client build, map position/tile stack, exact input sequenc
 execution_status: BLOCKED
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- reference behavior is insufficient for a deterministic pass/fail runtime assertion
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not started; no state created
 ```
 
 ## Conclusions
@@ -88,7 +92,9 @@ static_conclusion: STATIC_INCONCLUSIVE
 runtime_conclusion: NOT_RUN_REFERENCE_INSUFFICIENT
 owner_action: RESEARCH_REQUIRED
 confidence: high
-rationale: the source does not define a falsifiable scenario, and the symptom spans server movement, map state, packet ordering and client prediction; selecting any one target path would be guesswork
+rationale: the source does not define a falsifiable scenario, and the symptom spans server movement, map state, packet ordering
+  and client prediction; selecting any one target path would be guesswork Runtime execution is reference-blocked because no
+  deterministic expected result is supported.
 ```
 
 ## Drift and unresolved questions

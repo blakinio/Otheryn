@@ -43,24 +43,30 @@ conflicts: []
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
+plan_status: NOT_APPLICABLE
 system_boundary: ordinary monster spawn in hazard zone -> hazard tag/modifiers -> death pod/patriarch probabilities
 preconditions:
-  - isolated hazard zone with deterministic RNG and player hazard levels 0/1/12
+- isolated hazard zone with deterministic RNG and player hazard levels 0/1/12
 steps:
-  - spawn ordinary, scripted Primal Menace and reward-boss controls inside/outside zone
-  - record `monster:hazard()`, combat modifiers and registered death event
-  - force probability thresholds and kill each monster
-  - verify exclusion rectangles and hazard-disabled configuration
+- spawn ordinary, scripted Primal Menace and reward-boss controls inside/outside zone
+- record `monster:hazard()`, combat modifiers and registered death event
+- force probability thresholds and kill each monster
+- verify exclusion rectangles and hazard-disabled configuration
 expected_observations:
-  - eligible ordinary monsters are tagged and mechanics scale with points; controls remain excluded
-artifacts: [hazard-spawn-matrix.jsonl, combat-modifiers.json, death-rewards.jsonl]
-cleanup: [discard monsters/player]
+- eligible ordinary monsters are tagged and mechanics scale with points; controls remain excluded
+artifacts:
+- hazard-spawn-matrix.jsonl
+- combat-modifiers.json
+- death-rewards.jsonl
+- runtime-feasibility.md
+cleanup:
+- discard monsters/player
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: none
+blocker: 'not applicable: pinned static evidence already reaches a target disposition; runtime execution would not change
+  the audit decision'
 ```
 
 ## Runtime execution
@@ -69,9 +75,11 @@ blocker: none
 execution_status: NOT_RUN
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- static comparison is sufficient for the target disposition; no game-world state was created
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not applicable
 ```
 
 ## Conclusions
@@ -79,10 +87,12 @@ cleanup_result: not run
 ```yaml
 truth_status: PROVEN
 static_conclusion: TARGET_AFFECTED
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_APPLICABLE
 owner_action: OPEN_FIX_PROGRAM
 confidence: high
-rationale: Otheryn contains the exact death guard and zone-spawn hook implicated by a detailed cross-version reproduction; deterministic tag and probability tests can isolate the missing assignment
+rationale: Otheryn contains the exact death guard and zone-spawn hook implicated by a detailed cross-version reproduction;
+  deterministic tag and probability tests can isolate the missing assignment Runtime execution is not applicable because the
+  pinned static comparison already determines the target disposition.
 ```
 
 ## Drift and unresolved questions

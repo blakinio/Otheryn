@@ -58,48 +58,58 @@ conflicts:
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
-system_boundary: deterministic raid start under controlled world load -> scheduler/game-loop/network latency and spawn completion metrics
+plan_status: BLOCKED_INFEASIBLE
+system_boundary: deterministic raid start under controlled world load -> scheduler/game-loop/network latency and spawn completion
+  metrics
 preconditions:
-  - isolated Otheryn database/world and fixed machine/runner class
-  - scripted observer clients or protocol probes at fixed positions
-  - baseline population and monster counts recorded
-  - original and wave-staggered XML variants used only as audit fixtures
+- isolated Otheryn database/world and fixed machine/runner class
+- scripted observer clients or protocol probes at fixed positions
+- baseline population and monster counts recorded
+- original and wave-staggered XML variants used only as audit fixtures
 steps:
-  - warm the server and record five minutes of baseline scheduler delay, tick duration, CPU, RSS and probe RTT
-  - trigger original Draptor raid five times from a clean fixture and capture per-event spawn count/time plus p50/p95/p99/max delay
-  - repeat for Yeti
-  - repeat the same matrix with the source-proposed wave pattern
-  - run a no-raid control and verify total monsters/areas/announcements are equivalent between variants
+- warm the server and record five minutes of baseline scheduler delay, tick duration, CPU, RSS and probe RTT
+- trigger original Draptor raid five times from a clean fixture and capture per-event spawn count/time plus p50/p95/p99/max
+  delay
+- repeat for Yeti
+- repeat the same matrix with the source-proposed wave pattern
+- run a no-raid control and verify total monsters/areas/announcements are equivalent between variants
 expected_observations:
-  - reproduced defect: original bursts produce repeatable material tail-latency/tick spikes above the declared budget and staggered waves reduce them without content loss
-  - not reproduced: distributions overlap controls or proposed staggering changes encounter semantics without meaningful performance benefit
+- reproduced defect: original bursts produce repeatable material tail-latency/tick spikes above the declared budget and staggered
+    waves reduce them without content loss
+- not reproduced: distributions overlap controls or proposed staggering changes encounter semantics without meaningful performance
+    benefit
 artifacts:
-  - raid-fixtures/
-  - scheduler-delay.csv
-  - game-loop-duration.csv
-  - probe-rtt.csv
-  - spawn-timeline.jsonl
-  - resource-series.csv
-  - semantic-parity.json
+- raid-fixtures/
+- scheduler-delay.csv
+- game-loop-duration.csv
+- probe-rtt.csv
+- spawn-timeline.jsonl
+- resource-series.csv
+- semantic-parity.json
+- runtime-feasibility.md
 cleanup:
-  - terminate isolated server and discard raid fixture state
+- terminate isolated server and discard raid fixture state
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: none; a temporary audit workflow/harness is required for quantitative execution
+blocker: the repository can start the server and validate the seeded HTTP login response, but it has no deterministic game-protocol/client
+  driver and no isolated per-scenario world fixture for map, quest, combat, store, boss, persistence or client-rendering actions;
+  adding that infrastructure would be implementation outside this audit-only authorization
 ```
 
 ## Runtime execution
 
 ```yaml
-execution_status: NOT_RUN
+execution_status: BLOCKED
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- Docker quickstart validates server startup and the seeded HTTP login response only
+- no deterministic game-protocol/client driver or per-scenario world fixture exists in the repository
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not started; no state created
 ```
 
 ## Conclusions
@@ -107,10 +117,13 @@ cleanup_result: not run
 ```yaml
 truth_status: PARTIALLY_PROVEN
 static_conclusion: STATIC_INCONCLUSIVE
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_RUN_INFEASIBLE
 owner_action: RESEARCH_REQUIRED
 confidence: high
-rationale: Otheryn undeniably contains large raid spawn bursts, but the source overstates the Draptor timing and provides no quantitative latency evidence; controlled performance reproduction is required before changing encounter data
+rationale: 'Otheryn undeniably contains large raid spawn bursts, but the source overstates the Draptor timing and provides
+  no quantitative latency evidence; controlled performance reproduction is required before changing encounter data Runtime
+  execution is infrastructure-blocked: the repository has no deterministic game/client driver and adding one is outside audit-only
+  authority.'
 ```
 
 ## Drift and unresolved questions

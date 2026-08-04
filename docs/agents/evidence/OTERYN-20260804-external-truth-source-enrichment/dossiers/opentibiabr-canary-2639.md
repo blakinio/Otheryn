@@ -39,34 +39,45 @@ conflicts: []
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
+plan_status: BLOCKED_INFEASIBLE
 system_boundary: out-of-range fluid use request -> autowalk/revalidation -> fluid consumption/target effect and item position
-preconditions: [representative fluid containers and valid self/creature/tile targets]
+preconditions:
+- representative fluid containers and valid self/creature/tile targets
 steps:
-  - use from one to several squares away with clear and interrupted paths
-  - move/replace source or target during autowalk and test cancellation
-  - record source item UID/position, target and resulting fluid/item state
-  - compare non-fluid use-with and throwable item controls
+- use from one to several squares away with clear and interrupted paths
+- move/replace source or target during autowalk and test cancellation
+- record source item UID/position, target and resulting fluid/item state
+- compare non-fluid use-with and throwable item controls
 expected_observations:
-  - source container never moves to stale player origin and action executes only after valid in-range revalidation
-artifacts: [deferred-use-matrix.jsonl, movement-use-events.jsonl, inventory-tile-state.json]
-cleanup: [restore/discard items and actors]
+- source container never moves to stale player origin and action executes only after valid in-range revalidation
+artifacts:
+- deferred-use-matrix.jsonl
+- movement-use-events.jsonl
+- inventory-tile-state.json
+- runtime-feasibility.md
+cleanup:
+- restore/discard items and actors
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: none
+blocker: the repository can start the server and validate the seeded HTTP login response, but it has no deterministic game-protocol/client
+  driver and no isolated per-scenario world fixture for map, quest, combat, store, boss, persistence or client-rendering actions;
+  adding that infrastructure would be implementation outside this audit-only authorization
 ```
 
 ## Runtime execution
 
 ```yaml
-execution_status: NOT_RUN
+execution_status: BLOCKED
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- Docker quickstart validates server startup and the seeded HTTP login response only
+- no deterministic game-protocol/client driver or per-scenario world fixture exists in the repository
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not started; no state created
 ```
 
 ## Conclusions
@@ -74,10 +85,12 @@ cleanup_result: not run
 ```yaml
 truth_status: PROVEN
 static_conclusion: STATIC_INCONCLUSIVE
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_RUN_INFEASIBLE
 owner_action: RESEARCH_REQUIRED
 confidence: high
-rationale: paired source/reference videos establish the intended deferred-use semantics; item/target identity tracing can localize the stale-position bug
+rationale: 'paired source/reference videos establish the intended deferred-use semantics; item/target identity tracing can
+  localize the stale-position bug Runtime execution is infrastructure-blocked: the repository has no deterministic game/client
+  driver and adding one is outside audit-only authority.'
 ```
 
 ## Drift and unresolved questions

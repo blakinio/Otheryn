@@ -52,13 +52,17 @@ system_boundary: no target Kusuma content exists to reproduce
 preconditions: []
 steps: []
 expected_observations: []
-artifacts: [repository-symbol-search.txt, map-content-inventory.json]
+artifacts:
+- repository-symbol-search.txt
+- map-content-inventory.json
+- runtime-feasibility.md
 cleanup: []
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: implementation/runtime reproduction is not applicable until a separate content programme defines and adds the missing quest/boss from authoritative data
+blocker: 'not applicable: pinned static evidence already reaches a target disposition; runtime execution would not change
+  the audit decision'
 ```
 
 ## Runtime execution
@@ -67,8 +71,10 @@ blocker: implementation/runtime reproduction is not applicable until a separate 
 execution_status: NOT_RUN
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
+observations:
+- static comparison is sufficient for the target disposition; no game-world state was created
+artifacts:
+- runtime-feasibility.md
 cleanup_result: not applicable
 ```
 
@@ -80,7 +86,9 @@ static_conclusion: TARGET_PATH_ABSENT
 runtime_conclusion: NOT_APPLICABLE
 owner_action: OPEN_ARCHITECTURE_DECISION
 confidence: high
-rationale: all compared server repositories lack a Kusuma symbol while external references establish that Kusuma belongs to Within the Tides; a full versioned content design is required rather than a bug patch
+rationale: all compared server repositories lack a Kusuma symbol while external references establish that Kusuma belongs to
+  Within the Tides; a full versioned content design is required rather than a bug patch Runtime execution is not applicable
+  because the pinned static comparison already determines the target disposition.
 ```
 
 ## Drift and unresolved questions

@@ -58,47 +58,55 @@ conflicts:
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
-system_boundary: repeated deterministic partial-map swaps -> MapCache retained objects and process memory -> convergence or monotonic growth
+plan_status: BLOCKED_INFEASIBLE
+system_boundary: repeated deterministic partial-map swaps -> MapCache retained objects and process memory -> convergence or
+  monotonic growth
 preconditions:
-  - isolated Otheryn build with audit-only counters obtainable without changing production behavior
-  - two small OTBM fixtures with overlapping rectangle and intentionally absent coordinates in alternating variants
-  - fixed player/creature occupancy matrix, including an empty-area control
+- isolated Otheryn build with audit-only counters obtainable without changing production behavior
+- two small OTBM fixtures with overlapping rectangle and intentionally absent coordinates in alternating variants
+- fixed player/creature occupancy matrix, including an empty-area control
 steps:
-  - capture baseline RSS, heap allocation summary, map sector/floor/tile/cache counts and retainedBasicTiles count
-  - alternate fixture A and B for 10 warm-up cycles and 500 measured cycles
-  - after every cycle force all fixture coordinates through the same bounded read path and capture counters
-  - repeat with the source Misguided and Ebb/Flow maps if fixture result is positive
-  - run an identical no-swap control for elapsed-time allocation drift
+- capture baseline RSS, heap allocation summary, map sector/floor/tile/cache counts and retainedBasicTiles count
+- alternate fixture A and B for 10 warm-up cycles and 500 measured cycles
+- after every cycle force all fixture coordinates through the same bounded read path and capture counters
+- repeat with the source Misguided and Ebb/Flow maps if fixture result is positive
+- run an identical no-swap control for elapsed-time allocation drift
 expected_observations:
-  - confirmed defect: retained tile/cache count or leak-attributed heap grows with swap count and absent coordinates remain materializable from stale state
-  - not reproduced: counters and RSS plateau after warm-up and absent coordinates remain absent
+- confirmed defect: retained tile/cache count or leak-attributed heap grows with swap count and absent coordinates remain
+    materializable from stale state
+- not reproduced: counters and RSS plateau after warm-up and absent coordinates remain absent
 artifacts:
-  - fixture-a.otbm
-  - fixture-b.otbm
-  - map-cache-counters.csv
-  - rss-heap-series.csv
-  - absent-coordinate-checks.jsonl
-  - no-swap-control.csv
-  - sanitizer-or-heap-report.txt
+- fixture-a.otbm
+- fixture-b.otbm
+- map-cache-counters.csv
+- rss-heap-series.csv
+- absent-coordinate-checks.jsonl
+- no-swap-control.csv
+- sanitizer-or-heap-report.txt
+- runtime-feasibility.md
 cleanup:
-  - remove fixtures and terminate isolated process; discard audit-only state
+- remove fixtures and terminate isolated process; discard audit-only state
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: execution requires an audit harness or temporary CI workflow exposing counters; no product fix is authorized
+blocker: the repository can start the server and validate the seeded HTTP login response, but it has no deterministic game-protocol/client
+  driver and no isolated per-scenario world fixture for map, quest, combat, store, boss, persistence or client-rendering actions;
+  adding that infrastructure would be implementation outside this audit-only authorization
 ```
 
 ## Runtime execution
 
 ```yaml
-execution_status: NOT_RUN
+execution_status: BLOCKED
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- Docker quickstart validates server startup and the seeded HTTP login response only
+- no deterministic game-protocol/client driver or per-scenario world fixture exists in the repository
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not started; no state created
 ```
 
 ## Conclusions
@@ -106,10 +114,13 @@ cleanup_result: not run
 ```yaml
 truth_status: PARTIALLY_PROVEN
 static_conclusion: STATIC_INCONCLUSIVE
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_RUN_INFEASIBLE
 owner_action: RESEARCH_REQUIRED
 confidence: medium
-rationale: the target contains the same retained map-cache architecture and lacks the proposed clear API, but the PR provides neither complete caller integration nor quantitative proof; a bounded swap soak is required before authorizing a fix programme
+rationale: 'the target contains the same retained map-cache architecture and lacks the proposed clear API, but the PR provides
+  neither complete caller integration nor quantitative proof; a bounded swap soak is required before authorizing a fix programme
+  Runtime execution is infrastructure-blocked: the repository has no deterministic game/client driver and adding one is outside
+  audit-only authority.'
 ```
 
 ## Drift and unresolved questions

@@ -40,36 +40,47 @@ conflicts:
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
+plan_status: BLOCKED_INFEASIBLE
 system_boundary: clean Pale Worm encounter -> add spawns/phase state/Hex/lamp input -> boss completion and rewards
 preconditions:
-  - isolated party and resettable encounter
-  - lamp item and known quest storages
+- isolated party and resettable encounter
+- lamp item and known quest storages
 steps:
-  - run without lamp and record every spawn, state transition, damage source and completion condition
-  - repeat with lamp use at each plausible phase
-  - kill Greed/Hunger adds in controlled orders and test Weak Spot availability
-  - compare wipe/reset and repeated-entry behavior
+- run without lamp and record every spawn, state transition, damage source and completion condition
+- repeat with lamp use at each plausible phase
+- kill Greed/Hunger adds in controlled orders and test Weak Spot availability
+- compare wipe/reset and repeated-entry behavior
 expected_observations:
-  - named phases and mechanics occur exactly once with deterministic transitions and no shortcut to final kill
-artifacts: [pale-worm-timeline.jsonl, creature-spawns.jsonl, combat-effects.jsonl, quest-state.json]
-cleanup: [reset encounter and discard party state]
+- named phases and mechanics occur exactly once with deterministic transitions and no shortcut to final kill
+artifacts:
+- pale-worm-timeline.jsonl
+- creature-spawns.jsonl
+- combat-effects.jsonl
+- quest-state.json
+- runtime-feasibility.md
+cleanup:
+- reset encounter and discard party state
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: exact numeric truth values require a primary reference before implementation; structural reproduction is feasible
+blocker: the repository can start the server and validate the seeded HTTP login response, but it has no deterministic game-protocol/client
+  driver and no isolated per-scenario world fixture for map, quest, combat, store, boss, persistence or client-rendering actions;
+  adding that infrastructure would be implementation outside this audit-only authorization
 ```
 
 ## Runtime execution
 
 ```yaml
-execution_status: NOT_RUN
+execution_status: BLOCKED
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- Docker quickstart validates server startup and the seeded HTTP login response only
+- no deterministic game-protocol/client driver or per-scenario world fixture exists in the repository
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not started; no state created
 ```
 
 ## Conclusions
@@ -77,10 +88,12 @@ cleanup_result: not run
 ```yaml
 truth_status: PARTIALLY_PROVEN
 static_conclusion: STATIC_INCONCLUSIVE
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_RUN_INFEASIBLE
 owner_action: RESEARCH_REQUIRED
 confidence: medium
-rationale: the source identifies a coherent missing-mechanics set and target search did not locate it, but authoritative phase timings and formulas are absent
+rationale: 'the source identifies a coherent missing-mechanics set and target search did not locate it, but authoritative
+  phase timings and formulas are absent Runtime execution is infrastructure-blocked: the repository has no deterministic game/client
+  driver and adding one is outside audit-only authority.'
 ```
 
 ## Drift and unresolved questions

@@ -40,36 +40,47 @@ conflicts:
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
+plan_status: BLOCKED_INFEASIBLE
 system_boundary: named wand definition/equip/use -> server item/skills/Cyclopedia packets -> client parse/UI/attack result
 preconditions:
-  - representative wand IDs including zero-attack and level-restricted variants
-  - protocol fixtures for 13.40 and 14.12-compatible profiles
+- representative wand IDs including zero-attack and level-restricted variants
+- protocol fixtures for 13.40 and 14.12-compatible profiles
 steps:
-  - open skills and Cyclopedia, inspect wand, equip/use and attack for each profile
-  - capture serialized item/weapon fields and client logs/crash artifacts
-  - compare with non-wand melee and distance controls
-  - fuzz only declared optional/zero fields within isolated packet fixtures
+- open skills and Cyclopedia, inspect wand, equip/use and attack for each profile
+- capture serialized item/weapon fields and client logs/crash artifacts
+- compare with non-wand melee and distance controls
+- fuzz only declared optional/zero fields within isolated packet fixtures
 expected_observations:
-  - no null/invalid field or client failure; wand-specific fields match the negotiated layout
-artifacts: [wand-protocol-matrix.json, packet-traces.jsonl, client-logs, crash-artifacts]
-cleanup: [discard test player]
+- no null/invalid field or client failure; wand-specific fields match the negotiated layout
+artifacts:
+- wand-protocol-matrix.json
+- packet-traces.jsonl
+- client-logs
+- crash-artifacts
+- runtime-feasibility.md
+cleanup:
+- discard test player
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: exact source wand/client is missing, but a bounded representative matrix is feasible
+blocker: the repository can start the server and validate the seeded HTTP login response, but it has no deterministic game-protocol/client
+  driver and no isolated per-scenario world fixture for map, quest, combat, store, boss, persistence or client-rendering actions;
+  adding that infrastructure would be implementation outside this audit-only authorization
 ```
 
 ## Runtime execution
 
 ```yaml
-execution_status: NOT_RUN
+execution_status: BLOCKED
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- Docker quickstart validates server startup and the seeded HTTP login response only
+- no deterministic game-protocol/client driver or per-scenario world fixture exists in the repository
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not started; no state created
 ```
 
 ## Conclusions
@@ -77,10 +88,12 @@ cleanup_result: not run
 ```yaml
 truth_status: PARTIALLY_PROVEN
 static_conclusion: STATIC_INCONCLUSIVE
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_RUN_INFEASIBLE
 owner_action: OPEN_PROTOCOL_DECISION
 confidence: medium
-rationale: the reported cross-version client failure is plausible and testable, but the source omits the exact item and packet field, so protocol capture must precede any wand-specific condition
+rationale: 'the reported cross-version client failure is plausible and testable, but the source omits the exact item and packet
+  field, so protocol capture must precede any wand-specific condition Runtime execution is infrastructure-blocked: the repository
+  has no deterministic game/client driver and adding one is outside audit-only authority.'
 ```
 
 ## Drift and unresolved questions

@@ -40,34 +40,43 @@ conflicts:
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
+plan_status: BLOCKED_INFEASIBLE
 system_boundary: fixed incoming combat origin/type -> target reflection -> attacker HP/combat events
 preconditions:
-  - deterministic reflecting target and fixed attacker damage
+- deterministic reflecting target and fixed attacker damage
 steps:
-  - attack with physical melee, elemental weapon component, knight spells, mage spells, runes, summons and conditions
-  - record origin/type/primary-secondary components and reflected events
-  - test immunity, lethal reflection and reflection-of-reflection recursion guards
+- attack with physical melee, elemental weapon component, knight spells, mage spells, runes, summons and conditions
+- record origin/type/primary-secondary components and reflected events
+- test immunity, lethal reflection and reflection-of-reflection recursion guards
 expected_observations:
-  - every eligible component reflects exactly once according to one declared formula
-artifacts: [reflection-origin-matrix.jsonl, combat-events.jsonl]
-cleanup: [discard actors]
+- every eligible component reflects exactly once according to one declared formula
+artifacts:
+- reflection-origin-matrix.jsonl
+- combat-events.jsonl
+- runtime-feasibility.md
+cleanup:
+- discard actors
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: none
+blocker: the repository can start the server and validate the seeded HTTP login response, but it has no deterministic game-protocol/client
+  driver and no isolated per-scenario world fixture for map, quest, combat, store, boss, persistence or client-rendering actions;
+  adding that infrastructure would be implementation outside this audit-only authorization
 ```
 
 ## Runtime execution
 
 ```yaml
-execution_status: NOT_RUN
+execution_status: BLOCKED
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- Docker quickstart validates server startup and the seeded HTTP login response only
+- no deterministic game-protocol/client driver or per-scenario world fixture exists in the repository
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not started; no state created
 ```
 
 ## Conclusions
@@ -75,10 +84,12 @@ cleanup_result: not run
 ```yaml
 truth_status: PROVEN
 static_conclusion: STATIC_INCONCLUSIVE
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_RUN_INFEASIBLE
 owner_action: RESEARCH_REQUIRED
 confidence: high
-rationale: the source isolates the defect by combat origin, enabling a deterministic origin/component matrix before any reflection fix
+rationale: 'the source isolates the defect by combat origin, enabling a deterministic origin/component matrix before any reflection
+  fix Runtime execution is infrastructure-blocked: the repository has no deterministic game/client driver and adding one is
+  outside audit-only authority.'
 ```
 
 ## Drift and unresolved questions

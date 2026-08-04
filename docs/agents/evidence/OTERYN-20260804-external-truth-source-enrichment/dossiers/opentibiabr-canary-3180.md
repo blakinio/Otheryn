@@ -40,35 +40,45 @@ conflicts:
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
+plan_status: BLOCKED_INFEASIBLE
 system_boundary: tile stack + clicked stack position -> server item resolution -> corpse container open
 preconditions:
-  - fixtures with corpse over/under representative decorative, hangable, splash and blocking items
+- fixtures with corpse over/under representative decorative, hangable, splash and blocking items
 steps:
-  - capture tile description and client click stack position for each fixture
-  - direct-open corpse and repeat through Browse Field
-  - vary corpse insertion order, decay/transform and multiple corpses
-  - verify ownership/loot-window controls
+- capture tile description and client click stack position for each fixture
+- direct-open corpse and repeat through Browse Field
+- vary corpse insertion order, decay/transform and multiple corpses
+- verify ownership/loot-window controls
 expected_observations:
-  - direct click resolves the same corpse/container as the corresponding Browse Field selection
-artifacts: [corpse-stack-matrix.json, use-packets.jsonl, tile-descriptions.jsonl]
-cleanup: [remove corpses/fixtures]
+- direct click resolves the same corpse/container as the corresponding Browse Field selection
+artifacts:
+- corpse-stack-matrix.json
+- use-packets.jsonl
+- tile-descriptions.jsonl
+- runtime-feasibility.md
+cleanup:
+- remove corpses/fixtures
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: original coordinate is missing, but a bounded stack-class matrix is feasible
+blocker: the repository can start the server and validate the seeded HTTP login response, but it has no deterministic game-protocol/client
+  driver and no isolated per-scenario world fixture for map, quest, combat, store, boss, persistence or client-rendering actions;
+  adding that infrastructure would be implementation outside this audit-only authorization
 ```
 
 ## Runtime execution
 
 ```yaml
-execution_status: NOT_RUN
+execution_status: BLOCKED
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- Docker quickstart validates server startup and the seeded HTTP login response only
+- no deterministic game-protocol/client driver or per-scenario world fixture exists in the repository
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not started; no state created
 ```
 
 ## Conclusions
@@ -76,10 +86,12 @@ cleanup_result: not run
 ```yaml
 truth_status: PROVEN
 static_conclusion: STATIC_INCONCLUSIVE
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_RUN_INFEASIBLE
 owner_action: RESEARCH_REQUIRED
 confidence: high
-rationale: Browse Field success proves the corpse is valid and accessible; direct-use stack resolution can be isolated with controlled tile fixtures
+rationale: 'Browse Field success proves the corpse is valid and accessible; direct-use stack resolution can be isolated with
+  controlled tile fixtures Runtime execution is infrastructure-blocked: the repository has no deterministic game/client driver
+  and adding one is outside audit-only authority.'
 ```
 
 ## Drift and unresolved questions

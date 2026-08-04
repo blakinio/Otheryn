@@ -59,35 +59,38 @@ conflicts:
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
-system_boundary: isolated bank balance and withdrawal request -> money delivery work/game-loop responsiveness -> actual inventory/bank accounting
+plan_status: NOT_APPLICABLE
+system_boundary: isolated bank balance and withdrawal request -> money delivery work/game-loop responsiveness -> actual inventory/bank
+  accounting
 preconditions:
-  - isolated Otheryn account with disposable balance above 10B
-  - empty and constrained inventory variants
-  - game-loop/scheduler watchdog and item-allocation counters
+- isolated Otheryn account with disposable balance above 10B
+- empty and constrained inventory variants
+- game-loop/scheduler watchdog and item-allocation counters
 steps:
-  - establish baseline for 100, 10k, 1M, 100M and 10B withdrawals through talkaction and NPC paths
-  - enforce a finite timeout and capture CPU, allocations, scheduler delay, delivered money and final bank balance
-  - repeat with no inventory slots, limited capacity and ground-drop conditions
-  - verify conservation: initial bank plus inventory/ground money equals final totals
-  - compare pinned target with the accepted upstream PR 3692 behavior in an isolated donor build
+- establish baseline for 100, 10k, 1M, 100M and 10B withdrawals through talkaction and NPC paths
+- enforce a finite timeout and capture CPU, allocations, scheduler delay, delivered money and final bank balance
+- repeat with no inventory slots, limited capacity and ground-drop conditions
+- verify conservation: initial bank plus inventory/ground money equals final totals
+- compare pinned target with the accepted upstream PR 3692 behavior in an isolated donor build
 expected_observations:
-  - current talkaction is affected if work/time grows pathologically or blocks the scheduler for very large requests
-  - all failure/partial-delivery cases preserve money and return bounded feedback
+- current talkaction is affected if work/time grows pathologically or blocks the scheduler for very large requests
+- all failure/partial-delivery cases preserve money and return bounded feedback
 artifacts:
-  - withdrawal-latency.csv
-  - scheduler-watchdog.jsonl
-  - allocation-counts.csv
-  - money-conservation.json
-  - server-stack-or-timeout.txt
-  - upstream-3692-control.json
+- withdrawal-latency.csv
+- scheduler-watchdog.jsonl
+- allocation-counts.csv
+- money-conservation.json
+- server-stack-or-timeout.txt
+- upstream-3692-control.json
+- runtime-feasibility.md
 cleanup:
-  - discard account/database/world state and generated coins
+- discard account/database/world state and generated coins
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: none; strict timeout and disposable state are mandatory
+blocker: 'not applicable: pinned static evidence already reaches a target disposition; runtime execution would not change
+  the audit decision'
 ```
 
 ## Runtime execution
@@ -96,9 +99,11 @@ blocker: none; strict timeout and disposable state are mandatory
 execution_status: NOT_RUN
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- static comparison is sufficient for the target disposition; no game-world state was created
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not applicable
 ```
 
 ## Conclusions
@@ -106,10 +111,13 @@ cleanup_result: not run
 ```yaml
 truth_status: PROVEN
 static_conclusion: TARGET_AFFECTED
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_APPLICABLE
 owner_action: OPEN_FIX_PROGRAM
 confidence: high
-rationale: the source now contains a deterministic 10B reproducer and an accepted upstream remediation, while Otheryn's player talkaction still forwards an unbounded amount directly to bank delivery; quantitative bounded execution remains required before implementation
+rationale: the source now contains a deterministic 10B reproducer and an accepted upstream remediation, while Otheryn's player
+  talkaction still forwards an unbounded amount directly to bank delivery; quantitative bounded execution remains required
+  before implementation Runtime execution is not applicable because the pinned static comparison already determines the target
+  disposition.
 ```
 
 ## Drift and unresolved questions

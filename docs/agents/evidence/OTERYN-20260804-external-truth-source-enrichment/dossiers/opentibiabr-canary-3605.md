@@ -43,38 +43,50 @@ conflicts:
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
+plan_status: BLOCKED_INFEASIBLE
 system_boundary: amulet action + creature kills + live map swaps -> quest storage/map/client/barrier result
 preconditions:
-  - isolated player at exact Misguided mission state
-  - uncharged and charged amulet fixtures
-  - known qualifying creature set and maintained OTClient
+- isolated player at exact Misguided mission state
+- uncharged and charged amulet fixtures
+- known qualifying creature set and maintained OTClient
 steps:
-  - test amulet charge action with valid and invalid targets/storages
-  - trigger one illusion/reality swap with player outside and inside the replaced area
-  - kill qualifying creatures one at a time and record counter, duplicate/party/summon cases
-  - verify barrier/teleport before threshold and after exact threshold
-  - correlate any client failure with map packets and server tile/cache state
+- test amulet charge action with valid and invalid targets/storages
+- trigger one illusion/reality swap with player outside and inside the replaced area
+- kill qualifying creatures one at a time and record counter, duplicate/party/summon cases
+- verify barrier/teleport before threshold and after exact threshold
+- correlate any client failure with map packets and server tile/cache state
 expected_observations:
-  - one valid charge transition, coherent map state, exact-once death counting and threshold-gated boss access
-artifacts: [misguided-amulet.jsonl, kill-counter.jsonl, map-packets.jsonl, barrier-results.json, client-crash]
-cleanup: [discard quest player/map state]
+- one valid charge transition, coherent map state, exact-once death counting and threshold-gated boss access
+artifacts:
+- misguided-amulet.jsonl
+- kill-counter.jsonl
+- map-packets.jsonl
+- barrier-results.json
+- client-crash
+- runtime-feasibility.md
+cleanup:
+- discard quest player/map state
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: none
+blocker: the repository can start the server and validate the seeded HTTP login response, but it has no deterministic game-protocol/client
+  driver and no isolated per-scenario world fixture for map, quest, combat, store, boss, persistence or client-rendering actions;
+  adding that infrastructure would be implementation outside this audit-only authorization
 ```
 
 ## Runtime execution
 
 ```yaml
-execution_status: NOT_RUN
+execution_status: BLOCKED
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- Docker quickstart validates server startup and the seeded HTTP login response only
+- no deterministic game-protocol/client driver or per-scenario world fixture exists in the repository
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not started; no state created
 ```
 
 ## Conclusions
@@ -82,10 +94,11 @@ cleanup_result: not run
 ```yaml
 truth_status: PARTIALLY_PROVEN
 static_conclusion: STATIC_INCONCLUSIVE
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_RUN_INFEASIBLE
 owner_action: RESEARCH_REQUIRED
 confidence: medium-high
-rationale: Otheryn contains the exact live-map quest path independently implicated by Crystal issue #852, but the amulet and kill-counter subclaims remain unassigned until the three-part reproduction is executed
+rationale: 'Otheryn contains the exact live-map quest path independently implicated by Crystal issue Runtime execution is
+  infrastructure-blocked: the repository has no deterministic game/client driver and adding one is outside audit-only authority.'
 ```
 
 ## Drift and unresolved questions

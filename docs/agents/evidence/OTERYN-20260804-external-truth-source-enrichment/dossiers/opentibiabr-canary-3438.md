@@ -40,35 +40,45 @@ conflicts:
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
+plan_status: BLOCKED_INFEASIBLE
 system_boundary: quest storage + gem/item + exact fountain tile -> item consumption, tile/action state and quest progression
 preconditions:
-  - inventory of Lion's Rock action registrations, map action/unique IDs and required gem IDs
+- inventory of Lion's Rock action registrations, map action/unique IDs and required gem IDs
 steps:
-  - derive every valid gem/tile pair from target data and map dump
-  - execute each pair at pre-quest, correct and completed states
-  - test order, duplicate use and wrong-pair controls
-  - verify final fountain/door/storage transition
+- derive every valid gem/tile pair from target data and map dump
+- execute each pair at pre-quest, correct and completed states
+- test order, duplicate use and wrong-pair controls
+- verify final fountain/door/storage transition
 expected_observations:
-  - valid pairs advance exactly once and complete set unlocks progression
-artifacts: [lions-rock-actions.json, gem-tile-matrix.jsonl, storage-transitions.json]
-cleanup: [discard quest player/map state]
+- valid pairs advance exactly once and complete set unlocks progression
+artifacts:
+- lions-rock-actions.json
+- gem-tile-matrix.jsonl
+- storage-transitions.json
+- runtime-feasibility.md
+cleanup:
+- discard quest player/map state
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: none after generating the action/map inventory
+blocker: the repository can start the server and validate the seeded HTTP login response, but it has no deterministic game-protocol/client
+  driver and no isolated per-scenario world fixture for map, quest, combat, store, boss, persistence or client-rendering actions;
+  adding that infrastructure would be implementation outside this audit-only authorization
 ```
 
 ## Runtime execution
 
 ```yaml
-execution_status: NOT_RUN
+execution_status: BLOCKED
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- Docker quickstart validates server startup and the seeded HTTP login response only
+- no deterministic game-protocol/client driver or per-scenario world fixture exists in the repository
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not started; no state created
 ```
 
 ## Conclusions
@@ -76,10 +86,12 @@ cleanup_result: not run
 ```yaml
 truth_status: PARTIALLY_PROVEN
 static_conclusion: STATIC_INCONCLUSIVE
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_RUN_INFEASIBLE
 owner_action: RESEARCH_REQUIRED
 confidence: medium
-rationale: the quest invariant is clear enough to build a bounded matrix, but the source omits every concrete identifier needed to assign a static defect
+rationale: 'the quest invariant is clear enough to build a bounded matrix, but the source omits every concrete identifier
+  needed to assign a static defect Runtime execution is infrastructure-blocked: the repository has no deterministic game/client
+  driver and adding one is outside audit-only authority.'
 ```
 
 ## Drift and unresolved questions

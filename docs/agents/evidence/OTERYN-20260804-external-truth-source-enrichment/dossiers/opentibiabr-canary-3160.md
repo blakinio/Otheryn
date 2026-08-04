@@ -40,35 +40,45 @@ conflicts:
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
+plan_status: BLOCKED_INFEASIBLE
 system_boundary: caster/spell picker + spectator set -> ordered chain targets/effects/damage
 preconditions:
-  - fixture containing monsters, NPC, caster, players, player/monster summons and protection-zone boundaries
+- fixture containing monsters, NPC, caster, players, player/monster summons and protection-zone boundaries
 steps:
-  - cast player and monster chain spells with secure mode on/off
-  - vary spell-specific picker callbacks and maximum hops
-  - record considered, accepted and emitted targets plus damage/effects
-  - test deterministic ordering and no-target termination
+- cast player and monster chain spells with secure mode on/off
+- vary spell-specific picker callbacks and maximum hops
+- record considered, accepted and emitted targets plus damage/effects
+- test deterministic ordering and no-target termination
 expected_observations:
-  - only legal picker-approved targets receive a hop/effect and no invalid actor shortens the chain
-artifacts: [chain-target-matrix.jsonl, effect-packets.jsonl, combat-events.jsonl]
-cleanup: [discard actors/fixtures]
+- only legal picker-approved targets receive a hop/effect and no invalid actor shortens the chain
+artifacts:
+- chain-target-matrix.jsonl
+- effect-packets.jsonl
+- combat-events.jsonl
+- runtime-feasibility.md
+cleanup:
+- discard actors/fixtures
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: none
+blocker: the repository can start the server and validate the seeded HTTP login response, but it has no deterministic game-protocol/client
+  driver and no isolated per-scenario world fixture for map, quest, combat, store, boss, persistence or client-rendering actions;
+  adding that infrastructure would be implementation outside this audit-only authorization
 ```
 
 ## Runtime execution
 
 ```yaml
-execution_status: NOT_RUN
+execution_status: BLOCKED
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- Docker quickstart validates server startup and the seeded HTTP login response only
+- no deterministic game-protocol/client driver or per-scenario world fixture exists in the repository
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not started; no state created
 ```
 
 ## Conclusions
@@ -76,10 +86,12 @@ cleanup_result: not run
 ```yaml
 truth_status: PROVEN
 static_conclusion: STATIC_INCONCLUSIVE
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_RUN_INFEASIBLE
 owner_action: RESEARCH_REQUIRED
 confidence: high
-rationale: source and successful workaround prove a target-selection legality gap, but implementation must preserve spell callbacks and deterministic chain ordering rather than copy the broad patch blindly
+rationale: 'source and successful workaround prove a target-selection legality gap, but implementation must preserve spell
+  callbacks and deterministic chain ordering rather than copy the broad patch blindly Runtime execution is infrastructure-blocked:
+  the repository has no deterministic game/client driver and adding one is outside audit-only authority.'
 ```
 
 ## Drift and unresolved questions

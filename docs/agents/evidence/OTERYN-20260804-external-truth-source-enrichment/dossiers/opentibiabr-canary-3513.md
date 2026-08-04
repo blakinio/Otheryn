@@ -58,48 +58,56 @@ conflicts:
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
-system_boundary: isolated zone/login script input -> Otheryn login packet sequence -> observable client completion, disconnect or crash
+plan_status: BLOCKED_INFEASIBLE
+system_boundary: isolated zone/login script input -> Otheryn login packet sequence -> observable client completion, disconnect
+  or crash
 preconditions:
-  - disposable Otheryn world containing a small named zone
-  - test player positioned inside the zone
-  - audit-only Lua callback exactly matching Issue 3513
-  - maintained OTClient build at the pinned revision
-  - official 13.40 client only if a lawful reproducible test artifact and automation path are available
+- disposable Otheryn world containing a small named zone
+- test player positioned inside the zone
+- audit-only Lua callback exactly matching Issue 3513
+- maintained OTClient build at the pinned revision
+- official 13.40 client only if a lawful reproducible test artifact and automation path are available
 steps:
-  - start Otheryn with packet-level debug capture limited to the test connection
-  - log in outside the zone, enter it, log out and log in again five times with the callback enabled
-  - repeat five times with the callback disabled as control
-  - record ordering of creature introduction/map packets and opcode 0x8F
-  - execute the same matrix with maintained OTClient; execute official 13.40 only when the client artifact and crash collection are available
+- start Otheryn with packet-level debug capture limited to the test connection
+- log in outside the zone, enter it, log out and log in again five times with the callback enabled
+- repeat five times with the callback disabled as control
+- record ordering of creature introduction/map packets and opcode 0x8F
+- execute the same matrix with maintained OTClient; execute official 13.40 only when the client artifact and crash collection
+  are available
 expected_observations:
-  - callback-enabled login either completes safely or produces a reproducible disconnect/crash correlated with the 0x8F ordering
-  - disabled control completes without the correlated failure
+- callback-enabled login either completes safely or produces a reproducible disconnect/crash correlated with the 0x8F ordering
+- disabled control completes without the correlated failure
 artifacts:
-  - zone-after-enter.lua
-  - server-packet-order.log
-  - maintained-otclient-5x.json
-  - control-5x.json
-  - official-1340-5x.json
-  - client-crash-artifacts/
+- zone-after-enter.lua
+- server-packet-order.log
+- maintained-otclient-5x.json
+- control-5x.json
+- official-1340-5x.json
+- client-crash-artifacts/
+- runtime-feasibility.md
 cleanup:
-  - remove the audit-only zone script and disposable player/world state
+- remove the audit-only zone script and disposable player/world state
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: exact official 13.40 reproduction depends on a lawful automatable client artifact; maintained OTClient control remains feasible
+blocker: the repository can start the server and validate the seeded HTTP login response, but it has no deterministic game-protocol/client
+  driver and no isolated per-scenario world fixture for map, quest, combat, store, boss, persistence or client-rendering actions;
+  adding that infrastructure would be implementation outside this audit-only authorization
 ```
 
 ## Runtime execution
 
 ```yaml
-execution_status: NOT_RUN
+execution_status: BLOCKED
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- Docker quickstart validates server startup and the seeded HTTP login response only
+- no deterministic game-protocol/client driver or per-scenario world fixture exists in the repository
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not started; no state created
 ```
 
 ## Conclusions
@@ -107,10 +115,13 @@ cleanup_result: not run
 ```yaml
 truth_status: PARTIALLY_PROVEN
 static_conclusion: STATIC_INCONCLUSIVE
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_RUN_INFEASIBLE
 owner_action: RESEARCH_REQUIRED
 confidence: medium
-rationale: the exact callback and immediate speed-packet path exist in all server lines, but static code does not prove the packet is emitted before client creature registration; maintained OTClient safely handles an unknown creature, while the reported official 13.40 crash lacks a packet capture or dump
+rationale: 'the exact callback and immediate speed-packet path exist in all server lines, but static code does not prove the
+  packet is emitted before client creature registration; maintained OTClient safely handles an unknown creature, while the
+  reported official 13.40 crash lacks a packet capture or dump Runtime execution is infrastructure-blocked: the repository
+  has no deterministic game/client driver and adding one is outside audit-only authority.'
 ```
 
 ## Drift and unresolved questions

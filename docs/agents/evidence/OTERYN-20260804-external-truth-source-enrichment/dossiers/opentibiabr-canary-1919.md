@@ -46,13 +46,15 @@ system_boundary: bow imbue + Diamond Arrow + primary/secondary target resistance
 preconditions: []
 steps: []
 expected_observations: []
-artifacts: []
+artifacts:
+- runtime-feasibility.md
 cleanup: []
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: no versioned official formula or complete reference damage vector defines whether holy and imbuement components should coexist or convert on expanded targets
+blocker: no versioned official formula or complete reference damage vector defines whether holy and imbuement components should
+  coexist or convert on expanded targets
 ```
 
 ## Runtime execution
@@ -61,9 +63,11 @@ blocker: no versioned official formula or complete reference damage vector defin
 execution_status: BLOCKED
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- reference behavior is insufficient for a deterministic pass/fail runtime assertion
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not started; no state created
 ```
 
 ## Conclusions
@@ -74,7 +78,9 @@ static_conclusion: STATIC_INCONCLUSIVE
 runtime_conclusion: NOT_RUN_REFERENCE_INSUFFICIENT
 owner_action: RESEARCH_REQUIRED
 confidence: high
-rationale: the Issue does not assert a falsifiable expected formula; reproducing current numbers would not establish correctness without an authoritative balance-version reference
+rationale: the Issue does not assert a falsifiable expected formula; reproducing current numbers would not establish correctness
+  without an authoritative balance-version reference Runtime execution is reference-blocked because no deterministic expected
+  result is supported.
 ```
 
 ## Drift and unresolved questions

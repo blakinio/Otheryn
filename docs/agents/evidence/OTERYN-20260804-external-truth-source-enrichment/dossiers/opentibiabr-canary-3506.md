@@ -40,34 +40,47 @@ conflicts:
 ## Deterministic runtime plan
 
 ```yaml
-plan_status: READY
+plan_status: BLOCKED_INFEASIBLE
 system_boundary: clean arena entry/combat -> boss events, summons, linked participation -> completion/reset
-preconditions: [isolated party, resettable arenas, deterministic health/damage control]
+preconditions:
+- isolated party
+- resettable arenas
+- deterministic health/damage control
 steps:
-  - run each boss through all health/time thresholds
-  - enumerate registered events, summons and arena state every second
-  - test wipe, timeout, repeat entry and summon-cap behavior
-  - for twins, record activation/targetability and shared completion
+- run each boss through all health/time thresholds
+- enumerate registered events, summons and arena state every second
+- test wipe, timeout, repeat entry and summon-cap behavior
+- for twins, record activation/targetability and shared completion
 expected_observations:
-  - every named encounter performs defined mechanics and terminates all spawned state on completion/reset
-artifacts: [grave-danger-timelines.jsonl, summons.csv, arena-state.jsonl]
-cleanup: [reset arenas and discard party state]
+- every named encounter performs defined mechanics and terminates all spawned state on completion/reset
+artifacts:
+- grave-danger-timelines.jsonl
+- summons.csv
+- arena-state.jsonl
+- runtime-feasibility.md
+cleanup:
+- reset arenas and discard party state
 safety:
   production_access: false
   persistent_live_state: false
   external_side_effects: false
-blocker: numeric official mechanics require a primary reference; structural reproduction is feasible
+blocker: the repository can start the server and validate the seeded HTTP login response, but it has no deterministic game-protocol/client
+  driver and no isolated per-scenario world fixture for map, quest, combat, store, boss, persistence or client-rendering actions;
+  adding that infrastructure would be implementation outside this audit-only authorization
 ```
 
 ## Runtime execution
 
 ```yaml
-execution_status: NOT_RUN
+execution_status: BLOCKED
 exact_otheryn_head: not applicable
 run_ids: []
-observations: []
-artifacts: []
-cleanup_result: not run
+observations:
+- Docker quickstart validates server startup and the seeded HTTP login response only
+- no deterministic game-protocol/client driver or per-scenario world fixture exists in the repository
+artifacts:
+- runtime-feasibility.md
+cleanup_result: not started; no state created
 ```
 
 ## Conclusions
@@ -75,10 +88,12 @@ cleanup_result: not run
 ```yaml
 truth_status: PARTIALLY_PROVEN
 static_conclusion: STATIC_INCONCLUSIVE
-runtime_conclusion: PENDING
+runtime_conclusion: NOT_RUN_INFEASIBLE
 owner_action: RESEARCH_REQUIRED
 confidence: medium
-rationale: the source defines distinct observable failures across five bosses but does not provide versioned encounter specifications
+rationale: 'the source defines distinct observable failures across five bosses but does not provide versioned encounter specifications
+  Runtime execution is infrastructure-blocked: the repository has no deterministic game/client driver and adding one is outside
+  audit-only authority.'
 ```
 
 ## Drift and unresolved questions
