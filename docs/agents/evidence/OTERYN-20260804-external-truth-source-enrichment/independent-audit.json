@@ -78,6 +78,8 @@
     "docs/agents/evidence/OTERYN-20260804-external-truth-source-enrichment/source-registry.csv.gz",
     "docs/agents/evidence/OTERYN-20260804-external-truth-source-enrichment/source-registry.json.gz",
     "docs/agents/evidence/OTERYN-20260804-external-truth-source-enrichment/validate_evidence.py",
+    "docs/agents/evidence/OTERYN-20260804-external-truth-source-enrichment/validation.json",
+    "docs/agents/evidence/OTERYN-20260804-external-truth-source-enrichment/validation.txt",
     "docs/agents/tasks/active/OTERYN-20260804-external-truth-source-enrichment.md"
   ],
   "executions": {
