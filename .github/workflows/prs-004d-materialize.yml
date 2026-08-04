@@ -1,0 +1,1199 @@
+name: PRS-004D Materializer
+
+on:
+  push:
+    branches:
+      - dudantas/prs-004d-protected-player-save
+    paths:
+      - .github/workflows/prs-004d-materialize.yml
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: dudantas/prs-004d-protected-player-save
+          fetch-depth: 0
+
+      - name: Materialize protected player-save integration
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text(encoding="utf-8")
+              if text.count(old) != 1:
+                  raise SystemExit(f"{path}: expected exactly one replacement marker")
+              file.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          Path("src/database/player_writer_fence_repository.hpp").write_text(r'''#pragma once
+
+#ifndef USE_PRECOMPILED_HEADERS
+	#include <array>
+	#include <cstdint>
+	#include <string>
+#endif
+
+using PlayerWriterFenceSubjectId = uint32_t;
+using PlayerWriterFenceGeneration = uint64_t;
+using PlayerWriterFenceRevision = uint64_t;
+using PlayerWriterFenceToken = std::array<uint8_t, 16>;
+
+enum class PlayerWriterFenceResult : uint8_t {
+	Applied,
+	StaleConflict,
+	MalformedContext,
+	DatabaseFailure,
+};
+
+struct PlayerWriterFenceContext final {
+	PlayerWriterFenceSubjectId playerId = 0;
+	PlayerWriterFenceGeneration ownershipGeneration = 0;
+	PlayerWriterFenceToken writerToken {};
+	PlayerWriterFenceRevision stateRevision = 0;
+};
+
+struct PlayerWriterFenceLoadResult final {
+	PlayerWriterFenceResult result = PlayerWriterFenceResult::DatabaseFailure;
+	PlayerWriterFenceContext context {};
+};
+
+class PlayerWriterFenceRepository final {
+public:
+	[[nodiscard]] PlayerWriterFenceLoadResult load(PlayerWriterFenceSubjectId playerId) const;
+
+	[[nodiscard]] PlayerWriterFenceResult acquire(const PlayerWriterFenceContext &desired) const;
+
+	[[nodiscard]] PlayerWriterFenceResult transfer(
+		const PlayerWriterFenceContext &current,
+		const PlayerWriterFenceContext &desired
+	) const;
+
+	[[nodiscard]] PlayerWriterFenceResult release(const PlayerWriterFenceContext &current) const;
+
+	[[nodiscard]] PlayerWriterFenceResult advanceRevision(
+		const PlayerWriterFenceContext &current,
+		PlayerWriterFenceRevision nextRevision
+	) const;
+
+	/**
+	 * Executes only the exact-next revision CAS on the caller-owned transaction.
+	 * The caller must already own the shared database connection lock through
+	 * DBTransaction. This method never starts, commits or retries a transaction.
+	 */
+	[[nodiscard]] PlayerWriterFenceResult advanceRevisionInTransaction(
+		const PlayerWriterFenceContext &current,
+		PlayerWriterFenceRevision nextRevision
+	) const;
+
+	[[nodiscard]] static bool isValidOwnedContext(const PlayerWriterFenceContext &context) noexcept;
+	[[nodiscard]] static bool isValidToken(const PlayerWriterFenceToken &token) noexcept;
+
+private:
+	[[nodiscard]] static PlayerWriterFenceResult executeCas(const std::string &query);
+	[[nodiscard]] static PlayerWriterFenceResult executeCasInCurrentTransaction(const std::string &query);
+};
+''', encoding="utf-8")
+
+          Path("src/database/player_writer_fence_repository.cpp").write_text(r'''#include "database/player_writer_fence_repository.hpp"
+
+#include "database/database.hpp"
+
+#include <fmt/format.h>
+
+#ifndef USE_PRECOMPILED_HEADERS
+	#include <algorithm>
+	#include <limits>
+	#include <optional>
+	#include <string>
+#endif
+
+namespace {
+	std::string tokenHex(const PlayerWriterFenceToken &token) {
+		static constexpr char digits[] = "0123456789ABCDEF";
+		std::string value;
+		value.reserve(token.size() * 2);
+		for (const auto byte : token) {
+			value.push_back(digits[(byte >> 4U) & 0x0FU]);
+			value.push_back(digits[byte & 0x0FU]);
+		}
+		return value;
+	}
+
+	std::optional<uint8_t> hexNibble(char value) {
+		if (value >= '0' && value <= '9') {
+			return static_cast<uint8_t>(value - '0');
+		}
+		if (value >= 'A' && value <= 'F') {
+			return static_cast<uint8_t>(value - 'A' + 10);
+		}
+		if (value >= 'a' && value <= 'f') {
+			return static_cast<uint8_t>(value - 'a' + 10);
+		}
+		return std::nullopt;
+	}
+
+	std::optional<PlayerWriterFenceToken> parseTokenHex(const std::string &value) {
+		PlayerWriterFenceToken token {};
+		if (value.empty()) {
+			return token;
+		}
+		if (value.size() != token.size() * 2) {
+			return std::nullopt;
+		}
+		for (size_t index = 0; index < token.size(); ++index) {
+			const auto high = hexNibble(value[index * 2]);
+			const auto low = hexNibble(value[index * 2 + 1]);
+			if (!high.has_value() || !low.has_value()) {
+				return std::nullopt;
+			}
+			token[index] = static_cast<uint8_t>((*high << 4U) | *low);
+		}
+		return token;
+	}
+
+	std::string exactOwnerPredicate(const PlayerWriterFenceContext &context) {
+		return fmt::format(
+			"`player_id` = {} AND `ownership_generation` = {} AND `writer_token` = UNHEX('{}') AND `state_revision` = {}",
+			context.playerId,
+			context.ownershipGeneration,
+			tokenHex(context.writerToken),
+			context.stateRevision
+		);
+	}
+} // namespace
+
+bool PlayerWriterFenceRepository::isValidToken(const PlayerWriterFenceToken &token) noexcept {
+	return std::ranges::any_of(token, [](uint8_t byte) {
+		return byte != 0;
+	});
+}
+
+bool PlayerWriterFenceRepository::isValidOwnedContext(const PlayerWriterFenceContext &context) noexcept {
+	return context.playerId != 0 && context.ownershipGeneration != 0 && isValidToken(context.writerToken);
+}
+
+PlayerWriterFenceLoadResult PlayerWriterFenceRepository::load(PlayerWriterFenceSubjectId playerId) const {
+	if (playerId == 0) {
+		return { PlayerWriterFenceResult::MalformedContext, {} };
+	}
+
+	const auto result = g_database().storeQuery(fmt::format(
+		"SELECT `ownership_generation`, COALESCE(HEX(`writer_token`), '') AS `writer_token_hex`, `state_revision` "
+		"FROM `player_writer_fence` WHERE `player_id` = {}",
+		playerId
+	));
+	if (!result) {
+		return { PlayerWriterFenceResult::DatabaseFailure, {} };
+	}
+
+	const auto parsedToken = parseTokenHex(result->getString("writer_token_hex"));
+	if (!parsedToken.has_value()) {
+		g_logger().error("Writer-fence row {} contains a malformed token representation.", playerId);
+		return { PlayerWriterFenceResult::DatabaseFailure, {} };
+	}
+
+	return {
+		PlayerWriterFenceResult::Applied,
+		{
+			.playerId = playerId,
+			.ownershipGeneration = result->getNumber<PlayerWriterFenceGeneration>("ownership_generation"),
+			.writerToken = *parsedToken,
+			.stateRevision = result->getNumber<PlayerWriterFenceRevision>("state_revision"),
+		},
+	};
+}
+
+PlayerWriterFenceResult PlayerWriterFenceRepository::executeCasInCurrentTransaction(const std::string &query) {
+	if (!g_database().executeQuery(query)) {
+		return PlayerWriterFenceResult::DatabaseFailure;
+	}
+
+	const auto affected = g_database().storeQuery("SELECT ROW_COUNT() AS `affected_rows`");
+	if (!affected) {
+		return PlayerWriterFenceResult::DatabaseFailure;
+	}
+
+	const auto affectedRows = affected->getNumber<uint64_t>("affected_rows");
+	if (affectedRows > 1) {
+		g_logger().error("Writer-fence CAS affected more than one authority row: {}", affectedRows);
+		return PlayerWriterFenceResult::DatabaseFailure;
+	}
+
+	return affectedRows == 1 ? PlayerWriterFenceResult::Applied : PlayerWriterFenceResult::StaleConflict;
+}
+
+PlayerWriterFenceResult PlayerWriterFenceRepository::executeCas(const std::string &query) {
+	PlayerWriterFenceResult result = PlayerWriterFenceResult::DatabaseFailure;
+	const bool committed = DBTransaction::executeWithinTransaction([&] {
+		result = executeCasInCurrentTransaction(query);
+		return result == PlayerWriterFenceResult::Applied || result == PlayerWriterFenceResult::StaleConflict;
+	});
+
+	return committed ? result : PlayerWriterFenceResult::DatabaseFailure;
+}
+
+PlayerWriterFenceResult PlayerWriterFenceRepository::acquire(const PlayerWriterFenceContext &desired) const {
+	if (!isValidOwnedContext(desired)) {
+		return PlayerWriterFenceResult::MalformedContext;
+	}
+
+	return executeCas(fmt::format(
+		"UPDATE `player_writer_fence` SET `ownership_generation` = {}, `writer_token` = UNHEX('{}') "
+		"WHERE `player_id` = {} AND `writer_token` IS NULL AND `ownership_generation` < {} AND `state_revision` = {}",
+		desired.ownershipGeneration,
+		tokenHex(desired.writerToken),
+		desired.playerId,
+		desired.ownershipGeneration,
+		desired.stateRevision
+	));
+}
+
+PlayerWriterFenceResult PlayerWriterFenceRepository::transfer(
+	const PlayerWriterFenceContext &current,
+	const PlayerWriterFenceContext &desired
+) const {
+	if (!isValidOwnedContext(current) || !isValidOwnedContext(desired) || current.playerId != desired.playerId
+	    || desired.ownershipGeneration <= current.ownershipGeneration || desired.stateRevision != current.stateRevision
+	    || current.writerToken == desired.writerToken) {
+		return PlayerWriterFenceResult::MalformedContext;
+	}
+
+	return executeCas(fmt::format(
+		"UPDATE `player_writer_fence` SET `ownership_generation` = {}, `writer_token` = UNHEX('{}') WHERE {}",
+		desired.ownershipGeneration,
+		tokenHex(desired.writerToken),
+		exactOwnerPredicate(current)
+	));
+}
+
+PlayerWriterFenceResult PlayerWriterFenceRepository::release(const PlayerWriterFenceContext &current) const {
+	if (!isValidOwnedContext(current)) {
+		return PlayerWriterFenceResult::MalformedContext;
+	}
+
+	return executeCas(fmt::format(
+		"UPDATE `player_writer_fence` SET `writer_token` = NULL WHERE {}",
+		exactOwnerPredicate(current)
+	));
+}
+
+PlayerWriterFenceResult PlayerWriterFenceRepository::advanceRevisionInTransaction(
+	const PlayerWriterFenceContext &current,
+	PlayerWriterFenceRevision nextRevision
+) const {
+	if (!isValidOwnedContext(current) || current.stateRevision == std::numeric_limits<PlayerWriterFenceRevision>::max()
+	    || nextRevision != current.stateRevision + 1) {
+		return PlayerWriterFenceResult::MalformedContext;
+	}
+
+	return executeCasInCurrentTransaction(fmt::format(
+		"UPDATE `player_writer_fence` SET `state_revision` = {} WHERE {}",
+		nextRevision,
+		exactOwnerPredicate(current)
+	));
+}
+
+PlayerWriterFenceResult PlayerWriterFenceRepository::advanceRevision(
+	const PlayerWriterFenceContext &current,
+	PlayerWriterFenceRevision nextRevision
+) const {
+	if (!isValidOwnedContext(current) || current.stateRevision == std::numeric_limits<PlayerWriterFenceRevision>::max()
+	    || nextRevision != current.stateRevision + 1) {
+		return PlayerWriterFenceResult::MalformedContext;
+	}
+
+	return executeCas(fmt::format(
+		"UPDATE `player_writer_fence` SET `state_revision` = {} WHERE {}",
+		nextRevision,
+		exactOwnerPredicate(current)
+	));
+}
+''', encoding="utf-8")
+
+          Path("src/database/player_writer_fenced_save_transaction.hpp").write_text(r'''#pragma once
+
+#include "database/database.hpp"
+#include "database/player_writer_fence_repository.hpp"
+
+#ifndef USE_PRECOMPILED_HEADERS
+	#include <functional>
+	#include <limits>
+	#include <utility>
+#endif
+
+class PlayerWriterFencedSaveTransaction final {
+public:
+	template <typename SaveCallback>
+	[[nodiscard]] static PlayerWriterFenceResult execute(
+		PlayerWriterFenceContext &context,
+		SaveCallback &&saveCallback
+	) {
+		if (!PlayerWriterFenceRepository::isValidOwnedContext(context)
+		    || context.stateRevision == std::numeric_limits<PlayerWriterFenceRevision>::max()) {
+			return PlayerWriterFenceResult::MalformedContext;
+		}
+
+		const auto nextRevision = context.stateRevision + 1;
+		PlayerWriterFenceResult fenceResult = PlayerWriterFenceResult::DatabaseFailure;
+		const bool committed = DBTransaction::executeWithinTransaction([&] {
+			if (!std::invoke(std::forward<SaveCallback>(saveCallback))) {
+				return false;
+			}
+
+			fenceResult = PlayerWriterFenceRepository().advanceRevisionInTransaction(context, nextRevision);
+			return fenceResult == PlayerWriterFenceResult::Applied;
+		});
+		if (!committed) {
+			return fenceResult == PlayerWriterFenceResult::Applied
+				? PlayerWriterFenceResult::DatabaseFailure
+				: fenceResult;
+		}
+
+		context.stateRevision = nextRevision;
+		return PlayerWriterFenceResult::Applied;
+	}
+};
+''', encoding="utf-8")
+
+          Path("src/game/scheduling/save_manager.hpp").write_text(r'''/**
+ * Canary - A free and open-source MMORPG server emulator
+ * Copyright (©) 2019–present OpenTibiaBR <opentibiabr@outlook.com>
+ * Repository: https://github.com/opentibiabr/canary
+ * License: https://github.com/opentibiabr/canary/blob/main/LICENSE
+ * Contributors: https://github.com/opentibiabr/canary/graphs/contributors
+ * Website: https://docs.opentibiabr.com/
+ */
+
+#pragma once
+
+#include "database/player_writer_fence_repository.hpp"
+#include "lib/thread/thread_pool.hpp"
+#include "game/scheduling/player_checkpoint_attempt.hpp"
+
+#ifndef USE_PRECOMPILED_HEADERS
+	#include <cstdint>
+	#include <map>
+	#include <memory>
+	#include <mutex>
+	#include <optional>
+	#include <vector>
+#endif
+
+class KVStore;
+class Logger;
+class Game;
+class Player;
+class Guild;
+
+struct DatabaseOutageDrainPlayerRemovalResult final {
+	bool removed = false;
+	bool finalSaveObserved = false;
+	bool finalSaveSucceeded = false;
+};
+
+class SaveManager {
+public:
+	explicit SaveManager(ThreadPool &threadPool, KVStore &kvStore, Logger &logger, Game &game);
+
+	SaveManager(const SaveManager &) = delete;
+	void operator=(const SaveManager &) = delete;
+
+	static SaveManager &getInstance();
+
+	bool saveAll();
+	void scheduleAll();
+
+	bool savePlayer(std::shared_ptr<Player> player);
+
+	[[nodiscard]] bool acquirePlayerWriterFence(const std::shared_ptr<Player> &player);
+	[[nodiscard]] bool releasePlayerWriterFence(const std::shared_ptr<Player> &player);
+
+	bool savePlayerFinal(std::shared_ptr<Player> player);
+
+	DatabaseOutageDrainPlayerRemovalResult removePlayerForDatabaseOutageDrain(const std::shared_ptr<Player> &player);
+
+	bool saveGuild(std::shared_ptr<Guild> guild);
+
+	static void markPlayerDirty(const std::shared_ptr<Player> &player);
+
+private:
+	struct DatabaseOutageDrainSaveObservation final {
+		const Player* player;
+		bool observed;
+		bool succeeded;
+	};
+
+	bool saveMap();
+	bool saveKV();
+
+	bool schedulePlayer(std::weak_ptr<Player> player);
+	bool scheduleDirtyPlayer(std::weak_ptr<Player> player, std::shared_ptr<PlayerPersistenceState> state);
+	static std::shared_ptr<PlayerPersistenceState> persistenceStateFor(const std::shared_ptr<Player> &player);
+	static std::vector<std::shared_ptr<PlayerPersistenceState>> persistenceStatesSnapshot();
+	static std::optional<PlayerWriterFenceContext> writerFenceContextFor(const std::shared_ptr<Player> &player);
+	static void storeWriterFenceContext(const std::shared_ptr<Player> &player, const PlayerWriterFenceContext &context);
+	static void eraseWriterFenceContext(const std::shared_ptr<Player> &player);
+	static int64_t currentCheckpointTimestampSeconds();
+	static void publishPlayerDirtyGauges();
+	void publishPlayerCheckpointGauges();
+
+	bool doSavePlayer(std::shared_ptr<Player> player, bool releaseWriterFence = false);
+
+	std::atomic<std::chrono::steady_clock::time_point> m_scheduledAt;
+	inline static std::mutex m_playerPersistenceMutex;
+	inline static std::map<std::weak_ptr<Player>, std::shared_ptr<PlayerPersistenceState>, std::owner_less<std::weak_ptr<Player>>> m_playerPersistenceStates;
+	inline static std::map<std::weak_ptr<Player>, PlayerWriterFenceContext, std::owner_less<std::weak_ptr<Player>>> m_playerWriterFenceContexts;
+	inline static PlayerCheckpointTelemetry m_playerCheckpointTelemetry;
+	inline static thread_local DatabaseOutageDrainSaveObservation m_databaseOutageDrainSaveObservation { nullptr, false, false };
+	PlayerCheckpointQueueAdmission m_playerCheckpointQueueAdmission;
+
+	ThreadPool &threadPool;
+	KVStore &kv;
+	Logger &logger;
+	Game &game;
+};
+
+constexpr auto g_saveManager = SaveManager::getInstance;
+''', encoding="utf-8")
+
+          Path("src/io/iologindata.hpp").write_text(r'''/**
+ * Canary - A free and open-source MMORPG server emulator
+ * Copyright (©) 2019–present OpenTibiaBR <opentibiabr@outlook.com>
+ * Repository: https://github.com/opentibiabr/canary
+ * License: https://github.com/opentibiabr/canary/blob/main/LICENSE
+ * Contributors: https://github.com/opentibiabr/canary/graphs/contributors
+ * Website: https://docs.opentibiabr.com/
+ */
+
+#pragma once
+
+#include "database/player_writer_fence_repository.hpp"
+
+class Player;
+class Item;
+class DBResult;
+
+struct VIPEntry;
+struct VIPGroupEntry;
+
+using ItemBlockList = std::list<std::pair<int32_t, std::shared_ptr<Item>>>;
+
+class IOLoginData {
+public:
+	static bool gameWorldAuthentication(const std::string &accountDescriptor, const std::string &sessionOrPassword, std::string &characterName, uint32_t &accountId, bool oldProcotol, const uint32_t ip);
+	static uint8_t getAccountType(uint32_t accountId);
+	static bool loadPlayerById(const std::shared_ptr<Player> &player, uint32_t id, bool disableIrrelevantInfo = true);
+	static bool loadPlayerByName(const std::shared_ptr<Player> &player, const std::string &name, bool disableIrrelevantInfo = true);
+	static bool loadPlayer(const std::shared_ptr<Player> &player, const std::shared_ptr<DBResult> &result, bool disableIrrelevantInfo = false);
+
+	static void loadOnlyDataForOnlinePlayer(const std::shared_ptr<Player> &player, const std::shared_ptr<DBResult> &result);
+
+	static bool savePlayer(const std::shared_ptr<Player> &player);
+	static bool savePlayer(const std::shared_ptr<Player> &player, PlayerWriterFenceContext &writerFenceContext);
+
+	static void saveOnlyDataForOnlinePlayer(const std::shared_ptr<Player> &player);
+	static uint32_t getGuidByName(const std::string &name);
+	static bool getGuidByNameEx(uint32_t &guid, bool &specialVip, std::string &name);
+	static std::string getNameByGuid(uint32_t guid);
+	static bool formatPlayerName(std::string &name);
+	static void increaseBankBalance(uint32_t guid, uint64_t bankBalance);
+
+	static std::vector<VIPEntry> getVIPEntries(uint32_t accountId);
+	static void addVIPEntry(uint32_t accountId, uint32_t guid, const std::string &description, uint32_t icon, bool notify);
+	static void editVIPEntry(uint32_t accountId, uint32_t guid, const std::string &description, uint32_t icon, bool notify);
+	static void removeVIPEntry(uint32_t accountId, uint32_t guid);
+
+	static std::vector<VIPGroupEntry> getVIPGroupEntries(uint32_t accountId, uint32_t guid);
+	static void addVIPGroupEntry(uint8_t groupId, uint32_t accountId, const std::string &groupName, bool customizable);
+	static void editVIPGroupEntry(uint8_t groupId, uint32_t accountId, const std::string &groupName, bool customizable);
+	static void removeVIPGroupEntry(uint8_t groupId, uint32_t accountId);
+	static void addGuidVIPGroupEntry(uint8_t groupId, uint32_t accountId, uint32_t guid);
+	static void removeGuidVIPGroupEntry(uint32_t accountId, uint32_t guid);
+
+private:
+	static bool savePlayerGuard(const std::shared_ptr<Player> &player);
+};
+''', encoding="utf-8")
+
+          replace_once(
+              "src/io/iologindata.cpp",
+              '#include "database/database.hpp"\n',
+              '#include "database/database.hpp"\n#include "database/player_writer_fenced_save_transaction.hpp"\n',
+          )
+          io_path = Path("src/io/iologindata.cpp")
+          io_text = io_path.read_text(encoding="utf-8")
+          io_start = io_text.index("bool IOLoginData::savePlayer(const std::shared_ptr<Player> &player) {")
+          io_end = io_text.index("bool IOLoginData::savePlayerGuard", io_start)
+          io_replacement = r'''bool IOLoginData::savePlayer(const std::shared_ptr<Player> &player) {
+	g_logger().error("[{}] Refusing contextless protected player save.", __FUNCTION__);
+	(void)player;
+	return false;
+}
+
+bool IOLoginData::savePlayer(
+	const std::shared_ptr<Player> &player,
+	PlayerWriterFenceContext &writerFenceContext
+) {
+	if (!player || writerFenceContext.playerId != player->getGUID()) {
+		g_logger().error("[{}] Refusing protected player save with missing or cross-subject writer fence.", __FUNCTION__);
+		return false;
+	}
+
+	try {
+		const auto fenceResult = PlayerWriterFencedSaveTransaction::execute(writerFenceContext, [player]() {
+			return savePlayerGuard(player);
+		});
+		if (fenceResult != PlayerWriterFenceResult::Applied) {
+			g_logger().error(
+				"[{}] Protected player save rejected by durable writer fence with result {}.",
+				__FUNCTION__,
+				static_cast<uint32_t>(fenceResult)
+			);
+			return false;
+		}
+
+		stageOnlinePlayerWheelKV(player);
+		return true;
+	} catch (const DatabaseException &e) {
+		g_logger().error("[{}] Exception occurred: {}", __FUNCTION__, e.what());
+	} catch (const std::exception &e) {
+		g_logger().error("[{}] Exception occurred staging post-commit player data: {}", __FUNCTION__, e.what());
+	}
+
+	return false;
+}
+
+'''
+          io_path.write_text(io_text[:io_start] + io_replacement + io_text[io_end:], encoding="utf-8")
+
+          replace_once(
+              "src/game/scheduling/save_manager.cpp",
+              '#include "config/configmanager.hpp"\n',
+              '#include "config/configmanager.hpp"\n#include "database/player_writer_fence_repository.hpp"\n',
+          )
+          replace_once(
+              "src/game/scheduling/save_manager.cpp",
+              '#include "creatures/players/player.hpp"\n',
+              '#include "creatures/players/player.hpp"\n\n#include <mbedtls/ctr_drbg.h>\n#include <mbedtls/entropy.h>\n',
+          )
+          replace_once(
+              "src/game/scheduling/save_manager.cpp",
+              '''namespace {
+	constexpr auto PLAYER_FINAL_SAVE_WAIT_TIMEOUT = std::chrono::seconds(5);
+	constexpr uint8_t PLAYER_FINAL_SAVE_MAX_ATTEMPTS = 2;
+}
+''',
+              '''namespace {
+	constexpr auto PLAYER_FINAL_SAVE_WAIT_TIMEOUT = std::chrono::seconds(5);
+	constexpr uint8_t PLAYER_FINAL_SAVE_MAX_ATTEMPTS = 2;
+	constexpr std::array<unsigned char, 24> PLAYER_WRITER_FENCE_PERSONALIZATION = {
+		'o', 't', 'h', 'e', 'r', 'y', 'n', '-', 'w', 'r', 'i', 't', 'e', 'r', '-',
+		'f', 'e', 'n', 'c', 'e', '-', '0', '0', '4'
+	};
+
+	class PlayerWriterFenceTokenSource final {
+	public:
+		PlayerWriterFenceTokenSource() {
+			mbedtls_entropy_init(&entropy_);
+			mbedtls_ctr_drbg_init(&drbg_);
+			seeded_ = mbedtls_ctr_drbg_seed(
+				&drbg_,
+				mbedtls_entropy_func,
+				&entropy_,
+				PLAYER_WRITER_FENCE_PERSONALIZATION.data(),
+				PLAYER_WRITER_FENCE_PERSONALIZATION.size()
+			) == 0;
+			if (!seeded_) {
+				g_logger().error("Failed to seed player writer-fence CSPRNG; acquisition will fail closed.");
+			}
+		}
+
+		~PlayerWriterFenceTokenSource() {
+			mbedtls_ctr_drbg_free(&drbg_);
+			mbedtls_entropy_free(&entropy_);
+		}
+
+		[[nodiscard]] std::optional<PlayerWriterFenceToken> next() {
+			std::scoped_lock lock(mutex_);
+			if (!seeded_) {
+				return std::nullopt;
+			}
+
+			PlayerWriterFenceToken token {};
+			if (mbedtls_ctr_drbg_random(&drbg_, token.data(), token.size()) != 0
+			    || !PlayerWriterFenceRepository::isValidToken(token)) {
+				return std::nullopt;
+			}
+			return token;
+		}
+
+	private:
+		std::mutex mutex_;
+		mbedtls_entropy_context entropy_ {};
+		mbedtls_ctr_drbg_context drbg_ {};
+		bool seeded_ = false;
+	};
+
+	PlayerWriterFenceTokenSource &playerWriterFenceTokenSource() {
+		static PlayerWriterFenceTokenSource source;
+		return source;
+	}
+}
+''',
+          )
+          save_path = Path("src/game/scheduling/save_manager.cpp")
+          save_text = save_path.read_text(encoding="utf-8")
+          marker = "void SaveManager::publishPlayerDirtyGauges() {"
+          insertion = r'''std::optional<PlayerWriterFenceContext> SaveManager::writerFenceContextFor(const std::shared_ptr<Player> &player) {
+	if (!player) {
+		return std::nullopt;
+	}
+
+	std::lock_guard lock(m_playerPersistenceMutex);
+	const std::weak_ptr<Player> owner = player;
+	const auto it = m_playerWriterFenceContexts.find(owner);
+	return it == m_playerWriterFenceContexts.end() ? std::nullopt : std::optional<PlayerWriterFenceContext> { it->second };
+}
+
+void SaveManager::storeWriterFenceContext(
+	const std::shared_ptr<Player> &player,
+	const PlayerWriterFenceContext &context
+) {
+	if (!player) {
+		return;
+	}
+
+	std::lock_guard lock(m_playerPersistenceMutex);
+	m_playerWriterFenceContexts[std::weak_ptr<Player> { player }] = context;
+}
+
+void SaveManager::eraseWriterFenceContext(const std::shared_ptr<Player> &player) {
+	if (!player) {
+		return;
+	}
+
+	std::lock_guard lock(m_playerPersistenceMutex);
+	m_playerWriterFenceContexts.erase(std::weak_ptr<Player> { player });
+}
+
+bool SaveManager::acquirePlayerWriterFence(const std::shared_ptr<Player> &player) {
+	if (!player || player->getGUID() == 0) {
+		logger.error("Player writer-fence acquisition failed because the player subject is missing.");
+		return false;
+	}
+	if (writerFenceContextFor(player).has_value()) {
+		logger.error("Player {} already owns a process-local writer-fence context.", player->getName());
+		return false;
+	}
+
+	PlayerWriterFenceRepository repository;
+	const auto loaded = repository.load(player->getGUID());
+	if (loaded.result != PlayerWriterFenceResult::Applied
+	    || PlayerWriterFenceRepository::isValidToken(loaded.context.writerToken)
+	    || loaded.context.ownershipGeneration == std::numeric_limits<PlayerWriterFenceGeneration>::max()) {
+		logger.error("Player {} durable writer-fence is unavailable for a new initial owner.", player->getName());
+		return false;
+	}
+
+	const auto token = playerWriterFenceTokenSource().next();
+	if (!token.has_value()) {
+		logger.error("Player {} writer-fence token generation failed closed.", player->getName());
+		return false;
+	}
+
+	PlayerWriterFenceContext desired {
+		.playerId = player->getGUID(),
+		.ownershipGeneration = loaded.context.ownershipGeneration + 1,
+		.writerToken = *token,
+		.stateRevision = loaded.context.stateRevision,
+	};
+	if (repository.acquire(desired) != PlayerWriterFenceResult::Applied) {
+		logger.error("Player {} durable writer-fence acquisition was rejected.", player->getName());
+		return false;
+	}
+
+	storeWriterFenceContext(player, desired);
+	return true;
+}
+
+bool SaveManager::releasePlayerWriterFence(const std::shared_ptr<Player> &player) {
+	const auto context = writerFenceContextFor(player);
+	if (!context.has_value()) {
+		logger.error("Player writer-fence release failed because no exact owner context exists.");
+		return false;
+	}
+
+	if (PlayerWriterFenceRepository().release(*context) != PlayerWriterFenceResult::Applied) {
+		logger.error("Player {} durable writer-fence release was rejected.", player->getName());
+		return false;
+	}
+
+	eraseWriterFenceContext(player);
+	return true;
+}
+
+'''
+          if save_text.count(marker) != 1:
+              raise SystemExit("save_manager.cpp: publish marker mismatch")
+          save_text = save_text.replace(marker, insertion + marker, 1)
+
+          do_start = save_text.index("bool SaveManager::doSavePlayer(std::shared_ptr<Player> player) {")
+          do_end = save_text.index("bool SaveManager::savePlayer(std::shared_ptr<Player> player) {", do_start)
+          do_replacement = r'''bool SaveManager::doSavePlayer(std::shared_ptr<Player> player, bool releaseWriterFence) {
+	if (!player) {
+		logger.debug("Failed to save player because player is null.");
+		return false;
+	}
+
+	Benchmark bm_savePlayer;
+	Player::PlayerLock lock(player);
+	if (g_game().getGameState() == GAME_STATE_NORMAL) {
+		logger.debug("Saving player {}.", player->getName());
+	}
+
+	auto writerFenceContext = writerFenceContextFor(player);
+	if (!writerFenceContext.has_value()) {
+		logger.error("Refusing player {} save because the durable writer-fence context is missing.", player->getName());
+		return false;
+	}
+
+	bool saveSuccess = IOLoginData::savePlayer(player, *writerFenceContext);
+	storeWriterFenceContext(player, *writerFenceContext);
+
+	if (saveSuccess && releaseWriterFence) {
+		const auto releaseResult = PlayerWriterFenceRepository().release(*writerFenceContext);
+		if (releaseResult != PlayerWriterFenceResult::Applied) {
+			logger.error("Failed to release player {} durable writer fence after protected save.", player->getName());
+			saveSuccess = false;
+		} else {
+			eraseWriterFenceContext(player);
+		}
+	}
+
+	if (!saveSuccess) {
+		logger.error("Failed to save player {}.", player->getName());
+	}
+
+	auto duration = bm_savePlayer.duration();
+	logger.debug("Saving player {} took {} milliseconds.", player->getName(), duration);
+	return saveSuccess;
+}
+
+'''
+          save_text = save_text[:do_start] + do_replacement + save_text[do_end:]
+
+          dispatch_start = save_text.index("bool SaveManager::savePlayer(std::shared_ptr<Player> player) {")
+          dispatch_end = save_text.index("DatabaseOutageDrainPlayerRemovalResult", dispatch_start)
+          dispatch_block = save_text[dispatch_start:dispatch_end]
+          old_dispatch = "\t\treturn doSavePlayer(player);\n\t};"
+          if dispatch_block.count(old_dispatch) != 1:
+              raise SystemExit("save_manager.cpp: offline dispatch marker mismatch")
+          dispatch_block = dispatch_block.replace(old_dispatch, "\t\treturn doSavePlayer(player, true);\n\t};", 1)
+          save_text = save_text[:dispatch_start] + dispatch_block + save_text[dispatch_end:]
+
+          final_start = save_text.index("bool SaveManager::savePlayerFinal(std::shared_ptr<Player> player) {")
+          final_end = save_text.index("bool SaveManager::saveGuild", final_start)
+          final_block = save_text[final_start:final_end]
+          old_final = "return doSavePlayer(player);"
+          if final_block.count(old_final) != 1:
+              raise SystemExit("save_manager.cpp: final save marker mismatch")
+          final_block = final_block.replace(old_final, "return doSavePlayer(player, true);", 1)
+          save_text = save_text[:final_start] + final_block + save_text[final_end:]
+          save_path.write_text(save_text, encoding="utf-8")
+
+          replace_once(
+              "src/server/network/protocol/protocolgame.cpp",
+              '#include "game/scheduling/dispatcher.hpp"\n',
+              '#include "game/scheduling/dispatcher.hpp"\n#include "game/scheduling/save_manager.hpp"\n',
+          )
+          replace_once(
+              "src/server/network/protocol/protocolgame.cpp",
+              '''		const bool suppressPreLoginPacketsBeforePlacement = isCipsoft860Profile(protocolProfile);
+''',
+              '''		if (!g_saveManager().acquirePlayerWriterFence(player)) {
+			disconnectClient("Your character persistence owner could not be acquired. Please try again later.");
+			return;
+		}
+
+		const bool suppressPreLoginPacketsBeforePlacement = isCipsoft860Profile(protocolProfile);
+''',
+          )
+          replace_once(
+              "src/server/network/protocol/protocolgame.cpp",
+              '''		if (!placedCreature) {
+			disconnectClient("Temple position is wrong. Please, contact the administrator.");
+			g_logger().warn("Player {} temple position is wrong", player->getName());
+			return;
+		}
+''',
+              '''		if (!placedCreature) {
+			if (!g_saveManager().releasePlayerWriterFence(player)) {
+				g_logger().error("Failed to release player {} writer fence after placement rejection.", player->getName());
+			}
+			disconnectClient("Temple position is wrong. Please, contact the administrator.");
+			g_logger().warn("Player {} temple position is wrong", player->getName());
+			return;
+		}
+''',
+          )
+
+          Path("tests/integration/database/CMakeLists.txt").write_text(r'''target_sources(
+    canary_it
+    PRIVATE ${CMAKE_SOURCE_DIR}/src/database/player_writer_fence_repository.cpp
+            database_migrations_it.cpp
+            player_checkpoint_commit_before_ack_crash_it.cpp
+            player_checkpoint_kv_post_commit_failure_it.cpp
+            player_checkpoint_sql_failure_it.cpp
+            player_writer_fence_repository_it.cpp
+            player_writer_fenced_save_it.cpp
+            sanctions_it.cpp
+            world_persistence_it.cpp
+)
+''', encoding="utf-8")
+
+          Path("tests/integration/database/player_writer_fenced_save_it.cpp").write_text(r'''#include <gtest/gtest.h>
+
+#include "database/database.hpp"
+#include "database/player_writer_fence_repository.hpp"
+#include "database/player_writer_fenced_save_transaction.hpp"
+#include "game/scheduling/player_checkpoint_attempt.hpp"
+
+#include <fmt/format.h>
+
+#include <atomic>
+#include <string>
+
+namespace it_player_writer_fenced_save {
+
+	class PlayerWriterFencedSaveTest : public ::testing::Test {
+	protected:
+		void SetUp() override {
+			static std::atomic_uint64_t sequence = 0;
+			playerName = fmt::format("PRS004D Subject {}", ++sequence);
+			ASSERT_TRUE(g_database().executeQuery(fmt::format(
+				"INSERT INTO `players` (`name`, `account_id`, `conditions`) VALUES ({}, 1, '')",
+				g_database().escapeString(playerName)
+			)));
+			playerId = static_cast<uint32_t>(g_database().getLastInsertId());
+			ASSERT_NE(0, playerId);
+		}
+
+		void TearDown() override {
+			if (playerId != 0) {
+				EXPECT_TRUE(g_database().executeQuery(fmt::format("DELETE FROM `players` WHERE `id` = {}", playerId)));
+			}
+		}
+
+		static PlayerWriterFenceToken token(uint8_t seed) {
+			PlayerWriterFenceToken value {};
+			for (size_t index = 0; index < value.size(); ++index) {
+				value[index] = static_cast<uint8_t>(seed + index);
+			}
+			return value;
+		}
+
+		PlayerWriterFenceContext acquireContext() {
+			const auto loaded = repository.load(playerId);
+			EXPECT_EQ(PlayerWriterFenceResult::Applied, loaded.result);
+			EXPECT_FALSE(PlayerWriterFenceRepository::isValidToken(loaded.context.writerToken));
+			PlayerWriterFenceContext desired {
+				.playerId = playerId,
+				.ownershipGeneration = loaded.context.ownershipGeneration + 1,
+				.writerToken = token(7),
+				.stateRevision = loaded.context.stateRevision,
+			};
+			EXPECT_EQ(PlayerWriterFenceResult::Applied, repository.acquire(desired));
+			return desired;
+		}
+
+		uint32_t level() const {
+			const auto result = g_database().storeQuery(fmt::format("SELECT `level` FROM `players` WHERE `id` = {}", playerId));
+			EXPECT_NE(nullptr, result);
+			return result ? result->getNumber<uint32_t>("level") : 0;
+		}
+
+		uint64_t revision() const {
+			const auto result = g_database().storeQuery(fmt::format(
+				"SELECT `state_revision` FROM `player_writer_fence` WHERE `player_id` = {}",
+				playerId
+			));
+			EXPECT_NE(nullptr, result);
+			return result ? result->getNumber<uint64_t>("state_revision") : 0;
+		}
+
+		PlayerWriterFenceRepository repository;
+		uint32_t playerId = 0;
+		std::string playerName;
+	};
+
+	TEST_F(PlayerWriterFencedSaveTest, ProtectedMutationAndExactNextRevisionCommitTogether) {
+		auto context = acquireContext();
+		const auto result = PlayerWriterFencedSaveTransaction::execute(context, [&] {
+			return g_database().executeQuery(fmt::format(
+				"UPDATE `players` SET `level` = 77 WHERE `id` = {}",
+				playerId
+			));
+		});
+
+		EXPECT_EQ(PlayerWriterFenceResult::Applied, result);
+		EXPECT_EQ(1, context.stateRevision);
+		EXPECT_EQ(77, level());
+		EXPECT_EQ(1, revision());
+	}
+
+	TEST_F(PlayerWriterFencedSaveTest, MissingContextFailsBeforeMutation) {
+		PlayerWriterFenceContext missing;
+		uint32_t attempts = 0;
+		const auto result = PlayerWriterFencedSaveTransaction::execute(missing, [&] {
+			++attempts;
+			return g_database().executeQuery(fmt::format(
+				"UPDATE `players` SET `level` = 88 WHERE `id` = {}",
+				playerId
+			));
+		});
+
+		EXPECT_EQ(PlayerWriterFenceResult::MalformedContext, result);
+		EXPECT_EQ(0, attempts);
+		EXPECT_EQ(1, level());
+		EXPECT_EQ(0, revision());
+	}
+
+	TEST_F(PlayerWriterFencedSaveTest, CallbackFailureRollsBackMutationAndRevision) {
+		auto context = acquireContext();
+		const auto result = PlayerWriterFencedSaveTransaction::execute(context, [&] {
+			EXPECT_TRUE(g_database().executeQuery(fmt::format(
+				"UPDATE `players` SET `level` = 66 WHERE `id` = {}",
+				playerId
+			)));
+			return false;
+		});
+
+		EXPECT_EQ(PlayerWriterFenceResult::DatabaseFailure, result);
+		EXPECT_EQ(0, context.stateRevision);
+		EXPECT_EQ(1, level());
+		EXPECT_EQ(0, revision());
+	}
+
+	TEST_F(PlayerWriterFencedSaveTest, StaleRevisionRollsBackAndPreservesDirtyStateWithoutRetry) {
+		auto staleContext = acquireContext();
+		ASSERT_EQ(PlayerWriterFenceResult::Applied, repository.advanceRevision(staleContext, 1));
+		ASSERT_EQ(1, revision());
+
+		PlayerPersistenceState state;
+		EXPECT_EQ(1, state.markDirty());
+		const auto generation = state.beginCheckpoint();
+		ASSERT_EQ(1, generation);
+
+		uint32_t attempts = 0;
+		const auto attempt = executePlayerCheckpointAttempt(state, *generation, [&] {
+			++attempts;
+			return PlayerWriterFencedSaveTransaction::execute(staleContext, [&] {
+				return g_database().executeQuery(fmt::format(
+					"UPDATE `players` SET `level` = 99 WHERE `id` = {}",
+					playerId
+				));
+			}) == PlayerWriterFenceResult::Applied;
+		});
+
+		EXPECT_EQ(1, attempts);
+		EXPECT_EQ(PlayerCheckpointAttemptOutcome::saveFailed, attempt.outcome);
+		EXPECT_TRUE(attempt.acknowledgementAccepted);
+		EXPECT_FALSE(attempt.followUpRequired);
+		EXPECT_TRUE(state.isDirty());
+		EXPECT_EQ(0, state.acknowledgedGeneration());
+		EXPECT_EQ(1, state.consecutiveFailures());
+		EXPECT_EQ(1, level());
+		EXPECT_EQ(1, revision());
+	}
+
+} // namespace it_player_writer_fenced_save
+''', encoding="utf-8")
+
+          Path(".github/workflows/prs-004d-protected-player-save.yml").write_text(r'''name: PRS-004D Protected Player Save
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - src/database/player_writer_fence_repository.*
+      - src/database/player_writer_fenced_save_transaction.hpp
+      - src/game/scheduling/save_manager.*
+      - src/io/iologindata.*
+      - src/server/network/protocol/protocolgame.cpp
+      - tests/integration/database/**
+      - .github/workflows/prs-004d-protected-player-save.yml
+      - docs/architecture/prs-004d-protected-player-save.md
+      - docs/agents/tasks/active/OTH-20260804-prs004d-protected-player-save.md
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    permissions:
+      contents: write
+      packages: write
+    uses: ./.github/workflows/reusable-build-linux.yml
+    with:
+      buildtypes: '["linux-debug"]'
+      run_canary_smoke: false
+      run_global_smoke: false
+    secrets: inherit
+''', encoding="utf-8")
+
+          Path("docs/architecture/prs-004d-protected-player-save.md").write_text(r'''# PRS-004D protected player-save integration
+
+## Authority and runtime ownership
+
+MariaDB `player_writer_fence` remains the durable authority. An initial world login loads the released authority row, generates a CSPRNG token and performs one strictly newer acquire before Player placement. `SaveManager` binds the resulting complete context to the exact live Player object. A row still owned by another token fails login closed; this slice does not add crash takeover.
+
+Channel reconnect reuses the existing Player and authority context unchanged. Source quiesce and durable transfer to a newer generation/token remain PRS-004E.
+
+## Protected save transaction
+
+`IOLoginData::savePlayer` accepts the exact subject, ownership generation, writer token and current revision. `PlayerWriterFencedSaveTransaction` opens one `DBTransaction`, executes the existing selected SQL-backed player save callback, then performs the exact-next revision CAS on the same recursively locked MariaDB connection.
+
+- callback failure rolls back all earlier player mutations;
+- malformed context fails before the callback;
+- zero affected rows is a stale conflict and rolls back all player mutations;
+- commit failure leaves caller context unchanged;
+- successful commit updates caller context to exactly the next revision;
+- post-commit KV staging remains a separate persistence domain and never changes the SQL commit decision.
+
+No stale, failed or unknown-outcome operation is retried or replayed automatically.
+
+## Release boundary
+
+A final or offline save first completes the protected save and revision commit. It then performs one exact release CAS. Release failure remains explicit, retains the current process context and is not retried. Initial placement failure performs the same single exact release attempt.
+
+## Boundaries
+
+This slice does not add channel-handoff transfer, Redis authority, automatic crash takeover, reconnect/replay, broad economy-write fencing, production credentials/data access, deployment, PRS-005+ behavior or RPO/RTO claims.
+''', encoding="utf-8")
+
+          Path("docs/agents/tasks/active/OTH-20260804-prs004d-protected-player-save.md").write_text(r'''---
+task_id: OTH-20260804-prs004d-protected-player-save
+status: implementing
+project_lane: otheryn-runtime
+policy_version: 2
+task_kind: implementation
+implementation_authorized: true
+decomposition_decision: atomic
+decomposition_reason: initial acquisition, exact Player ownership, selected save transaction and exact-next revision form one inseparable fail-closed persistence seam
+context_pressure: medium
+context_growth: stable
+context_score: 10
+estimate_confidence: medium
+phase: implement
+session_id: chat-github-20260804-prs004d
+session_role: implementer
+execution_mode: chat-github
+branch: dudantas/prs-004d-protected-player-save
+base_branch: main
+start_sha: b489c1dd713fbcc2e4046d3173138138f1ba1e05
+issue: "337"
+feature_pr: pending
+created: 2026-08-04
+updated: 2026-08-04T08:35:00+02:00
+lease_expires_at: 2026-08-04T10:35:00+02:00
+invocation_started_at: 2026-08-04T08:05:00+02:00
+last_progress_at: 2026-08-04T08:35:00+02:00
+ci_checks_for_current_head: 0
+unchanged_state_checks: 0
+identical_failure_retries: 0
+repair_cycles_for_current_gate: 0
+context_reconstruction_attempts: 0
+stall_warnings: 0
+owned_paths:
+  - src/database/player_writer_fence_repository.hpp
+  - src/database/player_writer_fence_repository.cpp
+  - src/database/player_writer_fenced_save_transaction.hpp
+  - src/game/scheduling/save_manager.hpp
+  - src/game/scheduling/save_manager.cpp
+  - src/io/iologindata.hpp
+  - src/io/iologindata.cpp
+  - src/server/network/protocol/protocolgame.cpp
+  - tests/integration/database/CMakeLists.txt
+  - tests/integration/database/player_writer_fenced_save_it.cpp
+  - .github/workflows/prs-004d-protected-player-save.yml
+  - docs/architecture/prs-004d-protected-player-save.md
+  - docs/agents/tasks/active/OTH-20260804-prs004d-protected-player-save.md
+---
+
+# PRS-004D protected player-save integration
+
+## Scope
+
+Bind initial world login and the selected `IOLoginData` player persistence transaction to the durable MariaDB writer fence delivered by terminal PRS-004C. Missing or stale context fails closed; protected mutations and exact-next revision commit atomically; final release follows only a successful protected save. No channel-handoff transfer or later-package work.
+
+## Context checkpoint
+
+```yaml
+checkpoint_version: 1
+updated_at: 2026-08-04T08:35:00+02:00
+status: implementing
+phase: implement
+head: pending_materializer
+branch: dudantas/prs-004d-protected-player-save
+issue: 337
+owned_paths:
+  - src/database/player_writer_fence_repository.hpp
+  - src/database/player_writer_fence_repository.cpp
+  - src/database/player_writer_fenced_save_transaction.hpp
+  - src/game/scheduling/save_manager.hpp
+  - src/game/scheduling/save_manager.cpp
+  - src/io/iologindata.hpp
+  - src/io/iologindata.cpp
+  - src/server/network/protocol/protocolgame.cpp
+  - tests/integration/database/CMakeLists.txt
+  - tests/integration/database/player_writer_fenced_save_it.cpp
+  - .github/workflows/prs-004d-protected-player-save.yml
+  - docs/architecture/prs-004d-protected-player-save.md
+  - docs/agents/tasks/active/OTH-20260804-prs004d-protected-player-save.md
+proven:
+  - PRS-004C terminal through PRs 285, 329, 334 and 336
+  - issue 337 is the unique authorized PRS-004D execution issue
+  - no open PR or branch named PRS-004D existed before ownership freeze
+  - reconnect path remains read-only for PRS-004E transfer
+unknown:
+  - deterministic materializer outcome
+  - exact-head focused and full CI
+  - feature merge and lifecycle metadata
+conflicts: []
+blockers: []
+next_action: materialize exact thirteen-path implementation, remove temporary workflow, open feature PR and validate exact head
+```
+''', encoding="utf-8")
+          PY
+
+      - name: Commit materialized implementation
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add \
+            src/database/player_writer_fence_repository.hpp \
+            src/database/player_writer_fence_repository.cpp \
+            src/database/player_writer_fenced_save_transaction.hpp \
+            src/game/scheduling/save_manager.hpp \
+            src/game/scheduling/save_manager.cpp \
+            src/io/iologindata.hpp \
+            src/io/iologindata.cpp \
+            src/server/network/protocol/protocolgame.cpp \
+            tests/integration/database/CMakeLists.txt \
+            tests/integration/database/player_writer_fenced_save_it.cpp \
+            .github/workflows/prs-004d-protected-player-save.yml \
+            docs/architecture/prs-004d-protected-player-save.md \
+            docs/agents/tasks/active/OTH-20260804-prs004d-protected-player-save.md
+          git commit -m "feat(resilience): protect player saves with writer fencing"
+          git push origin HEAD:dudantas/prs-004d-protected-player-save
