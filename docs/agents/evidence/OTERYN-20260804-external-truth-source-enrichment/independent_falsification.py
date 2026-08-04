@@ -134,7 +134,7 @@ for registry_name, kind in (('source-registry.json.gz', 'json'), ('source-regist
         if key in keyset and row.get('runtime_conclusion') not in EXPECTED_RUNTIME:
             finding(f'{registry_name}: {key} has invalid or stale runtime conclusion {row.get("runtime_conclusion")}')
 
-changed = subprocess.check_output(['git', 'diff', '--name-only', 'main...HEAD'], text=True).splitlines()
+changed = subprocess.check_output(['git', 'diff', '--name-only', 'origin/main...HEAD'], text=True).splitlines()
 unexpected = [path for path in changed if not path.startswith(ALLOWED_PREFIXES)]
 if unexpected:
     finding(f'out-of-scope changed paths: {unexpected}')
