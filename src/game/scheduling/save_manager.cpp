@@ -659,7 +659,7 @@ bool SaveManager::savePlayerFinal(std::shared_ptr<Player> player) {
 		g_metrics().addCounter("player_checkpoint_attempts", 1);
 		metrics::method_latency checkpointLatency("player_checkpoint_save");
 		const auto attempt = executePlayerCheckpointAttempt(*state, *generation, [this, &player] {
-			return doSavePlayer(player, true);
+			return doSavePlayer(player, false);
 		});
 
 		if (attempt.outcome != PlayerCheckpointAttemptOutcome::saved) {
@@ -698,6 +698,10 @@ bool SaveManager::savePlayerFinal(std::shared_ptr<Player> player) {
 		g_metrics().addCounter("player_checkpoint_successes", 1);
 		publishPlayerCheckpointGauges();
 		if (!attempt.followUpRequired && !state->isDirty()) {
+			if (!releasePlayerWriterFence(player)) {
+				logger.error("Final save for player {} committed but durable writer-fence release failed.", player->getName());
+				return false;
+			}
 			return true;
 		}
 	}
