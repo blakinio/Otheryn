@@ -22,7 +22,7 @@ Entering from `(31974,32326,10)` teleports players into an empty Brain Head aren
 expected_behavior_status: PROVEN
 expected_behavior: an eligible ordinary player crossing any valid entry tile starts exactly one Brain Head encounter with boss/minions; ignored staff characters do not start it; cooldown is committed only after successful encounter creation or is refunded on startup failure
 version_boundary: Canary 3.1.2 / client 13.40-era encounter framework and current descendants
- evidence_basis: [opentibiabr/canary#3479, issue discussion]
+evidence_basis: [opentibiabr/canary#3479, issue discussion]
 conflicts:
   - ordinary-player results differ between clean/test installations, indicating configuration, quest state or persisted encounter drift rather than a universal entry-tile bug
 ```
