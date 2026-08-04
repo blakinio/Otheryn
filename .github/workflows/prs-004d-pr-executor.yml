@@ -64,12 +64,7 @@ jobs:
           for line in source[run_index + 1:]:
               if line.startswith('      - name:'):
                   break
-              if line.startswith('          '):
-                  block.append(line[10:])
-              elif not line.strip():
-                  block.append('')
-              else:
-                  raise SystemExit(f'unexpected materializer indentation: {line!r}')
+              block.append(line[10:] if line.startswith('          ') else line)
 
           if not block or not block[0].startswith("python3 - <<'PY'"):
               raise SystemExit('verified materializer payload shape mismatch')
