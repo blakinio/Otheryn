@@ -160,6 +160,7 @@ jobs:
               - "CMakePresets.json"
               - ".github/workflows/ci.yml"
               - ".github/workflows/reusable-build-docker.yml"
+              - ".github/workflows/reusable-docker-quickstart-smoke.yml"
               - ".github/scripts/**"
             docker_quickstart:
               - "docker/docker-compose.yml"
