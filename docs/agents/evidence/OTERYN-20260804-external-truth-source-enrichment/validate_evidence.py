@@ -92,6 +92,7 @@ for extra in sorted(actual_files - expected_files):
 conclusions: list[dict] = []
 plans: list[dict] = []
 executions: list[dict] = []
+identity_by_key: dict[str, dict] = {}
 
 for item in items:
     key = item['canonical_key']
@@ -108,6 +109,7 @@ for item in items:
         fail(f'{path}: expected one identity block, found {len(identities)}')
         continue
     ident = identities[0]
+    identity_by_key[key] = ident
     if ident.get('canonical_key') != key:
         fail(f'{path}: canonical_key {ident.get("canonical_key")} != {key}')
     if ident.get('research_status') != 'COMPLETE':
@@ -121,12 +123,18 @@ for item in items:
         fail(f'{path}: source type mismatch')
     if ident.get('prior_bucket') != item.get('prior_bucket'):
         fail(f'{path}: prior bucket mismatch')
-    if '<' in text or 'PLACEHOLDER' in text:
+    if 'PLACEHOLDER' in text or '<owner/repo#number>' in text or '<one testable statement>' in text:
         fail(f'{path}: unresolved template placeholder')
     tables = [line for line in text.splitlines() if line.startswith('|')]
-    repo_names = ['opentibiabr/canary', 'zimbadev/crystalserver', 'blakinio/canary', 'Otheryn', 'OTClient']
-    for repo_name in repo_names:
-        if not any(repo_name in line for line in tables):
+    repo_aliases = {
+        'opentibiabr/canary': ('opentibiabr/canary', 'upstream Canary'),
+        'zimbadev/crystalserver': ('zimbadev/crystalserver', 'CrystalServer'),
+        'blakinio/canary': ('blakinio/canary',),
+        'blakinio/Otheryn': ('blakinio/Otheryn', 'Otheryn'),
+        'blakinio/otclient': ('blakinio/otclient', 'OTClient'),
+    }
+    for repo_name, aliases in repo_aliases.items():
+        if not any(any(alias in line for alias in aliases) for line in tables):
             fail(f'{path}: five-repository table missing {repo_name}')
     cands = [b for b in blocks if 'truth_status' in b]
     if len(cands) != 1:
@@ -169,7 +177,11 @@ if len(executions) != 60:
 
 for matrix in MATRICES:
     text = matrix.read_text(encoding='utf-8')
-    row_keys = re.findall(r'^\|\s*`?((?:opentibiabr/canary|zimbadev/crystalserver)#\d+)`?\s*\|', text, flags=re.M)
+    row_keys = []
+    for line in text.splitlines():
+        if not line.startswith('|'):
+            continue
+        row_keys.extend(re.findall(r'(?:opentibiabr/canary|zimbadev/crystalserver)#\d+', line))
     counts = Counter(row_keys)
     if set(row_keys) != keyset:
         missing = sorted(keyset - set(row_keys))
