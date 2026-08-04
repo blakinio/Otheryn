@@ -4,7 +4,7 @@ lane: otheryn-runtime
 status: validating
 owner: agent-20260804-external-truth-source-enrichment-002
 created: 2026-08-04T09:35:00Z
-updated: 2026-08-04T17:20:00Z
+updated: 2026-08-04T17:25:00Z
 policy_version: 2
 prompting_standard_version: 2.1
 task_kind: audit
@@ -71,8 +71,8 @@ The existing Docker quickstart proves server/database/login/web startup and seed
 ## Validation
 
 - audit PR: `blakinio/Otheryn#360`;
-- primary deterministic validation: PASS on evidence content head `1cf8d74d10805156bc63c26416ce0a6d2bce0154`, run `30932195423`;
-- independent falsification: PASS, zero open material findings on evidence content head `ab8ea10db6bab03a7bc611c5cde1c8dcdfc29a8f`, run `30932913247`;
+- primary deterministic validation: PASS on evidence content head `d7fcbcbe8819860cb5d3902255694a9738e49e27`, run `30933366341`;
+- independent falsification: PASS, zero open material findings on evidence content head `d7fcbcbe8819860cb5d3902255694a9738e49e27`, run `30933366180`;
 - review comments: 0;
 - submitted reviews: 0;
 - unresolved review threads: 0;
@@ -97,8 +97,8 @@ The existing Docker quickstart proves server/database/login/web startup and seed
 
 ```yaml
 checkpoint_version: 2
-updated_at: 2026-08-04T17:20:00Z
-head: deefcf49b2f3172c83d86925905493fe7aaa311f
+updated_at: 2026-08-04T17:25:00Z
+head: 9714499d05daab9e076d8492c272ebfcaecc6020
 branch: audit/otheryn-external-truth-source-enrichment-20260804
 pr: 360
 status: validating
@@ -132,13 +132,13 @@ recovery:
   generation: 3
   session_id: agent-20260804-external-truth-source-enrichment-003
   session_started_at: 2026-08-04T16:41:00Z
-  checkpointed_at: 2026-08-04T17:20:00Z
-  last_progress_at: 2026-08-04T17:20:00Z
+  checkpointed_at: 2026-08-04T17:25:00Z
+  last_progress_at: 2026-08-04T17:25:00Z
   phase: terminal_validation
-  exact_head: deefcf49b2f3172c83d86925905493fe7aaa311f
+  exact_head: 9714499d05daab9e076d8492c272ebfcaecc6020
   pull_request: 360
   active_operation: final evidence persistence, temporary workflow removal and exact-head CI
-  external_run_ids: [30932195423, 30932913247]
+  external_run_ids: [30933366341, 30933366180]
   operation_started_at: 2026-08-04T16:41:00Z
   wait_deadline_at: null
   check_generation: final-audit-head
