@@ -17,11 +17,12 @@ The scope was recovered from the predecessor 103-row matrix and refreshed with t
 
 - `canonical-scope.json` — exact 60-key scope, predecessor row, live source title, prior bucket/status/reason, source URL and pinned source revision;
 - `source-policy.md` — provenance hierarchy, version discipline, conclusion enums, five-repository comparison and runtime gate;
-- `dossiers/` — per-item research and reproduction records, to be populated;
+- `dossier-template.md` — normalized per-item evidence schema;
+- `dossiers/` — completed per-item research and reproduction records;
 - `source-registry.json.gz` and `source-registry.csv.gz` — final normalized source records, not yet generated;
-- `expected-behavior-matrix.md` — pending;
-- `reproduction-matrix.md` — pending;
-- `decision-matrix.md` — pending;
+- `expected-behavior-matrix.md` — pending final aggregation;
+- `reproduction-matrix.md` — pending final aggregation;
+- `decision-matrix.md` — pending final aggregation;
 - `validation.txt` — pending;
 - `independent-audit.md` — pending.
 
@@ -33,11 +34,36 @@ The scope was recovered from the predecessor 103-row matrix and refreshed with t
 | Unique keys | 60/60 |
 | Source titles resolved | 60/60 |
 | Pinned source revisions recorded | 60/60 |
-| Per-item dossiers | 0/60 |
-| Five-repository comparisons | 0/60 |
-| Runtime plans | 0/60 |
+| Per-item dossiers | 14/60 |
+| Five-repository comparisons | 14/60 |
+| Expected-behavior conclusions | 14/60 |
+| Runtime plans or explicit reference blockers | 14/60 |
 | Runtime executions | 0/60 |
-| Final decisions | 0/60 |
+| Final item decisions | 14/60 |
+| `INSUFFICIENT` rows fully researched | 11/11 |
+| `REPRO` rows fully researched | 3/49 |
+
+## Completed insufficient-evidence dispositions
+
+| Item | Truth | Static | Runtime | Owner action |
+|---|---|---|---|---|
+| `opentibiabr/canary#4052` | PARTIALLY_PROVEN | TARGET_AFFECTED | NOT_APPLICABLE | OPEN_ARCHITECTURE_DECISION |
+| `opentibiabr/canary#3742` | PARTIALLY_PROVEN | TARGET_AFFECTED | PENDING | OPEN_FIX_PROGRAM |
+| `opentibiabr/canary#3599` | PARTIALLY_PROVEN | STATIC_INCONCLUSIVE | PENDING | RESEARCH_REQUIRED |
+| `opentibiabr/canary#3430` | PROVEN | TARGET_NOT_AFFECTED | PENDING | NO_ACTION |
+| `opentibiabr/canary#3427` | UNKNOWN | STATIC_INCONCLUSIVE | NOT_RUN_REFERENCE_INSUFFICIENT | RESEARCH_REQUIRED |
+| `opentibiabr/canary#3407` | UNKNOWN | STATIC_INCONCLUSIVE | NOT_RUN_REFERENCE_INSUFFICIENT | RESEARCH_REQUIRED |
+| `opentibiabr/canary#3374` | PROVEN | TARGET_AFFECTED | PENDING | OPEN_FIX_PROGRAM |
+| `opentibiabr/canary#2272` | UNKNOWN | STATIC_INCONCLUSIVE | NOT_RUN_REFERENCE_INSUFFICIENT | RESEARCH_REQUIRED |
+| `opentibiabr/canary#917` | UNKNOWN | STATIC_INCONCLUSIVE | NOT_RUN_REFERENCE_INSUFFICIENT | RESEARCH_REQUIRED |
+| `opentibiabr/canary#560` | PROVEN | TARGET_AFFECTED | PENDING | OPEN_FIX_PROGRAM |
+| `zimbadev/crystalserver#206` | PARTIALLY_PROVEN | STATIC_INCONCLUSIVE | PENDING | OPEN_ARCHITECTURE_DECISION |
+
+## Completed reproduction-row research
+
+- `opentibiabr/canary#3513` — official-client zone-login speed crash: source path present, maintained client is tolerant, deterministic packet-order reproduction pending;
+- `zimbadev/crystalserver#785` — live map cache retention: architecture present, quantitative swap soak pending;
+- `zimbadev/crystalserver#852` — occupied live map swap/client crash: exact script path present, deterministic map/client reproduction pending.
 
 ## Scope integrity
 
@@ -50,4 +76,4 @@ Authoritative predecessor evidence:
 
 ## Next bounded phase
 
-Create the normalized dossier template and complete the first coherent research batch, prioritizing items with deterministic source steps or shared map-runtime/protocol families. Persist source provenance and static comparison before attempting any runtime reproduction.
+Research the remaining 46 `REPRO` rows in coherent behavior families. Prioritize rows with exact source steps and shared quest/map/protocol paths, then build runtime harnesses only after expected behavior and safety boundaries are complete.
