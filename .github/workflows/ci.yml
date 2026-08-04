@@ -49,12 +49,22 @@ concurrency:
 
 jobs:
   repair-prs-004d-final-save:
-    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 339 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'dudantas/prs-004d-protected-player-save' }}
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 339
     permissions:
       contents: write
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Verify trusted PRS-004D trigger
+        env:
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          EXPECTED_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          [[ "$HEAD_REPOSITORY" == "$EXPECTED_REPOSITORY" ]]
+          [[ "$HEAD_REF" == "dudantas/prs-004d-protected-player-save" ]]
+
       - uses: actions/checkout@v6
         with:
           repository: blakinio/Otheryn
