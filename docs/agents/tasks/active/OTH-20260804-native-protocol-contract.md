@@ -1,11 +1,11 @@
 ---
 task_id: OTH-20260804-native-protocol-contract
-status: implementing
+status: validating
 branch: docs/OTS-20260804-native-protocol-contract
 base_branch: main
 created: 2026-08-04
 updated: 2026-08-04
-related_pr: ""
+related_pr: "blakinio/Otheryn#356"
 owned_paths:
   - docs/agents/tasks/active/OTH-20260804-native-protocol-contract.md
   - docs/contracts/OTERYN_NATIVE_GAMEPLAY_PROTOCOL_CORRESPONDENCE.md
@@ -29,50 +29,65 @@ optional_reads:
 
 ## Goal
 
-Record Otheryn producer and session-enforcement responsibilities for the canonical native gameplay protocol contract without modifying ASIO, login admission, protocol handlers, schema, dependencies or runtime behavior.
+Record Otheryn producer and session-enforcement responsibilities for the canonical native gameplay protocol contract without modifying runtime behavior.
 
 ## Acceptance criteria
 
-- The document points to the exact canonical Platform contract and coordination ID.
-- Current Canary-compatible profiles remain distinct from the future native family.
-- Native framing, session validation, action authority, synchronization and downgrade boundaries are explicit.
-- No unimplemented Otheryn behavior is claimed as present.
-- Required documentation/governance validation and exact-head CI pass.
+- [x] Canonical Platform contract and shared coordination ID are linked.
+- [x] Canary-compatible profiles remain separate from the native family.
+- [x] Native listener, opaque Game Session v2, command/result and state boundaries are explicit.
+- [x] No unimplemented behavior is claimed.
+- [x] Independent consistency review has no remaining material findings.
+- [x] Required workflow passed on content head `4a7150f688539726bb7b42c6d715b57eb475cdf8`.
 
 ## Context checkpoint
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-08-04T14:50:00Z
-head: UNKNOWN
+updated_at: 2026-08-04T15:31:00Z
+head: 4a7150f688539726bb7b42c6d715b57eb475cdf8
 branch: docs/OTS-20260804-native-protocol-contract
-pr: none
-status: implementing
+pr: blakinio/Otheryn#356
+status: validating
 context_routes:
   - coordination:OTS-20260804-native-protocol-selection
-  - canonical:blakinio/Oteryn-Platform/docs/contracts/OTERYN_NATIVE_GAMEPLAY_PROTOCOL_CONTRACT.md
+  - canonical-pr:blakinio/Oteryn-Platform#519
+  - consumer-correspondence:blakinio/otclient#265
 owned_paths:
   - docs/agents/tasks/active/OTH-20260804-native-protocol-contract.md
   - docs/contracts/OTERYN_NATIVE_GAMEPLAY_PROTOCOL_CORRESPONDENCE.md
   - docs/architecture/oteryn-native-gameplay-protocol.md
 proven:
-  - Current Otheryn game networking is ASIO-based and profile-driven.
-  - Current Canary-compatible transport profiles include explicit framing, encryption, checksum, sequence and compression behavior.
-  - protobuf is already an Otheryn build dependency, but no native gameplay schema/runtime is authorized in this task.
+  - Current networking remains ASIO-based and profile-driven.
+  - Current Canary-compatible wire behavior is unchanged.
+  - Native is a separate TLS, BE32 and protobuf family.
+  - Target Game Session v2 is an opaque server-side-bound reference with atomic first-character admission.
+  - Native commands converge only at authoritative game/domain seams.
+  - This task changes documentation only.
 derived:
-  - Native protocol must be a separate producer family and must not reuse or translate through Canary-compatible packet profiles.
+  - Otheryn is the native gameplay producer and admission authority, not the selector or reusable-credential authority.
 unknown: []
 conflicts: []
 first_failure:
   marker: none
   evidence: none
-rejected_hypotheses: []
+rejected_hypotheses:
+  - native opcodes inside Canary profiles
+  - first-byte protocol sniffing
+  - replacing ASIO with Tokio
 changed_paths:
   - docs/agents/tasks/active/OTH-20260804-native-protocol-contract.md
+  - docs/architecture/oteryn-native-gameplay-protocol.md
+  - docs/contracts/OTERYN_NATIVE_GAMEPLAY_PROTOCOL_CORRESPONDENCE.md
 validation:
-  - command: repository documentation/governance validation
-    result: NOT_RUN
-    evidence: correspondence documents not yet complete
-blockers: []
-next_action: add the Otheryn correspondence and architecture boundary documents
+  - command: Required run 30924282180
+    result: PASS
+    evidence: content head 4a7150f688539726bb7b42c6d715b57eb475cdf8
+  - command: independent contract consistency review
+    result: PASS
+    evidence: correspondence matches exact canonical authority, session, duplicate, state and rollback rules
+blockers:
+  - Platform PR must merge first
+  - checkpoint exact-head workflow
+next_action: verify checkpoint workflow, refresh merged canonical revision, then merge after Platform
 ```
