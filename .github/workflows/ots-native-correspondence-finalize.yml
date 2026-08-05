@@ -1,0 +1,58 @@
+name: OTS native correspondence finalize
+
+on:
+  push:
+    branches:
+      - agents/ots-native-selection-otheryn-correction-20260804
+    paths:
+      - .github/workflows/ots-native-correspondence-finalize.yml
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: agents/ots-native-selection-otheryn-correction-20260804
+          fetch-depth: 0
+      - shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('docs/contracts/OTERYN_NATIVE_GAMEPLAY_PROTOCOL_CORRESPONDENCE.md')
+          text = p.read_text(encoding='utf-8')
+          replacements = {
+              '`PENDING_PLATFORM_PR_540_MERGE`': '`c0b8703d326a04b43ae8e06f6192b0cb91c859b7`',
+              '`19a9b3a27d2b00d4dfb8fd83ebf24dec15233b91`': '`eaed70477258e0e1dfb5b03c1e74002913e919dc`',
+              'This draft must not merge while `Canonical merged Platform revision` is pending. After Platform PR #540 merges, that marker must be replaced by the exact immutable merge commit and the candidate head must be verified as an ancestor of that merge.': 'Platform PR #540 is merged at the immutable commit above. Candidate head `eaed70477258e0e1dfb5b03c1e74002913e919dc` was the exact green audited head and is incorporated by the squash merge.',
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f'missing correspondence marker: {old}')
+              text = text.replace(old, new)
+          if 'PENDING_' in text:
+              raise SystemExit('pending provenance marker remains')
+          p.write_text(text, encoding='utf-8', newline='\n')
+
+          task = Path('docs/agents/tasks/active/OTH-20260805-native-protocol-single-version-completion.md')
+          task_text = task.read_text(encoding='utf-8')
+          task_text = task_text.replace('status: waiting', 'status: implementing', 1)
+          task_text = task_text.replace('updated: 2026-08-05T13:05:00+02:00', 'updated: 2026-08-05T13:36:00+02:00', 1)
+          task_text = task_text.replace('related_pr: none', 'related_pr: 365', 1)
+          task_text = task_text.replace('  - Platform PR #540 must merge first', '  - none', 1)
+          task_text = task_text.replace('status: waiting\ncontext_routes:', 'status: implementing\ncontext_routes:', 1)
+          task_text = task_text.replace('  - Exact corrected Platform merge commit and schema SHA-256.', '  - none for correspondence.', 1)
+          task_text = task_text.replace('blockers:\n  - Platform PR #540 must merge first', 'blockers: []', 1)
+          task_text = task_text.replace('next_action: After Platform PR #540 merges, update correspondence to its exact merge commit and corrected schema digest.', 'next_action: Validate and merge Otheryn correspondence PR #365 at exact head.', 1)
+          task.write_text(task_text, encoding='utf-8', newline='\n')
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/contracts/OTERYN_NATIVE_GAMEPLAY_PROTOCOL_CORRESPONDENCE.md docs/agents/tasks/active/OTH-20260805-native-protocol-single-version-completion.md
+          git commit -m "docs(native): pin merged Platform contract"
+          git push origin HEAD:agents/ots-native-selection-otheryn-correction-20260804
