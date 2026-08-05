@@ -1,12 +1,12 @@
 ---
 task_id: OTH-20260805-native-protocol-single-version-completion
 coordination_id: OTS-20260804-native-protocol-selection
-status: waiting
+status: implementing
 agent: ChatGPT
 branch: agents/ots-native-selection-otheryn-correction-20260804
 base_branch: main
 created: 2026-08-05T13:05:00+02:00
-updated: 2026-08-05T13:05:00+02:00
+updated: 2026-08-05T13:36:00+02:00
 risk: high
 run_scope: autonomous_program
 continuation_policy: continue_until_real_stop
@@ -14,7 +14,7 @@ task_completion_policy: finalize_archive_and_continue
 execution_mode: github-only
 implementation_authorized: true
 production_activation_authorized: false
-related_pr: none
+related_pr: 365
 owned_paths:
   - docs/agents/tasks/active/OTH-20260805-native-protocol-single-version-completion.md
   - docs/contracts/OTERYN_NATIVE_GAMEPLAY_PROTOCOL_CORRESPONDENCE.md
@@ -74,7 +74,7 @@ updated_at: 2026-08-05T13:05:00+02:00
 head: e9eb10a72f7b711c809eea19fcd280154fddebe1
 branch: agents/ots-native-selection-otheryn-correction-20260804
 pr: none
-status: waiting
+status: implementing
 context_routes:
   - architecture
   - canary-integration
@@ -91,7 +91,7 @@ proven:
 derived:
   - Correspondence cannot be finalized until Platform PR #540 merges and exposes an immutable canonical commit and schema digest.
 unknown:
-  - Exact corrected Platform merge commit and schema SHA-256.
+  - none for correspondence.
 conflicts: []
 first_failure:
   marker: none
@@ -106,8 +106,8 @@ validation:
     result: PASS
     evidence: native correspondence path is free; runtime overlap is documented for later re-preflight
 blockers:
-  - Platform PR #540 must merge first
-next_action: After Platform PR #540 merges, update correspondence to its exact merge commit and corrected schema digest.
+  - none
+next_action: Validate and merge Otheryn correspondence PR #365 at exact head.
 ```
 
 ## Recovery checkpoint

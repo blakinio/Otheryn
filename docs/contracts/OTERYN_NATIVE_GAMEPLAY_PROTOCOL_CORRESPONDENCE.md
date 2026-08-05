@@ -5,8 +5,8 @@ Canonical contract: `blakinio/Oteryn-Platform/docs/contracts/OTERYN_NATIVE_GAMEP
 Canonical contract revision: `2`  
 Canonical schema revision: `2`  
 Canonical schema SHA-256: `9c67f19525400fb9890d2a3541ceb6d02eb955061540ad39ca1c1d891c06eba9`  
-Canonical merged Platform revision: `PENDING_PLATFORM_PR_540_MERGE`  
-Candidate Platform head reviewed by this draft: `19a9b3a27d2b00d4dfb8fd83ebf24dec15233b91`  
+Canonical merged Platform revision: `c0b8703d326a04b43ae8e06f6192b0cb91c859b7`  
+Candidate Platform head reviewed by this draft: `eaed70477258e0e1dfb5b03c1e74002913e919dc`  
 Local architecture boundary: `docs/architecture/oteryn-native-gameplay-protocol.md`
 
 ## Status
@@ -15,7 +15,7 @@ Contract correspondence only. This PR implements no Game Session v2 storage, lis
 
 Otheryn remains the authoritative gameplay server with ASIO networking. Canary compatibility profiles remain isolated in their existing compatibility mechanism. The native Oteryn producer has exactly one identity—`family = oteryn`, `native_protocol_version = 1`—and has no native profile field, alias, placeholder, catalogue, enum, registry, factory, ordering or selector.
 
-This draft must not merge while `Canonical merged Platform revision` is pending. After Platform PR #540 merges, that marker must be replaced by the exact immutable merge commit and the candidate head must be verified as an ancestor of that merge.
+Platform PR #540 is merged at the immutable commit above. Candidate head `eaed70477258e0e1dfb5b03c1e74002913e919dc` was the exact green audited head and is incorporated by the squash merge.
 
 ## Normative adoption
 
