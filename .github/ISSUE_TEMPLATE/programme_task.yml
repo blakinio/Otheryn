@@ -1,0 +1,50 @@
+name: Programme task
+description: Create an executable Otheryn server implementation, audit, repair, or operational task.
+title: "[Task] "
+labels: [state:triage, type:task]
+body:
+  - type: textarea
+    id: objective
+    attributes: {label: Objective, description: State the concrete observable outcome.}
+    validations: {required: true}
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      placeholder: |
+        - [ ] Criterion one
+        - [ ] Criterion two
+    validations: {required: true}
+  - type: dropdown
+    id: priority
+    attributes: {label: Priority, options: [P0, P1, P2, P3], default: 2}
+    validations: {required: true}
+  - type: dropdown
+    id: risk
+    attributes: {label: Risk, options: [Low, Medium, High, Critical], default: 1}
+    validations: {required: true}
+  - type: dropdown
+    id: programme
+    attributes:
+      label: Programme
+      options: [Server, Native Protocol, Content, Infrastructure, Audit & Repair]
+    validations: {required: true}
+  - type: textarea
+    id: blocked_by
+    attributes: {label: Blocked by, description: Full GitHub Issue URLs, one per line, or `None`. Only this section creates dependencies., placeholder: None}
+    validations: {required: true}
+  - type: textarea
+    id: affected_paths
+    attributes: {label: Affected paths, description: Declare expected paths, modules, contracts, or documentation.}
+    validations: {required: true}
+  - type: textarea
+    id: validation
+    attributes: {label: Validation plan, description: State focused checks, final build or E2E requirements, and exact-head CI.}
+    validations: {required: true}
+  - type: checkboxes
+    id: completion
+    attributes:
+      label: Completion claim
+      options:
+        - label: I understand that implementation, validation, exact-head CI, review hygiene, merge, task archival, and ownership release are required before completion.
+          required: true
