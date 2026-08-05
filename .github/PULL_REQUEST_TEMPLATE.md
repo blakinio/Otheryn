@@ -45,3 +45,33 @@ Please describe the tests that you ran to verify your changes. Provide instructi
   - [ ] I have made corresponding changes to the documentation
   - [ ] My changes generate no new warnings
   - [ ] I have added tests that prove my fix is effective or that my feature works
+
+## Projects Operations metadata
+
+### Parent issue
+
+<!-- Full GitHub Issue URL or None. -->
+
+### Programme
+
+<!-- Exact value: Server, Native Protocol, Content, Infrastructure, or Audit & Repair. -->
+
+### Priority
+
+<!-- Exact value: P0, P1, P2, or P3. -->
+
+### Risk
+
+<!-- Exact value: Low, Medium, High, or Critical. -->
+
+### Blocked by
+
+<!-- Full GitHub Issue URLs, one per line, or None. -->
+
+### Completion claim
+
+- [ ] Acceptance criteria are satisfied.
+- [ ] Required validation and exact-head CI pass.
+- [ ] Review threads and related PRs are reconciled.
+- [ ] Task archival and ownership release are complete when required.
+- [ ] PR is safe for squash merge.
