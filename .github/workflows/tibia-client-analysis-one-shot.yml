@@ -1,0 +1,151 @@
+name: Tibia Client Analysis One Shot
+
+on:
+  push:
+    branches:
+      - ops/tibia-client-analysis-20260811
+    paths:
+      - .github/workflows/tibia-client-analysis-one-shot.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tibia-client-analysis-one-shot
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    name: Bootstrap isolated Tibia analysis container on Oteryn deploy runner
+    runs-on: self-hosted
+    timeout-minutes: 15
+    env:
+      CONTAINER_NAME: oteryn-tibia-client-analysis
+      HOST_DATA_DIR: /volume1/docker/oteryn/tibia-analysis
+    steps:
+      - name: Verify runner and Docker boundary
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "runner_name=${RUNNER_NAME:-unknown}"
+          echo "runner_os=${RUNNER_OS:-unknown}"
+          echo "runner_arch=${RUNNER_ARCH:-unknown}"
+          uname -a
+          docker version
+          docker info --format 'docker_root={{.DockerRootDir}} server={{.ServerVersion}}'
+          test -d /volume1/docker/oteryn
+          if docker inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
+            owner="$(docker inspect --format '{{ index .Config.Labels "com.blakinio.owner" }}' "$CONTAINER_NAME")"
+            purpose="$(docker inspect --format '{{ index .Config.Labels "com.blakinio.purpose" }}' "$CONTAINER_NAME")"
+            [[ "$owner" == "oteryn" && "$purpose" == "tibia-client-analysis" ]]
+          fi
+
+      - name: Create isolated persistent analysis container
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$HOST_DATA_DIR"
+          if ! docker inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
+            docker run -d \
+              --name "$CONTAINER_NAME" \
+              --restart unless-stopped \
+              --label com.blakinio.owner=oteryn \
+              --label com.blakinio.purpose=tibia-client-analysis \
+              --label com.blakinio.created-by=github-actions \
+              -v "$HOST_DATA_DIR:/data" \
+              ubuntu:24.04 sleep infinity
+          else
+            docker start "$CONTAINER_NAME" >/dev/null || true
+          fi
+          docker inspect --format 'name={{.Name}} status={{.State.Status}} image={{.Config.Image}} data={{range .Mounts}}{{.Source}}:{{.Destination}} {{end}}' "$CONTAINER_NAME"
+
+      - name: Install launcher prerequisites
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          docker exec "$CONTAINER_NAME" bash -lc '
+            set -Eeuo pipefail
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update
+            apt-get install -y --no-install-recommends \
+              ca-certificates curl file procps tar xvfb xauth \
+              libxcb-cursor0 libxkbcommon-x11-0 libgl1 libnss3 \
+              libdbus-1-3 libasound2t64 libx11-xcb1 libxcb1
+            rm -rf /var/lib/apt/lists/*
+          '
+
+      - name: Download official CipSoft Linux launcher
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          docker exec "$CONTAINER_NAME" bash -lc '
+            set -Eeuo pipefail
+            mkdir -p /data/bootstrap /data/home
+            cd /data/bootstrap
+            page="$(curl -fsSL --retry 3 --retry-delay 2 https://www.tibia.com/account/?subtopic=downloadclient || true)"
+            url="$(printf "%s" "$page" | grep -Eo "https?://[^\"[:space:]]*tibia\.x64\.tar\.gz" | head -n1 || true)"
+            if [[ -z "$url" ]]; then
+              url="https://static.tibia.com/download/tibia.x64.tar.gz"
+            fi
+            echo "download_url=$url"
+            curl -fL --retry 3 --retry-delay 2 "$url" -o tibia.x64.tar.gz
+            test -s tibia.x64.tar.gz
+            sha256sum tibia.x64.tar.gz | tee tibia.x64.tar.gz.sha256
+            rm -rf Tibia
+            tar xfz tibia.x64.tar.gz
+            test -x Tibia/Tibia
+            file Tibia/Tibia
+          '
+
+      - name: Run launcher headlessly to materialize current package
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          set +e
+          docker exec "$CONTAINER_NAME" bash -lc '
+            export HOME=/data/home
+            export XDG_CONFIG_HOME=/data/home/.config
+            export XDG_DATA_HOME=/data/home/.local/share
+            export XDG_CACHE_HOME=/data/home/.cache
+            mkdir -p "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_CACHE_HOME"
+            cd /data/bootstrap/Tibia
+            timeout --signal=TERM --kill-after=15s 300s xvfb-run -a ./Tibia
+          '
+          rc=$?
+          set -e
+          echo "launcher_exit=$rc"
+          # GUI timeout is acceptable; package materialization is validated below.
+          [[ "$rc" -eq 0 || "$rc" -eq 124 || "$rc" -eq 137 || "$rc" -eq 143 ]]
+
+      - name: Verify downloaded game package and identify client binary
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          docker exec "$CONTAINER_NAME" bash -lc '
+            set -Eeuo pipefail
+            echo "=== candidate package directories ==="
+            find /data/home /data/bootstrap -maxdepth 7 -type d \( -iname packages -o -iname Tibia \) -print 2>/dev/null | sort -u
+            echo "=== large files ==="
+            find /data/home /data/bootstrap -type f -size +20M -print0 2>/dev/null \
+              | while IFS= read -r -d "" f; do
+                  printf "%s\t" "$f"
+                  stat -c "%s bytes" "$f"
+                  file "$f" || true
+                done | tee /data/tibia-large-files.txt
+            candidates="$(find /data/home -type f -size +20M 2>/dev/null | wc -l)"
+            echo "materialized_large_file_count=$candidates"
+            if [[ "$candidates" -lt 1 ]]; then
+              echo "No full game package was materialized by the launcher." >&2
+              find /data/home -maxdepth 8 -type f -printf "%s %p\n" 2>/dev/null | sort -nr | head -n 80 >&2 || true
+              exit 1
+            fi
+            echo "=== package metadata ==="
+            find /data/home -type f \( -name package.json -o -name launchermetadata.json -o -name tibiametadata.json \) -print -exec sed -n "1,120p" {} \; 2>/dev/null | tee /data/tibia-package-metadata.txt || true
+          '
+
+      - name: Final container state
+        if: always()
+        shell: bash
+        run: |
+          docker inspect --format 'name={{.Name}} status={{.State.Status}} restart={{.HostConfig.RestartPolicy.Name}} image={{.Config.Image}}' "$CONTAINER_NAME" || true
+          docker ps --filter "name=^/${CONTAINER_NAME}$" --no-trunc || true
