@@ -20,6 +20,7 @@ jobs:
       CRYSTAL_COMMIT: 5e89bf8329ea406cb4ea8f4a18f32954f13e5418
       ASSETS_JSON_SHA256: 4cbdf80eee33901f2eb4f3391e23ad02805b65890ca856efcd9c32c54888405a
       ASSETS_VERSION: 15.25.bd5a04
+      TIBIA_UA: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151.0.0.0 Safari/537.36
     steps:
       - name: Checkout task branch without third-party actions
         env:
@@ -45,7 +46,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p repo/vendor/map-analysis/tibia-client/$ASSETS_VERSION
-          curl --fail --location --retry 5 --retry-all-errors \
+          curl --fail --location --http1.1 --retry 3 --retry-all-errors \
+            --user-agent "$TIBIA_UA" \
+            --header 'Accept: application/json,text/plain,*/*' \
+            --header 'Referer: https://www.tibia.com/' \
             https://static.tibia.com/launcher/assets-current/assets.json \
             -o /tmp/assets.json
           echo "$ASSETS_JSON_SHA256  /tmp/assets.json" | sha256sum --check --strict
@@ -65,6 +69,11 @@ jobs:
           manifest = json.loads(pathlib.Path('/tmp/assets.json').read_text())
           rows = [x for x in manifest['files'] if x.get('localfile', '').startswith('assets/')]
           base = 'https://static.tibia.com/launcher/assets-current/'
+          headers = {
+              'User-Agent': os.environ['TIBIA_UA'],
+              'Accept': '*/*',
+              'Referer': 'https://www.tibia.com/',
+          }
 
           def digest(data):
               return hashlib.sha256(data).hexdigest()
@@ -73,7 +82,8 @@ jobs:
               url = base + entry['url']
               target = root / entry['localfile']
               target.parent.mkdir(parents=True, exist_ok=True)
-              with urllib.request.urlopen(url, timeout=120) as r:
+              req = urllib.request.Request(url, headers=headers)
+              with urllib.request.urlopen(req, timeout=120) as r:
                   packed = r.read()
               expected_packed = entry.get('packedhash')
               if expected_packed and digest(packed) != expected_packed:
@@ -85,15 +95,13 @@ jobs:
                       raise RuntimeError(f"unpacked hash mismatch: {entry['localfile']}")
               else:
                   data = packed
-              if len(data) != entry.get('unpackedsize', entry.get('packedsize', len(data))):
-                  # For unpack:false the package may omit unpackedsize.
-                  expected_size = entry.get('packedsize') if not entry.get('unpack', True) else entry.get('unpackedsize')
-                  if expected_size is not None and len(data) != expected_size:
-                      raise RuntimeError(f"size mismatch: {entry['localfile']}")
+              expected_size = entry.get('unpackedsize') if entry.get('unpack', True) else entry.get('packedsize')
+              if expected_size is not None and len(data) != expected_size:
+                  raise RuntimeError(f"size mismatch: {entry['localfile']}")
               target.write_bytes(data)
               return entry['localfile']
 
-          with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
+          with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
               futures = [pool.submit(fetch, row) for row in rows]
               done = 0
               for future in concurrent.futures.as_completed(futures):
