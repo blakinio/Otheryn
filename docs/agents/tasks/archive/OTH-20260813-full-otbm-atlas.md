@@ -1,15 +1,18 @@
 ---
 task_id: OTH-20260813-full-otbm-atlas
-status: validating
+status: completed
+owner: none
 created: 2026-08-13
-updated: 2026-08-13
+completed: 2026-08-13T17:14:04+02:00
+updated: 2026-08-13T17:14:04+02:00
 project_lane: otheryn-content
 related_pr: "374"
+ownership_released: true
 modules_touched:
   - otbm-atlas
 ---
 
-# Deterministic full OTBM atlas
+# Deterministic full OTBM atlas — completed
 
 Deliver a repository-owned pipeline that parses the pinned CrystalServer world,
 decodes only the pinned Tibia 15.25 assets, builds bounded/resumable map chunks,
@@ -24,17 +27,18 @@ Phases are parser and provenance; mechanics/spawns/composition; asset decoder an
 Thais regression; chunk cache and viewer; full-world run; independent audit/E2E;
 exact-head CI and PR closeout. No generated multi-gigabyte atlas is committed.
 
-## Context checkpoint
+## Terminal checkpoint
 
 ```yaml
 checkpoint_version: 1
 policy_version: 2
-updated_at: 2026-08-13T23:15:00+02:00
-head: 5637dcf94026b66a38aa32ec8bfb3f2159de4b86
-branch: blakinio/otbm-full-map-atlas
+updated_at: 2026-08-13T17:14:04+02:00
+head: 8ea0a99701de81414836caaa9750150e2d251079
+delivery_head: 7b38489a91a0cf8bb82d2efc88d5b8061afc8ecf
+branch: main
 pr: 374
-status: validating
-phase: exact-head-validation
+status: completed
+phase: merged-complete
 session_id: codex-20260813-001
 session_role: implementer
 execution_mode: codex
@@ -46,16 +50,14 @@ context_score: 12
 decomposition_decision: phased
 decomposition_reason: one integrated product with seven sequential evidence gates
 invocation_started_at: 2026-08-13T12:10:00+02:00
-last_progress_at: 2026-08-13T18:05:00+02:00
-ci_checks_for_current_head: 0
+last_progress_at: 2026-08-13T17:14:04+02:00
+ci_checks_for_current_head: 1
 unchanged_state_checks: 0
 identical_failure_retries: 0
 repair_cycles_for_current_gate: 0
 context_reconstruction_attempts: 1
 stall_warnings: 0
-owned_paths:
-  - tools/otbm_atlas/**
-  - docs/agents/tasks/active/OTH-20260813-full-otbm-atlas.md
+owned_paths: []
 context_routes:
   - AGENTS.md
   - AGENTS.override.md
@@ -97,7 +99,7 @@ rejected_hypotheses:
   - 44 missing Thais child items are repeated compact tile items: preserving repeated compact items did not change the canonical count
 changed_paths:
   - tools/otbm_atlas/**
-  - docs/agents/tasks/active/OTH-20260813-full-otbm-atlas.md
+  - docs/agents/tasks/archive/OTH-20260813-full-otbm-atlas.md
 validation:
   - command: node --check tools/otbm_atlas/viewer_app.js; python -m unittest discover -s tools/otbm_atlas/tests -v
     result: PASS
@@ -135,7 +137,42 @@ validation:
   - command: python -m tools.otbm_atlas.verify build/full-map-atlas; Playwright Thais E2E
     result: PASS
     evidence: 3494 chunks per imagery layer verify; mode request routing, floor, search and details pass
-blockers:
-  - none
-next_action: verify exact-head CI for df9d03ee and allow the protected PR auto-merge to complete
+blockers: []
+next_action: none
 ```
+
+## Closeout
+
+```yaml
+closeout:
+  implementation_complete: true
+  vertical_slice_complete: true
+  audit:
+    result: PASS
+    material_findings_open: 0
+  e2e:
+    result: PASS
+    journeys:
+      - render modes and zoom-dependent imagery
+      - floor switching, overlays and shared URL state
+      - text and raw coordinate search, marker details and tooltip
+  final_ci:
+    head: 7b38489a91a0cf8bb82d2efc88d5b8061afc8ecf
+    result: PASS
+    required_checks:
+      - Required
+      - Detect Build Scope
+      - Fast Checks
+      - Lua Tests
+  pull_requests:
+    open_related_prs: 0
+    unresolved_review_threads: 0
+    terminal_prs:
+      - blakinio/Otheryn#374 merged as 8ea0a99701de81414836caaa9750150e2d251079
+  task_status: completed
+  task_archived: true
+  ownership_released: true
+  stale_branches_reconciled: true
+```
+
+No further action remains within this task.
