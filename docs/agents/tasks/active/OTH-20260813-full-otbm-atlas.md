@@ -30,11 +30,11 @@ exact-head CI and PR closeout. No generated multi-gigabyte atlas is committed.
 checkpoint_version: 1
 policy_version: 2
 updated_at: 2026-08-13T13:00:00+02:00
-head: 1befda0b6d80400cd63cd8735788224b7ee82f51
+head: b1f5169fd37f4eb0c78fdcbeccf24e4c6236a9d2
 branch: blakinio/otbm-full-map-atlas
 pr: 373
 status: ready
-phase: mechanics-spawns-in-progress
+phase: mechanics-spawns-composition-implemented
 session_id: codex-20260813-001
 session_role: implementer
 execution_mode: codex
@@ -46,7 +46,7 @@ context_score: 12
 decomposition_decision: phased
 decomposition_reason: one integrated product with seven sequential evidence gates
 invocation_started_at: 2026-08-13T12:10:00+02:00
-last_progress_at: 2026-08-13T15:10:00+02:00
+last_progress_at: 2026-08-13T16:25:00+02:00
 ci_checks_for_current_head: 0
 unchanged_state_checks: 0
 identical_failure_retries: 0
@@ -81,6 +81,10 @@ proven:
   - the static viewer implements pan, zoom, floor selection, coordinate display/jump and required overlay toggles without an external service
   - all 8 canonical spawn XML files parse strictly to 87565 monster and 1068 NPC records
   - canonical spawn coordinates use center-relative X/Y and absolute child Z; all 88633 canonical records agree with their group center Z
+  - full factual scan finds 2311 AID records (736 unique), 597 UID records, 2406 teleports, 109744 house tiles, 4527 house doors, 33 towns and 18 waypoints
+  - conservative Lua resolution yields 496 RESOLVED, 18 AMBIGUOUS and 819 UNRESOLVED unique AID/UID values; 103 dynamic registrations remain UNKNOWN
+  - AID 5555 resolves only to scripts/movements/teleport/sorcerer_guild_thais.lua and UID 65207 only to the literal dispatch table in quest_system2.lua
+  - composition inventory classifies 1 base map, 1 conditional custom overlay, 28 runtime-loaded overlays and 2 UNKNOWN maps; none are flattened into the base atlas
 derived:
   - semantic parsing must operate incrementally over node events to preserve bounded memory
   - current 77.074 second framing scan needs profiling before it can be accepted for repeated full runs
@@ -118,6 +122,10 @@ changed_paths:
   - tools/otbm_atlas/tests/test_viewer.py
   - tools/otbm_atlas/spawns.py
   - tools/otbm_atlas/tests/test_spawns.py
+  - tools/otbm_atlas/mechanics.py
+  - tools/otbm_atlas/composition.py
+  - tools/otbm_atlas/tests/test_mechanics.py
+  - tools/otbm_atlas/tests/test_composition.py
   - docs/agents/tasks/active/OTH-20260813-full-otbm-atlas.md
 validation:
   - command: python -m unittest discover -s tools/otbm_atlas/tests -v
@@ -150,7 +158,16 @@ validation:
   - command: python -m tools.otbm_atlas.spawns canonical-world build/full-map-atlas/data/spawns.json
     result: PASS
     evidence: 8 sources; 87565 monster and 1068 NPC spawns; 36182644-byte deterministic JSON index
+  - command: spool_map canonical world.otbm with factual indexing
+    result: PASS
+    evidence: 18997668 tiles in 224.498 seconds; facts.json contains all mechanics totals and is 29093099 bytes
+  - command: resolve_mechanics facts.json data-otservbr-global
+    result: PASS
+    evidence: 496 RESOLVED, 18 AMBIGUOUS, 819 UNRESOLVED; regression AID 5555 and UID 65207 independently resolve
+  - command: python -m tools.otbm_atlas.composition canonical-world repository output
+    result: PASS
+    evidence: 32 OTBMs classified; only winterlight island and ferumbras habitats remain UNKNOWN; mergedIntoBaseAtlas false for every source
 blockers:
   - none
-next_action: implement global mechanics/script resolution, spawn parsing, and evidence-based additional-map composition classification
+next_action: harden cross-chunk sprite composition, parallelize bounded chunk rendering, then run the full atlas and E2E verification
 ```

@@ -65,6 +65,12 @@ The atlas build also writes `data/mechanics.json` from the same OTBM pass and
 X/Y offsets are relative to their group center; the child `z` value is absolute,
 matching the canonical XML. Every record retains its source and an origin class.
 Additional/event/quest sources remain distinct instead of being silently merged.
+`data/composition.json` records which supplemental OTBMs have direct runtime
+loading evidence. The base atlas always remains `world.otbm`; even proven runtime
+overlays are listed separately. `data/mechanics-resolution.json` links literal
+AID/UID registrations and legacy literal UID dispatch tables to Lua scripts with
+`RESOLVED`, `AMBIGUOUS`, or `UNRESOLVED` status. Dynamic registrations stay
+explicitly `UNKNOWN`.
 
 To build only the spawn index:
 
@@ -72,6 +78,16 @@ To build only the spawn index:
 python -m tools.otbm_atlas.spawns `
   vendor/map-analysis/crystalserver/data-global/world `
   build/full-map-atlas/data/spawns.json
+```
+
+Standalone factual resolution/composition reports can be rebuilt with:
+
+```powershell
+python -m tools.otbm_atlas.mechanics build/full-map-atlas/data/mechanics.json `
+  data-otservbr-global build/full-map-atlas/data/mechanics-resolution.json
+python -m tools.otbm_atlas.composition `
+  vendor/map-analysis/crystalserver/data-global/world . `
+  build/full-map-atlas/data/composition.json
 ```
 
 The node framing follows the authoritative Remere's Map Editor implementation in

@@ -13,6 +13,8 @@ import struct
 from typing import BinaryIO, Iterator
 
 from .render import AssetRenderer, render_tiles
+from .mechanics import resolve_mechanics
+from .composition import classify_maps
 from .semantic import Item, Position, Tile, Town, Waypoint, iter_map_records, walk_items
 from .spawns import scan_spawns
 from .viewer import write_viewer
@@ -134,7 +136,7 @@ def spool_map(map_path: Path, spool_dir: Path, chunk_size: int) -> dict[str, int
 	return metadata
 
 
-def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int = 128) -> dict[str, object]:
+def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int = 128, scripts_dir: Path = Path("data-otservbr-global"), repository_root: Path = Path(".")) -> dict[str, object]:
 	spool_dir = output / ".spool"
 	map_sha, assets_sha = _sha256(map_path), _tree_sha256(asset_dir)
 	state_path = spool_dir / "source.json"
@@ -167,13 +169,16 @@ def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int =
 	data_dir = output / "data"; data_dir.mkdir(parents=True, exist_ok=True)
 	shutil.copyfile(spool_dir / "facts.json", data_dir / "mechanics.json")
 	(data_dir / "spawns.json").write_text(json.dumps(scan_spawns(map_path.parent), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+	mechanics = json.loads((spool_dir / "facts.json").read_text(encoding="utf-8"))
+	(data_dir / "mechanics-resolution.json").write_text(json.dumps(resolve_mechanics(mechanics, scripts_dir), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+	(data_dir / "composition.json").write_text(json.dumps(classify_maps(map_path.parent, repository_root), indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	write_viewer(output)
 	return manifest
 
 
 def main() -> int:
-	parser = argparse.ArgumentParser(description=__doc__); parser.add_argument("map", type=Path); parser.add_argument("assets", type=Path); parser.add_argument("output", type=Path); parser.add_argument("--chunk-size", type=int, default=128)
-	args = parser.parse_args(); build_atlas(args.map, args.assets, args.output, args.chunk_size); return 0
+	parser = argparse.ArgumentParser(description=__doc__); parser.add_argument("map", type=Path); parser.add_argument("assets", type=Path); parser.add_argument("output", type=Path); parser.add_argument("--chunk-size", type=int, default=128); parser.add_argument("--scripts", type=Path, default=Path("data-otservbr-global")); parser.add_argument("--repository", type=Path, default=Path("."))
+	args = parser.parse_args(); build_atlas(args.map, args.assets, args.output, args.chunk_size, args.scripts, args.repository); return 0
 
 
 if __name__ == "__main__": raise SystemExit(main())
