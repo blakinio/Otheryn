@@ -93,6 +93,7 @@ proven:
   - exactly one canonical item server ID 2141 at 33572,32528,14 lacks an appearance; it is recorded in unknown-items.json and is not substituted
   - 995 canonical houses parse from world-house.xml
   - unchanged full-atlas cache verification completes in 19.418 seconds without rerendering chunks
+  - viewer exposes relative floor labels -8 through +7 while preserving raw OTBM Z=0..15 in manifests and data
 derived:
   - semantic parsing must operate incrementally over node events to preserve bounded memory
   - current 77.074 second framing scan needs profiling before it can be accepted for repeated full runs
@@ -198,4 +199,3 @@ blockers:
   - none
 next_action: commit verification tooling, perform exact-head CI/PR checks, and complete browser E2E if the Chrome extension initialization blocker clears
 ```
-

@@ -59,6 +59,8 @@ The first pass spools each tile once into bounded per-chunk binary files. Chunk
 reports retain source/spool fingerprints and PNG checksums; matching chunks are
 reused on subsequent runs. The viewer supports pan, zoom, floor selection,
 coordinate display/jump, and factual mechanics/spawn overlay toggles.
+Viewer floor labels are relative to the Tibia surface: raw OTBM Z=7 is floor 0,
+Z=0 is +7, and Z=15 is -8. Manifests and factual coordinates retain raw Z.
 Chunks are cropped to their populated bounds plus a conservative two-tile sprite
 gutter. This preserves 64×64 sprites and canonical displacement across chunk
 edges without allocating a full 4096×4096 canvas for sparse chunks. Workers use
@@ -107,4 +109,3 @@ python -m tools.otbm_atlas.verify build/full-map-atlas `
 The node framing follows the authoritative Remere's Map Editor implementation in
 `source/filehandle.h` and `source/filehandle.cpp`; semantic work must likewise be
 cross-checked against its `source/iomap_otbm.*` implementation.
-

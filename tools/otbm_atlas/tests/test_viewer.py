@@ -13,6 +13,9 @@ class ViewerTests(unittest.TestCase):
 			text = write_viewer(directory).read_text(encoding="utf-8")
 		for marker in ("manifest.json", "data/mechanics.json", "actionIds", "uniqueIds", "teleports", "houseDoors", "monsterSpawns", "npcSpawns", "Jump"):
 			self.assertIn(marker, text)
+		self.assertIn('min="-8" max="7"', text)
+		self.assertIn("function displayFloor(rawZ){return 7-rawZ}", text)
+		self.assertIn("sort((a,b)=>displayFloor(a)-displayFloor(b))", text)
 
 
 if __name__ == "__main__": unittest.main()
