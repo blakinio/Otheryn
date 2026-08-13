@@ -198,3 +198,4 @@ blockers:
   - none
 next_action: commit verification tooling, perform exact-head CI/PR checks, and complete browser E2E if the Chrome extension initialization blocker clears
 ```
+

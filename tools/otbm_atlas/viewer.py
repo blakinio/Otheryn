@@ -38,3 +38,4 @@ def write_viewer(output: str | Path) -> Path:
 	path.parent.mkdir(parents=True, exist_ok=True)
 	path.write_text(VIEWER_HTML, encoding="utf-8", newline="\n")
 	return path
+

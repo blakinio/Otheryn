@@ -107,3 +107,4 @@ python -m tools.otbm_atlas.verify build/full-map-atlas `
 The node framing follows the authoritative Remere's Map Editor implementation in
 `source/filehandle.h` and `source/filehandle.cpp`; semantic work must likewise be
 cross-checked against its `source/iomap_otbm.*` implementation.
+
