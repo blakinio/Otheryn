@@ -13,7 +13,8 @@ import struct
 from typing import BinaryIO, Iterator
 
 from .render import AssetRenderer, render_tiles
-from .semantic import Item, Position, Tile, iter_map_records
+from .semantic import Item, Position, Tile, Town, Waypoint, iter_map_records, walk_items
+from .spawns import scan_spawns
 from .viewer import write_viewer
 
 SPOOL_VERSION = 1
@@ -106,13 +107,30 @@ def spool_map(map_path: Path, spool_dir: Path, chunk_size: int) -> dict[str, int
 	if spool_dir.exists(): shutil.rmtree(spool_dir)
 	spool_dir.mkdir(parents=True)
 	pool = _WriterPool(spool_dir); tiles = 0
+	facts: dict[str, list[dict[str, object]]] = {key: [] for key in ("actionIds", "uniqueIds", "teleports", "houseTiles", "houseDoors", "towns", "waypoints")}
+	source = map_path.as_posix()
 	try:
 		for record in iter_map_records(map_path, strict=True):
+			if isinstance(record, Town):
+				facts["towns"].append({"id": record.town_id, "name": record.name, "temple": asdict(record.temple), "source": source, "origin": "base-map"}); continue
+			if isinstance(record, Waypoint):
+				facts["waypoints"].append({"name": record.name, "position": asdict(record.position), "source": source, "origin": "base-map"}); continue
 			if not isinstance(record, Tile): continue
 			pool.write((record.position.z, record.position.x // chunk_size, record.position.y // chunk_size), encode_tile(record)); tiles += 1
+			position = asdict(record.position)
+			if record.house_id is not None:
+				facts["houseTiles"].append({"position": position, "houseId": record.house_id, "source": source, "origin": "base-map"})
+			items = (() if record.ground is None else (record.ground,)) + tuple(walk_items(record.items))
+			for item in items:
+				base = {"position": position, "serverId": item.server_id, "source": source, "origin": "base-map"}
+				if item.action_id is not None: facts["actionIds"].append({**base, "actionId": item.action_id})
+				if item.unique_id is not None: facts["uniqueIds"].append({**base, "uniqueId": item.unique_id})
+				if item.teleport_destination is not None: facts["teleports"].append({**base, "destination": asdict(item.teleport_destination)})
+				if item.house_door_id is not None: facts["houseDoors"].append({**base, "doorId": item.house_door_id, "houseId": record.house_id})
 	finally: pool.close()
 	metadata = {"version": SPOOL_VERSION, "chunkSize": chunk_size, "tiles": tiles}
 	(spool_dir / "spool.json").write_text(json.dumps(metadata, sort_keys=True) + "\n", encoding="utf-8")
+	(spool_dir / "facts.json").write_text(json.dumps({"schemaVersion": 1, **facts}, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	return metadata
 
 
@@ -146,6 +164,9 @@ def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int =
 		chunks.append({"z": z, "chunkX": chunk_x, "chunkY": chunk_y, "path": tile_path.relative_to(output).as_posix(), **report})
 	manifest = {"schemaVersion": ATLAS_VERSION, "chunkSize": chunk_size, "tilePixels": 32, "sources": expected, "chunks": chunks}
 	(output / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+	data_dir = output / "data"; data_dir.mkdir(parents=True, exist_ok=True)
+	shutil.copyfile(spool_dir / "facts.json", data_dir / "mechanics.json")
+	(data_dir / "spawns.json").write_text(json.dumps(scan_spawns(map_path.parent), indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	write_viewer(output)
 	return manifest
 

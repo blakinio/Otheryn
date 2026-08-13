@@ -34,7 +34,7 @@ head: 1befda0b6d80400cd63cd8735788224b7ee82f51
 branch: blakinio/otbm-full-map-atlas
 pr: 373
 status: ready
-phase: chunk-pipeline-implemented
+phase: mechanics-spawns-in-progress
 session_id: codex-20260813-001
 session_role: implementer
 execution_mode: codex
@@ -79,6 +79,8 @@ proven:
   - the canonical spool is 545977318 bytes and completed in 180.07 seconds
   - canonical chunk z7/252_251 renders at 4096x4096 with 16384 tiles, 25205 render operations and zero missing appearances or sprites
   - the static viewer implements pan, zoom, floor selection, coordinate display/jump and required overlay toggles without an external service
+  - all 8 canonical spawn XML files parse strictly to 87565 monster and 1068 NPC records
+  - canonical spawn coordinates use center-relative X/Y and absolute child Z; all 88633 canonical records agree with their group center Z
 derived:
   - semantic parsing must operate incrementally over node events to preserve bounded memory
   - current 77.074 second framing scan needs profiling before it can be accepted for repeated full runs
@@ -114,6 +116,8 @@ changed_paths:
   - tools/otbm_atlas/viewer.py
   - tools/otbm_atlas/tests/test_atlas.py
   - tools/otbm_atlas/tests/test_viewer.py
+  - tools/otbm_atlas/spawns.py
+  - tools/otbm_atlas/tests/test_spawns.py
   - docs/agents/tasks/active/OTH-20260813-full-otbm-atlas.md
 validation:
   - command: python -m unittest discover -s tools/otbm_atlas/tests -v
@@ -142,7 +146,10 @@ validation:
     evidence: 4096x4096 PNG; 16384 tiles, 8821 child items, 25205 operations, zero missing, 10.966 seconds
   - command: python -m unittest discover -s tools/otbm_atlas/tests -v
     result: PASS
-    evidence: 20 tests pass including spool round-trip/corruption handling and static-viewer controls
+    evidence: 22 tests pass including spool round-trip/corruption handling, spawn coordinate semantics, and static-viewer controls
+  - command: python -m tools.otbm_atlas.spawns canonical-world build/full-map-atlas/data/spawns.json
+    result: PASS
+    evidence: 8 sources; 87565 monster and 1068 NPC spawns; 36182644-byte deterministic JSON index
 blockers:
   - none
 next_action: implement global mechanics/script resolution, spawn parsing, and evidence-based additional-map composition classification

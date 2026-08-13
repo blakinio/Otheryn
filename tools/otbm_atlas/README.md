@@ -60,6 +60,20 @@ reports retain source/spool fingerprints and PNG checksums; matching chunks are
 reused on subsequent runs. The viewer supports pan, zoom, floor selection,
 coordinate display/jump, and factual mechanics/spawn overlay toggles.
 
+The atlas build also writes `data/mechanics.json` from the same OTBM pass and
+`data/spawns.json` from every canonical `*-monster.xml` and `*-npc.xml`. Spawn
+X/Y offsets are relative to their group center; the child `z` value is absolute,
+matching the canonical XML. Every record retains its source and an origin class.
+Additional/event/quest sources remain distinct instead of being silently merged.
+
+To build only the spawn index:
+
+```powershell
+python -m tools.otbm_atlas.spawns `
+  vendor/map-analysis/crystalserver/data-global/world `
+  build/full-map-atlas/data/spawns.json
+```
+
 The node framing follows the authoritative Remere's Map Editor implementation in
 `source/filehandle.h` and `source/filehandle.cpp`; semantic work must likewise be
 cross-checked against its `source/iomap_otbm.*` implementation.
