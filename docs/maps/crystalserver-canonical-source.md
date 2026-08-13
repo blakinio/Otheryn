@@ -8,6 +8,13 @@ Owner-provided archive name:
 
 `crystalserver-main(2).zip`
 
+Verified archive identity:
+
+- SHA-256: `920a59e15175a5f53721f60b17f4bb37370bf0b61cd91abb4c909bf0d85e5f26`
+- embedded GitHub archive revision: `5e89bf8329ea406cb4ea8f4a18f32954f13e5418`
+- upstream repository: `zimbadev/crystalserver`
+- upstream commit verified through GitHub: `5e89bf8329ea406cb4ea8f4a18f32954f13e5418`
+
 The archive contains the CrystalServer source tree. For the global-world work discussed in the OTS project, the canonical primary map is:
 
 `crystalserver-main/data-global/world/world.otbm`
@@ -38,6 +45,8 @@ Do not treat the primary OTBM as the complete runtime world by itself. The owner
 
 Any full-world completeness or runtime-equivalence analysis must account for those overlays/auxiliary maps separately rather than silently flattening or ignoring them.
 
+Because the complete ZIP is pinned by SHA-256 and by its verified upstream Git revision, these supplemental inputs are covered by the canonical-source identity as well. Future agents must verify the archive SHA-256 before trusting any copy as the selected source package.
+
 ## Atlas/rendering baseline
 
 The validated rendering approach used in this project is source-derived, not AI-generated:
@@ -53,6 +62,6 @@ For whole-map output, prefer chunked map tiles plus a manifest/index over one mo
 
 ## Provenance rule
 
-Do not replace this baseline with a different CrystalServer/Canary/Otheryn map merely because another repository revision is newer. A change of canonical map source requires an explicit owner decision and should update this document with the new exact file identity/hash.
+Do not replace this baseline with a different CrystalServer/Canary/Otheryn map merely because another repository revision is newer. A change of canonical map source requires an explicit owner decision and should update this document with the new exact archive identity and source revision.
 
-The uploaded ZIP itself is not committed by this documentation change. This file records the exact selected source identity so future agents can verify a supplied copy byte-for-byte before using it.
+The uploaded ZIP itself is not committed by this documentation change. This file records the exact selected archive, source revision, and primary-map identities so future agents can verify a supplied copy byte-for-byte before using it.
