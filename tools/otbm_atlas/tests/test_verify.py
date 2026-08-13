@@ -15,7 +15,9 @@ class VerifyTests(unittest.TestCase):
 		with tempfile.TemporaryDirectory() as directory:
 			root = Path(directory); tile = root / "tiles/z7/1_2.png"; tile.parent.mkdir(parents=True)
 			png = encode_png(1, 1, b"\x00\x00\x00\x00"); tile.write_bytes(png)
-			chunk = {"path": "tiles/z7/1_2.png", "z": 7, "checksum": hashlib.sha256(png).hexdigest(), "imageWidth": 1, "imageHeight": 1, "tiles": 1, "groundItems": 0, "childItems": 0, "renderOperations": 0, "missingAppearances": {}, "missingSprites": {}}
+			overview=root/"overview/z7/1_2.png";overview.parent.mkdir(parents=True);overview.write_bytes(png)
+			low=root/"overview-low/z7/1_2.png";low.parent.mkdir(parents=True);low.write_bytes(png)
+			chunk = {"path": "tiles/z7/1_2.png", "overviewPath":"overview/z7/1_2.png","overviewChecksum":hashlib.sha256(png).hexdigest(),"overviewImageWidth":1,"overviewImageHeight":1,"lowOverviewPath":"overview-low/z7/1_2.png","lowOverviewChecksum":hashlib.sha256(png).hexdigest(),"lowOverviewImageWidth":1,"lowOverviewImageHeight":1,"z": 7, "checksum": hashlib.sha256(png).hexdigest(), "imageWidth": 1, "imageHeight": 1, "tiles": 1, "groundItems": 0, "childItems": 0, "renderOperations": 0, "missingAppearances": {}, "missingSprites": {}}
 			(root / "manifest.json").write_text(json.dumps({"chunks": [chunk]}), encoding="utf-8"); (root / "index.html").write_text("viewer", encoding="utf-8")
 			(root / "data").mkdir()
 			for name in ("mechanics.json", "mechanics-resolution.json", "spawns.json", "composition.json", "unknown-items.json", "houses.json", "statistics.json"): (root / "data" / name).write_text("{}", encoding="utf-8")

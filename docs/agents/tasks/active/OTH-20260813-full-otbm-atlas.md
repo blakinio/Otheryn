@@ -1,6 +1,6 @@
 ---
 task_id: OTH-20260813-full-otbm-atlas
-status: ready
+status: implementing
 created: 2026-08-13
 updated: 2026-08-13
 project_lane: otheryn-content
@@ -29,12 +29,12 @@ exact-head CI and PR closeout. No generated multi-gigabyte atlas is committed.
 ```yaml
 checkpoint_version: 1
 policy_version: 2
-updated_at: 2026-08-13T13:00:00+02:00
-head: 1880fc08cf7f92065e0940d7fc79bff7c4190d3e
+updated_at: 2026-08-13T20:20:00+02:00
+head: ea3088e6a7258c2ec9df8dc2abaabe4947987761
 branch: blakinio/otbm-full-map-atlas
 pr: 374
-status: ready
-phase: full-world-render-verified
+status: implementing
+phase: multi-resolution-viewer
 session_id: codex-20260813-001
 session_role: implementer
 execution_mode: codex
@@ -64,21 +64,6 @@ context_routes:
   - vendor/map-analysis/README.md
   - docs/oam-040-otbm-tooling-do-not-migrate.md
 proven:
-  - canonical base head is a7baaa9c26f9a5a36eeca1887f35c7c55b13c032
-  - vendor/map-analysis/README.md pins CrystalServer 5e89bf8 and exactly 6031 client assets
-  - canonical world.otbm is gzip-wrapped by magic bytes and its decompressed node stream is structurally balanced
-  - authoritative RME framing uses FE start, FF end and FD escape
-  - focused node reader tests pass 6 of 6
-  - full canonical framing scan sees 25170978 nodes, maximum depth 7 and 135815603 payload bytes
-  - semantic parser strict scan covers 18997668 tiles across every Z level 0 through 15 with zero diagnostics
-  - Thais scan exactly matches 24311 tiles and 24292 ground items and independently locates AID 5555 and UID 65207
-  - canonical scan CLI output fingerprints world.otbm as 3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034
-  - pinned assets decode to 42107 object appearances and 4927 sprite sheets with 75623 referenced sprite IDs and zero missing catalog sprites
-  - Thais renders at 5152x4832 from vendored sprites with zero missing appearances and zero missing sprites
-  - a single canonical scan spools all 18997668 tiles into 3494 bounded 128x128 chunk files covering Z 0 through 15
-  - the canonical spool is 545977318 bytes and completed in 180.07 seconds
-  - canonical chunk z7/252_251 renders at 4096x4096 with 16384 tiles, 25205 render operations and zero missing appearances or sprites
-  - the static viewer implements pan, zoom, floor selection, coordinate display/jump and required overlay toggles without an external service
   - all 8 canonical spawn XML files parse strictly to 87565 monster and 1068 NPC records
   - canonical spawn coordinates use center-relative X/Y and absolute child Z; all 88633 canonical records agree with their group center Z
   - full factual scan finds 2311 AID records (736 unique), 597 UID records, 2406 teleports, 109744 house tiles, 4527 house doors, 33 towns and 18 waypoints
@@ -94,6 +79,7 @@ proven:
   - 995 canonical houses parse from world-house.xml
   - unchanged full-atlas cache verification completes in 19.418 seconds without rerendering chunks
   - viewer exposes relative floor labels -8 through +7 while preserving raw OTBM Z=0..15 in manifests and data
+  - render-mode runtime tests pass for URL precedence, persistence, state preservation, layer selection and bounded LRU
 derived:
   - semantic parsing must operate incrementally over node events to preserve bounded memory
   - current 77.074 second framing scan needs profiling before it can be accepted for repeated full runs
@@ -112,62 +98,18 @@ rejected_hypotheses:
   - canonical world.otbm is an uncompressed OTBM stream: file magic is gzip and decompressed framing validates
   - 44 missing Thais child items are repeated compact tile items: preserving repeated compact items did not change the canonical count
 changed_paths:
-  - tools/otbm_atlas/__init__.py
-  - tools/otbm_atlas/nodefile.py
-  - tools/otbm_atlas/tests/__init__.py
-  - tools/otbm_atlas/tests/test_nodefile.py
-  - tools/otbm_atlas/README.md
-  - tools/otbm_atlas/semantic.py
-  - tools/otbm_atlas/scan.py
-  - tools/otbm_atlas/tests/test_semantic.py
-  - tools/otbm_atlas/tests/test_scan.py
-  - tools/otbm_atlas/assets.py
-  - tools/otbm_atlas/render.py
-  - tools/otbm_atlas/tests/test_assets.py
-  - tools/otbm_atlas/tests/test_render.py
-  - tools/otbm_atlas/atlas.py
-  - tools/otbm_atlas/viewer.py
-  - tools/otbm_atlas/tests/test_atlas.py
-  - tools/otbm_atlas/tests/test_viewer.py
-  - tools/otbm_atlas/spawns.py
-  - tools/otbm_atlas/tests/test_spawns.py
-  - tools/otbm_atlas/mechanics.py
-  - tools/otbm_atlas/composition.py
-  - tools/otbm_atlas/tests/test_mechanics.py
-  - tools/otbm_atlas/tests/test_composition.py
-  - tools/otbm_atlas/houses.py
-  - tools/otbm_atlas/verify.py
-  - tools/otbm_atlas/tests/test_houses.py
-  - tools/otbm_atlas/tests/test_verify.py
+  - tools/otbm_atlas/**
   - docs/agents/tasks/active/OTH-20260813-full-otbm-atlas.md
 validation:
-  - command: python -m unittest discover -s tools/otbm_atlas/tests -v
+  - command: node --check tools/otbm_atlas/viewer_app.js; python -m unittest discover -s tools/otbm_atlas/tests -v
     result: PASS
-    evidence: 6 tests pass including gzip detection and malformed framing
-  - command: full iter_node_events scan of canonical world.otbm
-    result: PASS
-    evidence: balanced 25170978 start/data/end events; depth 7; 77.074 seconds
-  - command: python -m unittest discover -s tools/otbm_atlas/tests -v
-    result: PASS
-    evidence: 13 tests pass for framing, gzip, semantics, attributes, nesting, mechanics and provenance
-  - command: python -m tools.otbm_atlas.scan world.otbm --bounds 32280 32440 32155 32305 7
-    result: PASS
-    evidence: build/otbm-atlas/thais-scan.json; 24311 tiles, 24292 ground, 14993 decoded child items, zero diagnostics
-  - command: python -m unittest discover -s tools/otbm_atlas/tests -v
-    result: PASS
-    evidence: 17 tests pass including protobuf wire decoding, catalog layout, PNG and alpha compositing
-  - command: python -m tools.otbm_atlas.render world.otbm assets --bounds 32280 32440 32155 32305 7
-    result: PASS
-    evidence: build/otbm-atlas/thais.png and thais-render.json; 39285 operations, 863 appearances, 1002 sprites, zero missing
+    evidence: viewer syntax passes and 32 focused tests pass
   - command: spool_map canonical world.otbm with chunk size 128
     result: PASS
     evidence: 18997668 tiles, 3494 chunks, 545977318 bytes, Z 0 through 15, 180.07 seconds
   - command: render_tiles build/full-map-atlas/.spool/z7/252_251.bin
     result: PASS
     evidence: 4096x4096 PNG; 16384 tiles, 8821 child items, 25205 operations, zero missing, 10.966 seconds
-  - command: python -m unittest discover -s tools/otbm_atlas/tests -v
-    result: PASS
-    evidence: 22 tests pass including spool round-trip/corruption handling, spawn coordinate semantics, and static-viewer controls
   - command: python -m tools.otbm_atlas.spawns canonical-world build/full-map-atlas/data/spawns.json
     result: PASS
     evidence: 8 sources; 87565 monster and 1068 NPC spawns; 36182644-byte deterministic JSON index
@@ -197,5 +139,5 @@ validation:
     evidence: all return 200 with correct HTML JSON and image/png content types
 blockers:
   - none
-next_action: commit verification tooling, perform exact-head CI/PR checks, and complete browser E2E if the Chrome extension initialization blocker clears
+next_action: finish spatial overlay and URL-state UX, then generate and verify all full-world overview chunks
 ```

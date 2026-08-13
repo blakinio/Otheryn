@@ -3,13 +3,14 @@
 Repository-owned tooling for deterministic analysis and chunked rendering of the
 canonical CrystalServer world documented in `docs/maps/crystalserver-canonical-source.md`.
 
-## Delivery status
+## Architecture and provenance
 
-This directory is under phased implementation. The current verified component is
-the bounded-memory escaped node-stream reader in `nodefile.py`. It recognizes a
-gzip wrapper by magic bytes and reports structural corruption with byte offsets.
-It does not yet claim semantic OTBM decoding, asset decoding, rendering, atlas UI,
-overlay composition, or a completed full-map run.
+The pipeline incrementally parses the pinned gzip-wrapped OTBM, spools bounded
+128×128 world chunks, renders canonical detailed PNGs from the pinned 6031-file
+Tibia 15.25 asset subset, and derives lightweight overview PNGs by deterministic
+4× and 8× alpha-aware downsampling of those exact detailed pixels. All layers retain
+per-chunk SHA-256 checksums in the manifest. No external map geometry or imagery
+is used.
 
 Run its focused tests from the repository root:
 
@@ -66,6 +67,17 @@ gutter. This preserves 64×64 sprites and canonical displacement across chunk
 edges without allocating a full 4096×4096 canvas for sparse chunks. Workers use
 separate bounded renderers; manifest ordering remains deterministic.
 
+Render mode is URL-shareable (`render=auto|detailed|performance`) and persisted
+in localStorage; an explicit URL wins. Auto uses 8× overview below zoom 0.25,
+4× overview from 0.25 to native 1.0 scale, and canonical detail at or above 1.0.
+These boundaries follow the generated 4×/8× pixel densities and the canonical
+32-pixel native tile scale rather than an unmeasured performance claim. Detailed requests canonical detailed chunks at
+every zoom. Performance requests only overview chunks. Mode changes retain the
+view, floor, zoom, layers, and selected-marker state without reloading. Imagery
+uses a 128-entry/384 MiB approximate decoded-image LRU; spatial overlay data uses
+a 96-entry/32 MiB approximate LRU. Diagnostics are opt-in and report only actual
+state/load timings—never invented FPS.
+
 The atlas build also writes `data/mechanics.json` from the same OTBM pass and
 `data/spawns.json` from every canonical `*-monster.xml` and `*-npc.xml`. Spawn
 X/Y offsets are relative to their group center; the child `z` value is absolute,
@@ -77,6 +89,11 @@ overlays are listed separately. `data/mechanics-resolution.json` links literal
 AID/UID registrations and legacy literal UID dispatch tables to Lua scripts with
 `RESOLVED`, `AMBIGUOUS`, or `UNRESOLVED` status. Dynamic registrations stay
 explicitly `UNKNOWN`.
+Large factual overlay collections are additionally partitioned under
+`data/chunks/z<z>/<chunkX>_<chunkY>.json`; the browser requests only viewport
+chunks plus one 128-tile prefetch margin. `data/search-index.json` contains one
+compact factual navigation entry per unique category/label, while details come
+from the spatial records.
 `data/unknown-items.json` lists every server ID without a canonical appearance,
 including occurrence counts and source chunk bounds. These items remain visibly
 unresolved; the renderer never substitutes another sprite.

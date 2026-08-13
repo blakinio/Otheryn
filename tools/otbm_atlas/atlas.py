@@ -20,6 +20,8 @@ from .houses import parse_houses
 from .semantic import Item, Position, Tile, Town, Waypoint, iter_map_records, walk_items
 from .spawns import scan_spawns
 from .viewer import write_viewer
+from .overview import make_overview, OVERVIEW_FACTOR, LOW_OVERVIEW_FACTOR, OVERVIEW_VERSION
+from .spatial import write_spatial_data
 
 SPOOL_VERSION = 1
 ATLAS_VERSION = 2
@@ -219,7 +221,16 @@ def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int =
 		with ProcessPoolExecutor(max_workers=workers, initializer=_init_render_worker, initargs=(str(asset_dir),)) as executor:
 			futures = [None if job is None else executor.submit(_render_worker, job) for _metadata, job in entries]
 			for (metadata, _job), future in zip(entries, futures): chunks.append({**metadata, **({} if future is None else future.result())})
-	manifest = {"schemaVersion": ATLAS_VERSION, "chunkSize": chunk_size, "tilePixels": 32, "sources": expected, "chunks": chunks}
+	for chunk in chunks:
+		detailed_path = output / str(chunk["path"])
+		for prefix,directory,factor in (("overview","overview",OVERVIEW_FACTOR),("lowOverview","overview-low",LOW_OVERVIEW_FACTOR)):
+			overview_path=output/directory/f"z{chunk['z']}"/f"{chunk['chunkX']}_{chunk['chunkY']}.png";fingerprint=hashlib.sha256(f"{OVERVIEW_VERSION}:{factor}:{chunk['checksum']}".encode()).hexdigest();report_path=overview_path.with_suffix(".json")
+			report=json.loads(report_path.read_text()) if report_path.exists() else {}
+			if not (overview_path.exists() and report.get("fingerprint")==fingerprint and report.get("checksum")==_sha256(overview_path)):
+				payload=make_overview(detailed_path.read_bytes(),factor);overview_path.parent.mkdir(parents=True,exist_ok=True);temporary=overview_path.with_suffix(".png.tmp");temporary.write_bytes(payload);temporary.replace(overview_path)
+				report={"fingerprint":fingerprint,"checksum":hashlib.sha256(payload).hexdigest(),"imageWidth":int(chunk["imageWidth"])//factor,"imageHeight":int(chunk["imageHeight"])//factor};report_path.write_text(json.dumps(report,sort_keys=True)+"\n",encoding="utf-8")
+			chunk.update({f"{prefix}Path":overview_path.relative_to(output).as_posix(),f"{prefix}Checksum":report["checksum"],f"{prefix}ImageWidth":report["imageWidth"],f"{prefix}ImageHeight":report["imageHeight"]})
+	manifest = {"schemaVersion": ATLAS_VERSION, "chunkSize": chunk_size, "tilePixels": 32, "overviewFactor": OVERVIEW_FACTOR,"lowOverviewFactor":LOW_OVERVIEW_FACTOR, "overviewVersion": OVERVIEW_VERSION, "chunks": chunks, "sources": expected}
 	(output / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	data_dir = output / "data"; data_dir.mkdir(parents=True, exist_ok=True)
 	unknown_items: dict[int, dict[str, object]] = {}
@@ -248,6 +259,15 @@ def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int =
 		**spawns["statistics"], "mechanicsResolution": resolutions["statistics"], "unknownItems": unknown_report["statistics"],
 	}
 	(data_dir / "statistics.json").write_text(json.dumps(statistics, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+	resolution_by_key={(entry["kind"],int(entry["value"])):entry for entry in resolutions["resolutions"]}
+	action_records=[{**entry,"mechanics":resolution_by_key.get(("ActionID",int(entry["actionId"])),{"status":"UNKNOWN","candidates":[]})} for entry in mechanics["actionIds"]]
+	unique_records=[{**entry,"mechanics":resolution_by_key.get(("UniqueID",int(entry["uniqueId"])),{"status":"UNKNOWN","candidates":[]})} for entry in mechanics["uniqueIds"]]
+	spatial_statistics=write_spatial_data(output,chunk_size,{
+		**{key:mechanics[key] for key in ("teleports","houseTiles","houseDoors","towns","waypoints")},"actionIds":action_records,"uniqueIds":unique_records,
+		"monsterSpawns":spawns["monsterSpawns"],"npcSpawns":spawns["npcSpawns"],"houses":houses["houses"],
+	})
+	statistics["spatialData"]=spatial_statistics
+	(data_dir / "statistics.json").write_text(json.dumps(statistics, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	write_viewer(output)
 	return manifest
 
@@ -258,4 +278,3 @@ def main() -> int:
 
 
 if __name__ == "__main__": raise SystemExit(main())
-
