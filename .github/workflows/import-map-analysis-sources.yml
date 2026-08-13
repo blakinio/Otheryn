@@ -86,9 +86,23 @@ jobs:
           fi
           echo "$CATALOG_SHA256  $catalog" | sha256sum --check --strict
           rm -rf "repo/vendor/map-analysis/tibia-client/$ASSETS_VERSION"
-          mkdir -p "repo/vendor/map-analysis/tibia-client/$ASSETS_VERSION"
+          mkdir -p "repo/vendor/map-analysis/tibia-client/$ASSETS_VERSION/assets"
           cp "$manifest" "repo/vendor/map-analysis/tibia-client/$ASSETS_VERSION/assets.json"
-          cp -a "$source_root/assets" "repo/vendor/map-analysis/tibia-client/$ASSETS_VERSION/assets"
+          SOURCE_ROOT="$source_root" TARGET_ROOT="repo/vendor/map-analysis/tibia-client/$ASSETS_VERSION" python3 - <<'PY'
+          import json, os, pathlib, shutil
+          source = pathlib.Path(os.environ['SOURCE_ROOT'])
+          target = pathlib.Path(os.environ['TARGET_ROOT'])
+          manifest = json.loads((source / 'assets.json').read_text())
+          rows = [x for x in manifest['files'] if x.get('localfile','').startswith('assets/')]
+          for entry in rows:
+              rel = pathlib.Path(entry['localfile'])
+              src = source / rel
+              dst = target / rel
+              if not src.is_file(): raise RuntimeError(f'missing source asset: {rel}')
+              dst.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copyfile(src, dst)
+          print(f'copied {len(rows)} canonical asset files only')
+          PY
           ROOT="repo/vendor/map-analysis/tibia-client/$ASSETS_VERSION" python3 - <<'PY'
           import hashlib, json, os, pathlib
           root = pathlib.Path(os.environ['ROOT'])
@@ -139,7 +153,7 @@ jobs:
           - Exact 6031-entry asset-subset manifest SHA-256: $ASSETS_SUBSET_SHA256
           - Exact catalog-content SHA-256: $CATALOG_SHA256
 
-          The GitHub mirror is transport only. The asset-only manifest, every file hash and size, file count and total size are verified against the owner-provided package; the mirror's LF-normalized catalog is restored to the package's exact CRLF bytes before verification.
+          The GitHub mirror is transport only. Only the 6031 paths present in the owner-provided asset manifest are copied. The asset-only manifest, every file hash and size, file count and total size are verified; the mirror's LF-normalized catalog is restored to the package's exact CRLF bytes before verification.
           EOF
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
