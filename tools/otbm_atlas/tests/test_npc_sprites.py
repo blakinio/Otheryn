@@ -4,7 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from tools.otbm_atlas.npc_sprites import outfit_color, parse_npc_outfits
+from tools.otbm_atlas.npc_sprites import NpcOutfit, _enabled_y_patterns, _recolor_outfit_mask, outfit_color, parse_npc_outfits
 
 
 class NpcSpriteTests(unittest.TestCase):
@@ -21,6 +21,30 @@ class NpcSpriteTests(unittest.TestCase):
 		self.assertEqual(outfit_color(132), (128, 0, 0))
 		self.assertEqual(outfit_color(95), outfit_color(95))
 		self.assertEqual(outfit_color(133), (0, 0, 0))
+
+	def test_identical_visual_duplicate_keeps_deterministic_first_provenance(self) -> None:
+		with tempfile.TemporaryDirectory() as directory:
+			root = Path(directory); npc = root / "npc"; npc.mkdir()
+			body = 'local internalNpcName = "Guide"\nnpcConfig.outfit = { lookType = 128, lookHead = 1 }'
+			(npc / "a.lua").write_text(body, encoding="utf-8")
+			(npc / "b.lua").write_text(body, encoding="utf-8")
+			outfit = parse_npc_outfits(npc, root)["guide"]
+			self.assertEqual(outfit.source, "npc/a.lua")
+
+	def test_addon_bits_select_otclient_y_patterns(self) -> None:
+		self.assertEqual(_enabled_y_patterns(3, 0), (0,))
+		self.assertEqual(_enabled_y_patterns(3, 1), (0, 1))
+		self.assertEqual(_enabled_y_patterns(3, 2), (0, 2))
+		self.assertEqual(_enabled_y_patterns(3, 3), (0, 1, 2))
+
+	def test_mask_primary_colors_map_to_head_body_legs_feet(self) -> None:
+		outfit = NpcOutfit("Guide", 128, 1, 2, 3, 4, 0, "npc/guide.lua")
+		pixels = b"\xff\xff\x00\xff" + b"\xff\x00\x00\xff" + b"\x00\xff\x00\xff" + b"\x00\x00\xff\xff"
+		recolored = _recolor_outfit_mask(pixels, outfit)
+		self.assertEqual(recolored[0:3], bytes(outfit_color(outfit.head)))
+		self.assertEqual(recolored[4:7], bytes(outfit_color(outfit.body)))
+		self.assertEqual(recolored[8:11], bytes(outfit_color(outfit.legs)))
+		self.assertEqual(recolored[12:15], bytes(outfit_color(outfit.feet)))
 
 	def test_conflicting_same_name_is_left_unresolved(self) -> None:
 		with tempfile.TemporaryDirectory() as directory:

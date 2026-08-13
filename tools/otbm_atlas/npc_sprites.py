@@ -79,11 +79,11 @@ def parse_npc_outfits(npc_root: Path, source_root: Path | None = None) -> dict[s
 		key = outfit.name.casefold()
 		if key in ambiguous:
 			continue
-		if key in result and result[key] != outfit:
-			# A spawn record has only an NPC name, not a script path. Do not select
-			# an arbitrary appearance when that name maps to conflicting definitions.
+		if key in result and result[key].key != outfit.key:
+			# Provenance is not visual state. Only genuinely different visual outfits conflict.
 			result.pop(key); ambiguous.add(key); continue
-		result[key] = outfit
+		if key not in result:
+			result[key] = outfit
 	return result
 
 
@@ -96,6 +96,27 @@ def _blend(canvas: bytearray, source: bytes, width: int, height: int) -> None:
 		for channel in range(3):
 			canvas[index + channel] = (source[index + channel] * alpha + canvas[index + channel] * inverse + 127) // 255
 		canvas[index + 3] = alpha + (canvas[index + 3] * inverse + 127) // 255
+
+
+def _enabled_y_patterns(pattern_height: int, addons: int) -> tuple[int, ...]:
+	return tuple([0] + [value for value in range(1, pattern_height) if addons & (1 << (value - 1))])
+
+
+def _sprite_index(frame, layer: int, x_pattern: int, y_pattern: int, z_pattern: int, phase: int) -> int:
+	return ((((phase * frame.pattern_depth + z_pattern) * frame.pattern_height + y_pattern) * frame.pattern_width + x_pattern) * frame.layers + layer)
+
+
+def _recolor_outfit_mask(pixels: bytes, outfit: NpcOutfit) -> bytes:
+	# Pinned OTClient: yellow=head, red=body, green=legs, blue=feet.
+	fields = {(255, 255, 0): outfit.head, (255, 0, 0): outfit.body, (0, 255, 0): outfit.legs, (0, 0, 255): outfit.feet}
+	mask = bytearray(len(pixels))
+	for index in range(0, len(pixels), 4):
+		red, green, blue, alpha = pixels[index:index + 4]
+		if not alpha or (red, green, blue) not in fields:
+			continue
+		mask[index:index + 3] = bytes(outfit_color(fields[(red, green, blue)]))
+		mask[index + 3] = alpha
+	return bytes(mask)
 
 
 class NpcSpriteRenderer:
@@ -122,33 +143,37 @@ class NpcSpriteRenderer:
 		appearance: Appearance | None = self.appearances.get(outfit.look_type)
 		if appearance is None or not appearance.frames:
 			return None
-		frame = appearance.frames[0]  # Deterministic base frame; NPC definitions do not animate atlas markers.
-		layers: list[tuple[int, int, bytes]] = []
-		for layer in range(frame.layers):
-			# Direction 2 is the canonical south-facing static atlas pose.
-			index = (((2 % frame.pattern_width) * frame.layers) + layer)
-			if index >= len(frame.sprite_ids):
-				return None
-			decoded = self.sprite(frame.sprite_ids[index])
-			if decoded is None:
-				return None
-			layers.append(decoded)
-		width, height = layers[0][0], layers[0][1]
-		if any((item[0], item[1]) != (width, height) for item in layers):
+		frame = appearance.frames[0]
+		if not frame.sprite_ids:
 			return None
-		canvas = bytearray(width * height * 4)
-		_blend(canvas, layers[0][2], width, height)
-		colours = (outfit.head, outfit.body, outfit.legs, outfit.feet)
-		for _sprite_width, _sprite_height, pixels in layers[1:]:
-			mask = bytearray(pixels)
-			for index in range(0, len(mask), 4):
-				red, green, blue, alpha = mask[index:index + 4]
-				if not alpha:
-					continue
-				colour = colours[0] if red and not green and not blue else colours[1] if green and not red and not blue else colours[2] if blue and not red and not green else colours[3]
-				mask[index:index + 3] = bytes(outfit_color(colour))
-			_blend(canvas, bytes(mask), width, height)
+		x_pattern = 2 % frame.pattern_width  # deterministic south-facing atlas pose
+		z_pattern = 0
+		phase = frame.default_start_phase % frame.animation_phases
+		canvas = None; width = height = 0
+		for y_pattern in _enabled_y_patterns(frame.pattern_height, outfit.addons):
+			base_index = _sprite_index(frame, 0, x_pattern, y_pattern, z_pattern, phase)
+			if base_index >= len(frame.sprite_ids):
+				return None
+			base = self.sprite(frame.sprite_ids[base_index])
+			if base is None:
+				return None
+			if canvas is None:
+				width, height = base[0], base[1]; canvas = bytearray(width * height * 4)
+			elif (base[0], base[1]) != (width, height):
+				return None
+			_blend(canvas, base[2], width, height)
+			if frame.layers > 1:
+				mask_index = _sprite_index(frame, 1, x_pattern, y_pattern, z_pattern, phase)
+				if mask_index >= len(frame.sprite_ids):
+					return None
+				mask = self.sprite(frame.sprite_ids[mask_index])
+				if mask is None or (mask[0], mask[1]) != (width, height):
+					return None
+				_blend(canvas, _recolor_outfit_mask(mask[2], outfit), width, height)
+		if canvas is None:
+			return None
 		return encode_png(width, height, bytes(canvas))
+
 
 
 def enrich_npc_spawns(asset_dir: Path, scripts_dir: Path, output: Path, records: list[dict[str, object]]) -> dict[str, int]:
