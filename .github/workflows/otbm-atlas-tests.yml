@@ -94,6 +94,7 @@ jobs:
             --report "$root/render.json"
           python3 - <<'PY'
           import json
+          import shutil
           from pathlib import Path
           from tools.otbm_atlas.spawns import scan_spawns
           from tools.otbm_atlas.viewer import write_viewer
