@@ -1,0 +1,68 @@
+---
+name: OTBM Atlas NPC Review Repair
+
+on:
+  push:
+    branches:
+      - agent/oth-20260813-full-otbm-atlas-current-main
+    paths:
+      - .github/workflows/otbm-atlas-npc-review-repair.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          ref: agent/oth-20260813-full-otbm-atlas-current-main
+          fetch-depth: 0
+      - name: Apply exact NPC semantics repairs
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('tools/otbm_atlas/npc_sprites.py')
+          text = path.read_text(encoding='utf-8')
+          old = '''\t\tif key in result and result[key] != outfit:\n\t\t\t# A spawn record has only an NPC name, not a script path. Do not select\n\t\t\t# an arbitrary appearance when that name maps to conflicting definitions.\n\t\t\tresult.pop(key); ambiguous.add(key); continue\n\t\tresult[key] = outfit\n'''
+          new = '''\t\tif key in result and result[key].key != outfit.key:\n\t\t\t# Provenance is not visual state. Only genuinely different visual outfits conflict.\n\t\t\tresult.pop(key); ambiguous.add(key); continue\n\t\tif key not in result:\n\t\t\tresult[key] = outfit\n'''
+          if text.count(old) != 1:
+              raise SystemExit('duplicate-outfit block drifted')
+          text = text.replace(old, new, 1)
+
+          class_marker = '\n\nclass NpcSpriteRenderer:'
+          helpers = '''\n\ndef _enabled_y_patterns(pattern_height: int, addons: int) -> tuple[int, ...]:\n\treturn tuple([0] + [value for value in range(1, pattern_height) if addons & (1 << (value - 1))])\n\n\ndef _sprite_index(frame, layer: int, x_pattern: int, y_pattern: int, z_pattern: int, phase: int) -> int:\n\treturn ((((phase * frame.pattern_depth + z_pattern) * frame.pattern_height + y_pattern) * frame.pattern_width + x_pattern) * frame.layers + layer)\n\n\ndef _recolor_outfit_mask(pixels: bytes, outfit: NpcOutfit) -> bytes:\n\t# Pinned OTClient: yellow=head, red=body, green=legs, blue=feet.\n\tfields = {(255, 255, 0): outfit.head, (255, 0, 0): outfit.body, (0, 255, 0): outfit.legs, (0, 0, 255): outfit.feet}\n\tmask = bytearray(len(pixels))\n\tfor index in range(0, len(pixels), 4):\n\t\tred, green, blue, alpha = pixels[index:index + 4]\n\t\tif not alpha or (red, green, blue) not in fields:\n\t\t\tcontinue\n\t\tmask[index:index + 3] = bytes(outfit_color(fields[(red, green, blue)]))\n\t\tmask[index + 3] = alpha\n\treturn bytes(mask)\n'''
+          if text.count(class_marker) != 1:
+              raise SystemExit('renderer class marker drifted')
+          text = text.replace(class_marker, helpers + class_marker, 1)
+
+          start = text.index('\tdef render(self, outfit: NpcOutfit) -> bytes | None:\n')
+          end = text.index('\n\n\ndef enrich_npc_spawns', start)
+          method = '''\tdef render(self, outfit: NpcOutfit) -> bytes | None:\n\t\tappearance: Appearance | None = self.appearances.get(outfit.look_type)\n\t\tif appearance is None or not appearance.frames:\n\t\t\treturn None\n\t\tframe = appearance.frames[0]\n\t\tif not frame.sprite_ids:\n\t\t\treturn None\n\t\tx_pattern = 2 % frame.pattern_width  # deterministic south-facing atlas pose\n\t\tz_pattern = 0\n\t\tphase = frame.default_start_phase % frame.animation_phases\n\t\tcanvas = None; width = height = 0\n\t\tfor y_pattern in _enabled_y_patterns(frame.pattern_height, outfit.addons):\n\t\t\tbase_index = _sprite_index(frame, 0, x_pattern, y_pattern, z_pattern, phase)\n\t\t\tif base_index >= len(frame.sprite_ids):\n\t\t\t\treturn None\n\t\t\tbase = self.sprite(frame.sprite_ids[base_index])\n\t\t\tif base is None:\n\t\t\t\treturn None\n\t\t\tif canvas is None:\n\t\t\t\twidth, height = base[0], base[1]; canvas = bytearray(width * height * 4)\n\t\t\telif (base[0], base[1]) != (width, height):\n\t\t\t\treturn None\n\t\t\t_blend(canvas, base[2], width, height)\n\t\t\tif frame.layers > 1:\n\t\t\t\tmask_index = _sprite_index(frame, 1, x_pattern, y_pattern, z_pattern, phase)\n\t\t\t\tif mask_index >= len(frame.sprite_ids):\n\t\t\t\t\treturn None\n\t\t\t\tmask = self.sprite(frame.sprite_ids[mask_index])\n\t\t\t\tif mask is None or (mask[0], mask[1]) != (width, height):\n\t\t\t\t\treturn None\n\t\t\t\t_blend(canvas, _recolor_outfit_mask(mask[2], outfit), width, height)\n\t\tif canvas is None:\n\t\t\treturn None\n\t\treturn encode_png(width, height, bytes(canvas))\n'''
+          text = text[:start] + method + text[end:]
+          path.write_text(text, encoding='utf-8')
+
+          test = Path('tools/otbm_atlas/tests/test_npc_sprites.py')
+          content = test.read_text(encoding='utf-8')
+          content = content.replace('from tools.otbm_atlas.npc_sprites import outfit_color, parse_npc_outfits', 'from tools.otbm_atlas.npc_sprites import NpcOutfit, _enabled_y_patterns, _recolor_outfit_mask, outfit_color, parse_npc_outfits')
+          marker = '\tdef test_conflicting_same_name_is_left_unresolved(self) -> None:\n'
+          additions = '''\tdef test_identical_visual_duplicate_keeps_deterministic_first_provenance(self) -> None:\n\t\twith tempfile.TemporaryDirectory() as directory:\n\t\t\troot = Path(directory); npc = root / "npc"; npc.mkdir()\n\t\t\tbody = 'local internalNpcName = "Guide"\\nnpcConfig.outfit = { lookType = 128, lookHead = 1 }'\n\t\t\t(npc / "a.lua").write_text(body, encoding="utf-8")\n\t\t\t(npc / "b.lua").write_text(body, encoding="utf-8")\n\t\t\toutfit = parse_npc_outfits(npc, root)["guide"]\n\t\t\tself.assertEqual(outfit.source, "npc/a.lua")\n\n\tdef test_addon_bits_select_otclient_y_patterns(self) -> None:\n\t\tself.assertEqual(_enabled_y_patterns(3, 0), (0,))\n\t\tself.assertEqual(_enabled_y_patterns(3, 1), (0, 1))\n\t\tself.assertEqual(_enabled_y_patterns(3, 2), (0, 2))\n\t\tself.assertEqual(_enabled_y_patterns(3, 3), (0, 1, 2))\n\n\tdef test_mask_primary_colors_map_to_head_body_legs_feet(self) -> None:\n\t\toutfit = NpcOutfit("Guide", 128, 1, 2, 3, 4, 0, "npc/guide.lua")\n\t\tpixels = b"\\xff\\xff\\x00\\xff" + b"\\xff\\x00\\x00\\xff" + b"\\x00\\xff\\x00\\xff" + b"\\x00\\x00\\xff\\xff"\n\t\trecolored = _recolor_outfit_mask(pixels, outfit)\n\t\tself.assertEqual(recolored[0:3], bytes(outfit_color(outfit.head)))\n\t\tself.assertEqual(recolored[4:7], bytes(outfit_color(outfit.body)))\n\t\tself.assertEqual(recolored[8:11], bytes(outfit_color(outfit.legs)))\n\t\tself.assertEqual(recolored[12:15], bytes(outfit_color(outfit.feet)))\n\n'''
+          if content.count(marker) != 1:
+              raise SystemExit('NPC test marker drifted')
+          test.write_text(content.replace(marker, additions + marker, 1), encoding='utf-8')
+          PY
+      - name: Validate repair
+        run: |
+          git diff --check
+          python3 -m unittest tools.otbm_atlas.tests.test_npc_sprites -v
+          python3 -m unittest discover -s tools/otbm_atlas/tests -p 'test_*.py' -v
+      - name: Commit validated repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/otbm-atlas-npc-review-repair.yml
+          git add tools/otbm_atlas/npc_sprites.py tools/otbm_atlas/tests/test_npc_sprites.py
+          git commit -m "fix(atlas): correct canonical NPC outfit rendering"
+          git push origin HEAD:agent/oth-20260813-full-otbm-atlas-current-main
