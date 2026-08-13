@@ -23,6 +23,7 @@ jobs:
       ASSETS_COUNT: '6031'
       ASSETS_TOTAL_SIZE: '124591048'
       CATALOG_SHA256: 93ea5888174ef44b352d7c2b1f8061573a4a260bfaba4b7ec32ea836b9e411ab
+      CATALOG_LF_SHA256: c57d70ba4f7e2cfb3bbb85c96572cf56854d71001f920f1e50c91b4e91748829
       MIRROR_URL: https://github.com/dudantas/tibia-client/releases/download/15.25.0a00a0/tibia-client-15.25.0a00a0.zip
     steps:
       - name: Checkout task branch without third-party actions
@@ -65,14 +66,25 @@ jobs:
           digest = hashlib.sha256(blob).hexdigest()
           print('asset subset count:', len(rows))
           print('asset subset sha256:', digest)
-          if len(rows) != int(os.environ['ASSETS_COUNT']):
-              raise SystemExit('asset subset count mismatch')
-          if digest != os.environ['ASSETS_SUBSET_SHA256']:
-              raise SystemExit('asset subset manifest mismatch')
+          if len(rows) != int(os.environ['ASSETS_COUNT']): raise SystemExit('asset subset count mismatch')
+          if digest != os.environ['ASSETS_SUBSET_SHA256']: raise SystemExit('asset subset manifest mismatch')
           PY
-          echo "$CATALOG_SHA256  $source_root/assets/catalog-content.json" | sha256sum --check --strict
-          actual_size="$(find "$source_root/assets" -type f -printf '%s\n' | awk '{s+=$1} END {print s+0}')"
-          test "$actual_size" = "$ASSETS_TOTAL_SIZE"
+          catalog="$source_root/assets/catalog-content.json"
+          catalog_actual="$(sha256sum "$catalog" | awk '{print $1}')"
+          echo "catalog transport sha256: $catalog_actual"
+          if [ "$catalog_actual" = "$CATALOG_LF_SHA256" ]; then
+            CATALOG="$catalog" python3 - <<'PY'
+          import os, pathlib
+          p = pathlib.Path(os.environ['CATALOG'])
+          data = p.read_bytes()
+          if b'\r\n' in data: raise SystemExit('expected LF-only transport catalog')
+          p.write_bytes(data.replace(b'\n', b'\r\n'))
+          PY
+          elif [ "$catalog_actual" != "$CATALOG_SHA256" ]; then
+            echo "unexpected catalog representation" >&2
+            exit 1
+          fi
+          echo "$CATALOG_SHA256  $catalog" | sha256sum --check --strict
           rm -rf "repo/vendor/map-analysis/tibia-client/$ASSETS_VERSION"
           mkdir -p "repo/vendor/map-analysis/tibia-client/$ASSETS_VERSION"
           cp "$manifest" "repo/vendor/map-analysis/tibia-client/$ASSETS_VERSION/assets.json"
@@ -87,14 +99,26 @@ jobs:
               with path.open('rb') as f:
                   for chunk in iter(lambda:f.read(1024*1024), b''): h.update(chunk)
               return h.hexdigest()
+          mismatches=[]
           for entry in rows:
               p = root / entry['localfile']
-              if not p.is_file(): raise RuntimeError(f"missing {entry['localfile']}")
+              if not p.is_file():
+                  mismatches.append((entry['localfile'],'missing'))
+                  continue
               expected = entry.get('unpackedhash') if entry.get('unpack', True) else entry.get('packedhash')
-              if expected and sha(p) != expected: raise RuntimeError(f"hash mismatch {entry['localfile']}")
+              actual=sha(p)
               size = entry.get('unpackedsize') if entry.get('unpack', True) else entry.get('packedsize')
-              if size is not None and p.stat().st_size != size: raise RuntimeError(f"size mismatch {entry['localfile']}")
-          print(f'verified {len(rows)} exact assets')
+              if expected and actual != expected: mismatches.append((entry['localfile'],f'hash {actual} != {expected}'))
+              if size is not None and p.stat().st_size != size: mismatches.append((entry['localfile'],f'size {p.stat().st_size} != {size}'))
+          actual_count=sum(1 for p in (root/'assets').rglob('*') if p.is_file())
+          actual_size=sum(p.stat().st_size for p in (root/'assets').rglob('*') if p.is_file())
+          print('asset files:', actual_count, 'bytes:', actual_size, 'mismatches:', len(mismatches))
+          if actual_count != int(os.environ['ASSETS_COUNT']): raise RuntimeError('asset count mismatch')
+          if actual_size != int(os.environ['ASSETS_TOTAL_SIZE']): raise RuntimeError('asset total size mismatch')
+          if mismatches:
+              for row in mismatches[:100]: print('MISMATCH', row)
+              raise RuntimeError(f'{len(mismatches)} asset mismatches')
+          print(f'verified {len(rows)} exact assets byte-for-byte')
           PY
 
       - name: Record provenance and commit imported data
@@ -115,7 +139,7 @@ jobs:
           - Exact 6031-entry asset-subset manifest SHA-256: $ASSETS_SUBSET_SHA256
           - Exact catalog-content SHA-256: $CATALOG_SHA256
 
-          The GitHub mirror is transport only; its assets are accepted only when the asset-only manifest, catalog, file hashes, sizes, count and total size match the owner-provided package.
+          The GitHub mirror is transport only. The asset-only manifest, every file hash and size, file count and total size are verified against the owner-provided package; the mirror's LF-normalized catalog is restored to the package's exact CRLF bytes before verification.
           EOF
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
