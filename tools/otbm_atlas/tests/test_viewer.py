@@ -11,8 +11,17 @@ class ViewerTests(unittest.TestCase):
 	def test_static_viewer_exposes_navigation_and_required_overlays(self) -> None:
 		with tempfile.TemporaryDirectory() as directory:
 			text = write_viewer(directory).read_text(encoding="utf-8")
-		for marker in ("manifest.json", "data/mechanics.json", "actionIds", "uniqueIds", "teleports", "houseDoors", "monsterSpawns", "npcSpawns", "Jump"):
+			self.assertTrue((Path(directory) / "viewer-runtime.js").is_file())
+			self.assertTrue((Path(directory) / "viewer-app.js").is_file())
+		for marker in ("actionIds", "uniqueIds", "teleports", "houseDoors", "monsterSpawns", "npcSpawns", "Jump", "Search world", "details", "tooltip", "X,Y,Z"):
 			self.assertIn(marker, text)
+		for marker in ("Render mode", "Auto", "Detailed", "Performance", "Diagnostics"):
+			self.assertIn(marker, text)
+		self.assertIn('min="-8" max="7"', text)
+		app=(Path(__file__).parents[1]/"viewer_app.js").read_text(encoding="utf-8")
+		self.assertIn("Number.isInteger(requestedFloor)",app)
+		self.assertIn("parseCoordinateSearch",app)
+		self.assertIn("showTooltip",app)
 
 
 if __name__ == "__main__": unittest.main()

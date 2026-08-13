@@ -16,9 +16,12 @@ from typing import BinaryIO, Iterator
 from .render import AssetRenderer, render_tiles
 from .mechanics import resolve_mechanics
 from .composition import classify_maps
+from .houses import parse_houses
 from .semantic import Item, Position, Tile, Town, Waypoint, iter_map_records, walk_items
 from .spawns import scan_spawns
 from .viewer import write_viewer
+from .overview import make_overview, OVERVIEW_FACTOR, LOW_OVERVIEW_FACTOR, OVERVIEW_VERSION
+from .spatial import write_spatial_data
 
 SPOOL_VERSION = 1
 ATLAS_VERSION = 2
@@ -218,14 +221,54 @@ def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int =
 		with ProcessPoolExecutor(max_workers=workers, initializer=_init_render_worker, initargs=(str(asset_dir),)) as executor:
 			futures = [None if job is None else executor.submit(_render_worker, job) for _metadata, job in entries]
 			for (metadata, _job), future in zip(entries, futures): chunks.append({**metadata, **({} if future is None else future.result())})
-	manifest = {"schemaVersion": ATLAS_VERSION, "chunkSize": chunk_size, "tilePixels": 32, "sources": expected, "chunks": chunks}
+	for chunk in chunks:
+		detailed_path = output / str(chunk["path"])
+		for prefix,directory,factor in (("overview","overview",OVERVIEW_FACTOR),("lowOverview","overview-low",LOW_OVERVIEW_FACTOR)):
+			overview_path=output/directory/f"z{chunk['z']}"/f"{chunk['chunkX']}_{chunk['chunkY']}.png";fingerprint=hashlib.sha256(f"{OVERVIEW_VERSION}:{factor}:{chunk['checksum']}".encode()).hexdigest();report_path=overview_path.with_suffix(".json")
+			report=json.loads(report_path.read_text()) if report_path.exists() else {}
+			if not (overview_path.exists() and report.get("fingerprint")==fingerprint and report.get("checksum")==_sha256(overview_path)):
+				payload=make_overview(detailed_path.read_bytes(),factor);overview_path.parent.mkdir(parents=True,exist_ok=True);temporary=overview_path.with_suffix(".png.tmp");temporary.write_bytes(payload);temporary.replace(overview_path)
+				report={"fingerprint":fingerprint,"checksum":hashlib.sha256(payload).hexdigest(),"imageWidth":int(chunk["imageWidth"])//factor,"imageHeight":int(chunk["imageHeight"])//factor};report_path.write_text(json.dumps(report,sort_keys=True)+"\n",encoding="utf-8")
+			chunk.update({f"{prefix}Path":overview_path.relative_to(output).as_posix(),f"{prefix}Checksum":report["checksum"],f"{prefix}ImageWidth":report["imageWidth"],f"{prefix}ImageHeight":report["imageHeight"]})
+	manifest = {"schemaVersion": ATLAS_VERSION, "chunkSize": chunk_size, "tilePixels": 32, "overviewFactor": OVERVIEW_FACTOR,"lowOverviewFactor":LOW_OVERVIEW_FACTOR, "overviewVersion": OVERVIEW_VERSION, "chunks": chunks, "sources": expected}
 	(output / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	data_dir = output / "data"; data_dir.mkdir(parents=True, exist_ok=True)
+	unknown_items: dict[int, dict[str, object]] = {}
+	for chunk in chunks:
+		for server_id, occurrences in chunk.get("missingAppearances", {}).items():
+			value = unknown_items.setdefault(int(server_id), {"serverId": int(server_id), "occurrences": 0, "chunks": []})
+			value["occurrences"] = int(value["occurrences"]) + int(occurrences)
+			value["chunks"].append({"z": chunk["z"], "chunkX": chunk["chunkX"], "chunkY": chunk["chunkY"], "logicalBounds": chunk["logicalBounds"]})
+	unknown_report = {"schemaVersion": 1, "items": list(unknown_items.values()), "statistics": {"uniqueServerIds": len(unknown_items), "occurrences": sum(int(value["occurrences"]) for value in unknown_items.values())}}
+	(data_dir / "unknown-items.json").write_text(json.dumps(unknown_report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	shutil.copyfile(spool_dir / "facts.json", data_dir / "mechanics.json")
 	(data_dir / "spawns.json").write_text(json.dumps(scan_spawns(map_path.parent), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+	(data_dir / "houses.json").write_text(json.dumps(parse_houses(map_path.parent / "world-house.xml"), indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	mechanics = json.loads((spool_dir / "facts.json").read_text(encoding="utf-8"))
 	(data_dir / "mechanics-resolution.json").write_text(json.dumps(resolve_mechanics(mechanics, scripts_dir), indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	(data_dir / "composition.json").write_text(json.dumps(classify_maps(map_path.parent, repository_root), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+	spawns = json.loads((data_dir / "spawns.json").read_text(encoding="utf-8")); resolutions = json.loads((data_dir / "mechanics-resolution.json").read_text(encoding="utf-8")); houses = json.loads((data_dir / "houses.json").read_text(encoding="utf-8"))
+	statistics = {
+		"schemaVersion": 1, "chunks": len(chunks), "populatedFloors": sorted({int(chunk["z"]) for chunk in chunks}),
+		"tiles": sum(int(chunk["tiles"]) for chunk in chunks), "groundItems": sum(int(chunk["groundItems"]) for chunk in chunks),
+		"childItems": sum(int(chunk["childItems"]) for chunk in chunks), "renderOperations": sum(int(chunk["renderOperations"]) for chunk in chunks),
+		"actionIdRecords": len(mechanics["actionIds"]), "uniqueActionIds": len({entry["actionId"] for entry in mechanics["actionIds"]}),
+		"uniqueIdRecords": len(mechanics["uniqueIds"]), "uniqueUniqueIds": len({entry["uniqueId"] for entry in mechanics["uniqueIds"]}),
+		"teleports": len(mechanics["teleports"]), "houseTiles": len(mechanics["houseTiles"]), "houseDoors": len(mechanics["houseDoors"]),
+		"houses": houses["statistics"]["houses"], "towns": len(mechanics["towns"]), "waypoints": len(mechanics["waypoints"]),
+		**spawns["statistics"], "mechanicsResolution": resolutions["statistics"], "unknownItems": unknown_report["statistics"],
+	}
+	(data_dir / "statistics.json").write_text(json.dumps(statistics, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+	resolution_by_key={(entry["kind"],int(entry["value"])):entry for entry in resolutions["resolutions"]}
+	action_records=[{**entry,"mechanics":resolution_by_key.get(("ActionID",int(entry["actionId"])),{"status":"UNKNOWN","candidates":[]})} for entry in mechanics["actionIds"]]
+	unique_records=[{**entry,"mechanics":resolution_by_key.get(("UniqueID",int(entry["uniqueId"])),{"status":"UNKNOWN","candidates":[]})} for entry in mechanics["uniqueIds"]]
+	spatial_statistics=write_spatial_data(output,chunk_size,{
+		**{key:mechanics[key] for key in ("teleports","houseTiles","houseDoors","towns","waypoints")},"actionIds":action_records,"uniqueIds":unique_records,
+		"mechanics":action_records+unique_records,
+		"monsterSpawns":spawns["monsterSpawns"],"npcSpawns":spawns["npcSpawns"],"houses":houses["houses"],
+	})
+	statistics["spatialData"]=spatial_statistics
+	(data_dir / "statistics.json").write_text(json.dumps(statistics, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	write_viewer(output)
 	return manifest
 
