@@ -22,6 +22,7 @@ from .spawns import scan_spawns
 from .viewer import write_viewer
 from .overview import make_overview, OVERVIEW_FACTOR, LOW_OVERVIEW_FACTOR, OVERVIEW_VERSION
 from .spatial import write_spatial_data
+from .npc_sprites import enrich_npc_spawns
 
 SPOOL_VERSION = 1
 ATLAS_VERSION = 2
@@ -242,7 +243,9 @@ def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int =
 	unknown_report = {"schemaVersion": 1, "items": list(unknown_items.values()), "statistics": {"uniqueServerIds": len(unknown_items), "occurrences": sum(int(value["occurrences"]) for value in unknown_items.values())}}
 	(data_dir / "unknown-items.json").write_text(json.dumps(unknown_report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	shutil.copyfile(spool_dir / "facts.json", data_dir / "mechanics.json")
-	(data_dir / "spawns.json").write_text(json.dumps(scan_spawns(map_path.parent), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+	spawns_report = scan_spawns(map_path.parent)
+	npc_sprite_statistics = enrich_npc_spawns(asset_dir, scripts_dir, output, spawns_report["npcSpawns"])
+	(data_dir / "spawns.json").write_text(json.dumps(spawns_report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	(data_dir / "houses.json").write_text(json.dumps(parse_houses(map_path.parent / "world-house.xml"), indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	mechanics = json.loads((spool_dir / "facts.json").read_text(encoding="utf-8"))
 	(data_dir / "mechanics-resolution.json").write_text(json.dumps(resolve_mechanics(mechanics, scripts_dir), indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -256,7 +259,7 @@ def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int =
 		"uniqueIdRecords": len(mechanics["uniqueIds"]), "uniqueUniqueIds": len({entry["uniqueId"] for entry in mechanics["uniqueIds"]}),
 		"teleports": len(mechanics["teleports"]), "houseTiles": len(mechanics["houseTiles"]), "houseDoors": len(mechanics["houseDoors"]),
 		"houses": houses["statistics"]["houses"], "towns": len(mechanics["towns"]), "waypoints": len(mechanics["waypoints"]),
-		**spawns["statistics"], "mechanicsResolution": resolutions["statistics"], "unknownItems": unknown_report["statistics"],
+		**spawns["statistics"], "npcSprites": npc_sprite_statistics, "mechanicsResolution": resolutions["statistics"], "unknownItems": unknown_report["statistics"],
 	}
 	(data_dir / "statistics.json").write_text(json.dumps(statistics, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	resolution_by_key={(entry["kind"],int(entry["value"])):entry for entry in resolutions["resolutions"]}

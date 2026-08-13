@@ -59,7 +59,13 @@ python -m http.server 8000 --directory build/full-map-atlas
 The first pass spools each tile once into bounded per-chunk binary files. Chunk
 reports retain source/spool fingerprints and PNG checksums; matching chunks are
 reused on subsequent runs. The viewer supports pan, zoom, floor selection,
-coordinate display/jump, and factual mechanics/spawn overlay toggles.
+coordinate display/jump, and factual mechanics/spawn overlay toggles. NPC markers
+use the configured canonical creature outfit from `data-otservbr-global/npc` and
+the pinned Tibia 15.25 creature appearances. At zoom below 0.45 they deliberately
+remain lightweight dots; an NPC without a decodable explicit `lookType` also stays
+a dot rather than receiving an invented image. Outfit PNGs are deduplicated by
+look type/colours/addons under `data/npc-sprites/` and loaded lazily through the
+existing bounded image LRU cache.
 Viewer floor labels are relative to the Tibia surface: raw OTBM Z=7 is floor 0,
 Z=0 is +7, and Z=15 is -8. Manifests and factual coordinates retain raw Z.
 Chunks are cropped to their populated bounds plus a conservative two-tile sprite

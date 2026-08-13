@@ -3,7 +3,7 @@ from __future__ import annotations
 import struct
 import unittest
 
-from tools.otbm_atlas.assets import SpriteSheet, encode_png, extract_sprite, load_object_appearances
+from tools.otbm_atlas.assets import SpriteSheet, encode_png, extract_sprite, load_creature_appearances, load_object_appearances
 from tools.otbm_atlas.tests.test_semantic import string
 
 
@@ -43,6 +43,15 @@ class AssetTests(unittest.TestCase):
 		self.assertEqual(decoded.frames[0].sprite_ids, (123,))
 		self.assertEqual((decoded.frames[0].pattern_width, decoded.frames[0].pattern_height), (2, 1))
 		self.assertEqual(decoded.frames[0].default_start_phase, 0)
+
+	def test_creature_appearance_loader_uses_creature_category(self) -> None:
+		appearance = varint(1 << 3) + varint(138)
+		root = field(2, appearance)
+		import tempfile
+		from pathlib import Path
+		with tempfile.TemporaryDirectory() as directory:
+			path = Path(directory, "appearances.dat"); path.write_bytes(root)
+			self.assertEqual(set(load_creature_appearances(path)), {138})
 
 	def test_extract_sprite_uses_catalog_layout_grid(self) -> None:
 		pixels = bytearray(384 * 384 * 4)

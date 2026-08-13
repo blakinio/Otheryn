@@ -22,6 +22,8 @@ class ViewerTests(unittest.TestCase):
 		self.assertIn("Number.isInteger(requestedFloor)",app)
 		self.assertIn("parseCoordinateSearch",app)
 		self.assertIn("showTooltip",app)
+		self.assertIn("drawNpcSprite",app)
+		self.assertIn("record.sprite",app)
 
 
 if __name__ == "__main__": unittest.main()
