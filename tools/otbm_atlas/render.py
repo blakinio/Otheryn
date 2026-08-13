@@ -23,7 +23,7 @@ class RenderStats:
 
 _MODERN_FLUID_COLORS=(0,1,7,3,3,2,4,3,5,6,7,2,5,3,5,6,3,3,8,10,9)
 
-def _item_patterns(appearance:Appearance,frame:SpriteInfo,item:Item,x:int,y:int,z:int)->tuple[int,int,int]:
+def _item_patterns(appearance:Appearance,frame:SpriteInfo,item:Item,x:int,y:int,z:int,hook_south:bool=False,hook_east:bool=False)->tuple[int,int,int]:
 	px=x%frame.pattern_width;py=y%frame.pattern_height;pz=z%frame.pattern_depth
 	if appearance.stackable and frame.pattern_width==4 and frame.pattern_height==2:
 		count=item.subtype or 0
@@ -34,6 +34,9 @@ def _item_patterns(appearance:Appearance,frame:SpriteInfo,item:Item,x:int,y:int,
 		elif count<50:px,py=2,1
 		else:px,py=3,1
 		pz=0
+	elif appearance.hangable:
+		px=1 if hook_south and frame.pattern_width>=2 else 2 if hook_east and frame.pattern_width>=3 else 0
+		py=pz=0
 	elif appearance.splash or appearance.fluid_container:
 		subtype=item.subtype or 0;color=_MODERN_FLUID_COLORS[subtype] if 0<=subtype<len(_MODERN_FLUID_COLORS) else 0
 		px=(color%4)%frame.pattern_width;py=(color//4)%frame.pattern_height;pz=0
@@ -84,11 +87,11 @@ class AssetRenderer:
 		self.sprite_cache[sprite_id] = result
 		return result
 
-	def item_sprites(self,item:Item,position_x:int,position_y:int,position_z:int)->Iterator[tuple[Appearance,int,tuple[int,int,bytes]]]:
+	def item_sprites(self,item:Item,position_x:int,position_y:int,position_z:int,hook_south:bool=False,hook_east:bool=False)->Iterator[tuple[Appearance,int,tuple[int,int,bytes]]]:
 		appearance=self.appearances.get(item.server_id);self.appearance_ids.add(item.server_id)
 		if appearance is None or not appearance.frames:
 			self.missing_appearances[item.server_id]+=1;return
-		frame=appearance.frames[0];px,py,pz=_item_patterns(appearance,frame,item,position_x,position_y,position_z);phase=frame.default_start_phase%frame.animation_phases
+		frame=appearance.frames[0];px,py,pz=_item_patterns(appearance,frame,item,position_x,position_y,position_z,hook_south,hook_east);phase=frame.default_start_phase%frame.animation_phases
 		for layer in range(frame.layers):
 			index=((((phase*frame.pattern_depth+pz)*frame.pattern_height+py)*frame.pattern_width+px)*frame.layers+layer)
 			if index>=len(frame.sprite_ids):self.missing_sprites[-item.server_id]+=1;continue
@@ -114,9 +117,15 @@ def render_tiles(tiles: Iterator[Tile], renderer: AssetRenderer, bounds: tuple[i
 		stats.child_items += sum(1 for _item in walk_items(tile.items))
 		# Item child nodes below top-level tile items are container contents, not visible map stack entries.
 		items.extend(tile.items)
+		hook_south=hook_east=False
+		for visible_item in items:
+			visible_appearance=renderer.appearances.get(visible_item.server_id)
+			if visible_appearance is not None:
+				hook_south=hook_south or visible_appearance.hook_direction==1
+				hook_east=hook_east or visible_appearance.hook_direction==2
 		for item in items:
 			appearance_ids.add(item.server_id)
-			for appearance, _sprite_id, (sprite_width, sprite_height, pixels) in renderer.item_sprites(item, tile.position.x, tile.position.y, tile.position.z):
+			for appearance, _sprite_id, (sprite_width, sprite_height, pixels) in renderer.item_sprites(item, tile.position.x, tile.position.y, tile.position.z, hook_south, hook_east):
 				sprite_ids.add(_sprite_id)
 				shift_x, shift_y = appearance.shift or (0, 0)
 				draw_x = (tile.position.x - x1) * 32 - (sprite_width - 32) - shift_x
@@ -132,7 +141,7 @@ def render_tiles(tiles: Iterator[Tile], renderer: AssetRenderer, bounds: tuple[i
 		"missingAppearances": dict(sorted((renderer.missing_appearances - start_missing_appearances).items())),
 		"missingSprites": dict(sorted((renderer.missing_sprites - start_missing_sprites).items())),
 		"animationPolicy": "first frame group, declared default_start_phase, no elapsed-time advancement",
-		"itemPatternPolicy": "OTClient-compatible position, stack-count and modern-fluid subtype patterns",
+		"itemPatternPolicy": "OTClient-compatible position, stack-count, hangable-hook and modern-fluid subtype patterns",
 	}
 	return encode_png(width, height, bytes(canvas)), report
 

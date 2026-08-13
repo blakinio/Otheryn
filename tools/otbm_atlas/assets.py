@@ -37,6 +37,8 @@ class Appearance:
 	stackable: bool
 	splash: bool
 	fluid_container: bool
+	hangable: bool
+	hook_direction: int | None
 	shift: tuple[int, int] | None
 	height: int | None
 	frames: tuple[SpriteInfo, ...]
@@ -146,6 +148,11 @@ def _appearance(data: bytes) -> Appearance:
 	if shift_data is not None:
 		shift_values = _message_values(shift_data)
 		shift = (_first_int(shift_values, 1), _first_int(shift_values, 2))
+	hook_data = _flag_message(flags, 21)
+	hook_direction = None
+	if hook_data is not None:
+		direction = _first_int(_message_values(hook_data), 1)
+		hook_direction = direction if direction in (1, 2) else None
 	height_data = _flag_message(flags, 27)
 	height = None
 	if height_data is not None:
@@ -161,6 +168,8 @@ def _appearance(data: bytes) -> Appearance:
 		stackable=bool(_first_int(flags, 6)),
 		splash=bool(_first_int(flags, 12)),
 		fluid_container=bool(_first_int(flags, 19)),
+		hangable=bool(_first_int(flags, 20)),
+		hook_direction=hook_direction,
 		shift=shift,
 		height=height,
 		frames=tuple(frames),
