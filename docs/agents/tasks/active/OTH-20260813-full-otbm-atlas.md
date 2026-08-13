@@ -1,10 +1,10 @@
 ---
 task_id: OTH-20260813-full-otbm-atlas
-status: implementing
+status: ready
 created: 2026-08-13
 updated: 2026-08-13
 project_lane: otheryn-content
-related_pr: none
+related_pr: "373"
 modules_touched:
   - otbm-atlas
 ---
@@ -30,11 +30,11 @@ exact-head CI and PR closeout. No generated multi-gigabyte atlas is committed.
 checkpoint_version: 1
 policy_version: 2
 updated_at: 2026-08-13T13:00:00+02:00
-head: a7baaa9c26f9a5a36eeca1887f35c7c55b13c032
+head: e7f7cbe0d55183c070050e83a81b83150b67f344
 branch: blakinio/otbm-full-map-atlas
-pr: none
-status: implementing
-phase: parser-foundation
+pr: 373
+status: ready
+phase: semantic-parser-ready
 session_id: codex-20260813-001
 session_role: implementer
 execution_mode: codex
