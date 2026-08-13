@@ -30,7 +30,7 @@ exact-head CI and PR closeout. No generated multi-gigabyte atlas is committed.
 checkpoint_version: 1
 policy_version: 2
 updated_at: 2026-08-13T23:15:00+02:00
-head: df9d03ee7a92d2613992e3ac529138128e8a5431
+head: 5637dcf94026b66a38aa32ec8bfb3f2159de4b86
 branch: blakinio/otbm-full-map-atlas
 pr: 374
 status: validating
@@ -79,8 +79,7 @@ proven:
   - render-mode runtime tests pass for URL precedence, persistence, state preservation, layer selection and bounded LRU
   - full world has 3494 verified detail, 3494 4x overview and 3494 8x overview PNGs plus 2595 spatial overlay shards
   - historical 15037 versus canonical 14993 Thais child-item totals reproduce exactly from different OTBM SHA-256 inputs
-  - browser E2E proves Auto low/high, Detailed low, Performance high, floor switch, search, URL state and marker details without page errors
-  - direct raw-Z coordinate search and marker hover tooltip pass browser E2E; external viewer references are documented with no copied code/data
+  - browser E2E proves all three modes, floor switch, URL/layer state, search, marker details, coordinate search and hover tooltip without page errors
 derived:
   - semantic parsing must operate incrementally over node events to preserve bounded memory
   - current 77.074 second framing scan needs profiling before it can be accepted for repeated full runs
