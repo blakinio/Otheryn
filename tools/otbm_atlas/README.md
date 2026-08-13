@@ -8,7 +8,7 @@ canonical CrystalServer world documented in `docs/maps/crystalserver-canonical-s
 The pipeline incrementally parses the pinned gzip-wrapped OTBM, spools bounded
 128×128 world chunks, renders canonical detailed PNGs from the pinned 6031-file
 Tibia 15.25 asset subset, and derives lightweight overview PNGs by deterministic
-4× and 8× deterministic nearest-pixel downsampling of those exact detailed pixels. All layers retain
+4× and 8× nearest-pixel downsampling of those exact detailed pixels. All layers retain
 per-chunk SHA-256 checksums in the manifest. No external map geometry or imagery
 is used.
 

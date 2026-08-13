@@ -61,8 +61,20 @@ def verify_atlas(root: Path) -> dict[str, Any]:
 	if expected_overviews!=seen_overviews: errors.append(f"overview file set differs from manifest: disk={len(expected_overviews)} manifest={len(seen_overviews)}")
 	expected_low={path.relative_to(root).as_posix() for path in (root/"overview-low").glob("z*/*.png")}
 	if expected_low!=seen_low_overviews:errors.append(f"low overview file set differs from manifest: disk={len(expected_low)} manifest={len(seen_low_overviews)}")
-	for relative in ("index.html", *[f"data/{name}" for name in REQUIRED_DATA]):
-		if not (root / relative).is_file(): errors.append(f"missing {relative}")
+	if not (root/"index.html").is_file():errors.append("missing index.html")
+	reports={}
+	for name in REQUIRED_DATA:
+		path=root/"data"/name
+		if not path.is_file():errors.append(f"missing data/{name}");continue
+		try:reports[name]=json.loads(path.read_text(encoding="utf-8"))
+		except (json.JSONDecodeError,OSError) as error:errors.append(f"data/{name}: {error}")
+	unknown=reports.get("unknown-items.json",{})
+	reported_missing={int(entry["serverId"]):int(entry["occurrences"]) for entry in unknown.get("items",[]) if "serverId" in entry and "occurrences" in entry}
+	if reported_missing!=dict(missing_appearances):errors.append("data/unknown-items.json disagrees with recomputed missing appearances")
+	reported_statistics=reports.get("statistics.json",{})
+	expected_statistics={"chunks":len(chunks),"populatedFloors":sorted(floors),**dict(statistics)}
+	for key,value in expected_statistics.items():
+		if reported_statistics.get(key)!=value:errors.append(f"data/statistics.json {key} disagrees: reported={reported_statistics.get(key)!r} recomputed={value!r}")
 	return {
 		"ok": not errors, "errors": errors, "chunks": len(chunks), "floors": dict(sorted(floors.items())),
 		"statistics": dict(statistics), "missingAppearances": dict(sorted(missing_appearances.items())), "missingSprites": dict(sorted(missing_sprites.items())),

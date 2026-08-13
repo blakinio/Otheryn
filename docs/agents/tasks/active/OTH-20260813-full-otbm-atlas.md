@@ -137,5 +137,5 @@ validation:
     evidence: 3494 chunks per imagery layer verify; mode request routing, floor, search and details pass
 blockers:
   - none
-next_action: commit and push final fixes, then run exact-head CI and PR closeout checks
+next_action: push review fixes, dispatch required workflows, and verify exact-head CI
 ```

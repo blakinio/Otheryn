@@ -18,6 +18,8 @@ class ViewerTests(unittest.TestCase):
 		for marker in ("Render mode", "Auto", "Detailed", "Performance", "Diagnostics"):
 			self.assertIn(marker, text)
 		self.assertIn('min="-8" max="7"', text)
+		app=(Path(__file__).parents[1]/"viewer_app.js").read_text(encoding="utf-8")
+		self.assertIn("Number.isInteger(requestedFloor)",app)
 
 
 if __name__ == "__main__": unittest.main()
