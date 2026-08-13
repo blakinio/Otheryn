@@ -55,6 +55,10 @@ def _overlap_radius(r):
 		if a.shift:shift=max(shift,abs(a.shift[0]),abs(a.shift[1]))
 		if a.height:shift=max(shift,a.height)
 	return max(1,math.ceil((64+shift)/32))
+def _durations(frame):
+	# assets.py currently maps protobuf 0/0 to 1/1. The pinned object assets contain
+	# no genuine 1ms phases, so restore OTClient's first-nonzero fallback semantics.
+	ranges=list(frame.phase_durations);fallback=next((v for v in ranges if v!=(1,1)),(1,1));return [fallback if v==(1,1) else v for v in ranges]
 
 def enrich_environment_animations(asset_dir:Path,output:Path)->dict[str,int]:
 	manifest_path=output/'manifest.json';spool=output/'.spool';zero={'instances':0,'uniqueAnimations':0,'chunks':0,'staticFallbacks':0}
@@ -79,8 +83,8 @@ def enrich_environment_animations(asset_dir:Path,output:Path)->dict[str,int]:
 			if key not in made:
 				for p,rel in enumerate(frames):path=output/rel;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(_phase(r,f,px,py,pz,p))
 				made.add(key)
-			under=f'data/environment-animations/underlays/z{z}/{cx}_{cy}/{x}_{y}.png';path=output/under;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(_underlay(tile,r));ranges=[[lo,hi] for lo,hi in f.phase_durations];loop=-1 if f.loop_type>1 else f.loop_type
-			rec={'position':{'x':x,'y':y,'z':tile.position.z},'serverId':item.server_id,'animationKey':key,'frames':frames,'underlay':under,'phaseDurationsMs':[max(1,(lo+hi)//2) for lo,hi in f.phase_durations],'durationRangesMs':ranges,'defaultStartPhase':f.default_start_phase,'synchronized':f.synchronized,'randomStartPhase':f.random_start_phase,'loopType':loop,'loopCount':f.loop_count,'policy':'cyclic-appearance'}
+			under=f'data/environment-animations/underlays/z{z}/{cx}_{cy}/{x}_{y}.png';path=output/under;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(_underlay(tile,r));ranges=_durations(f);loop=-1 if f.loop_type>1 else f.loop_type
+			rec={'position':{'x':x,'y':y,'z':tile.position.z},'serverId':item.server_id,'animationKey':key,'frames':frames,'underlay':under,'phaseDurationsMs':[max(1,(lo+hi)//2) for lo,hi in ranges],'durationRangesMs':[[lo,hi] for lo,hi in ranges],'defaultStartPhase':f.default_start_phase,'synchronized':f.synchronized,'randomStartPhase':f.random_start_phase,'loopType':loop,'loopCount':f.loop_count,'policy':'cyclic-appearance'}
 			if item.subtype is not None:rec['subtype']=item.subtype
 			records.append(rec);instances+=1
 		if records:
