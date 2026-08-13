@@ -1,0 +1,127 @@
+---
+name: OTBM Atlas Tests
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+    paths:
+      - "tools/otbm_atlas/**"
+      - ".github/workflows/otbm-atlas-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: Atlas unit and runtime tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          persist-credentials: false
+      - name: Run atlas tests
+        run: python3 -m unittest discover -s tools/otbm_atlas/tests -p 'test_*.py' -v
+
+  canonical-data:
+    name: Canonical Thais scan and render
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          persist-credentials: false
+      - name: Scan canonical Thais regression region
+        run: |
+          python3 -m tools.otbm_atlas.scan \
+            vendor/map-analysis/crystalserver/data-global/world/world.otbm \
+            --bounds 32280 32440 32155 32305 7 \
+            --output /tmp/thais-scan.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('/tmp/thais-scan.json').read_text(encoding='utf-8'))
+          assert data['sourceSha256'] == '3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034'
+          assert data['statistics']['tiles'] == 24311
+          assert data['statistics']['groundItems'] == 24292
+          assert data['statistics']['childItems'] == 14993
+          assert data['statistics']['diagnostics'] == 0
+          PY
+      - name: Render canonical Thais sample from pinned assets
+        run: |
+          python3 -m tools.otbm_atlas.render \
+            vendor/map-analysis/crystalserver/data-global/world/world.otbm \
+            vendor/map-analysis/tibia-client/15.25.bd5a04/assets \
+            --bounds 32340 32371 32215 32246 7 \
+            --output /tmp/thais.png \
+            --report /tmp/thais-render.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('/tmp/thais-render.json').read_text(encoding='utf-8'))
+          assert data['tiles'] > 0
+          assert data['renderOperations'] > 0
+          assert data['missingAppearances'] == {}
+          assert data['missingSprites'] == {}
+          assert 'stack-count' in data['itemPatternPolicy']
+          assert Path('/tmp/thais.png').read_bytes().startswith(b'\x89PNG\r\n\x1a\n')
+          PY
+
+  full-world:
+    name: Full canonical world v3
+    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:final-gate')
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          persist-credentials: false
+      - name: Free disk for generated atlas
+        run: |
+          sudo rm -rf /usr/local/lib/android /opt/ghc /usr/share/dotnet || true
+          df -h /
+      - name: Build full canonical atlas
+        run: |
+          python3 -m tools.otbm_atlas.atlas \
+            vendor/map-analysis/crystalserver/data-global/world/world.otbm \
+            vendor/map-analysis/tibia-client/15.25.bd5a04/assets \
+            build/full-map-atlas-v3 \
+            --workers 4
+      - name: Independently verify generated atlas
+        run: |
+          python3 -m tools.otbm_atlas.verify \
+            build/full-map-atlas-v3 \
+            --output build/full-map-atlas-v3/verification.json
+      - name: Assert and print compact full-world evidence
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('build/full-map-atlas-v3')
+          manifest = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
+          statistics = json.loads((root / 'data/statistics.json').read_text(encoding='utf-8'))
+          verification = json.loads((root / 'verification.json').read_text(encoding='utf-8'))
+          mechanics = json.loads((root / 'data/mechanics-resolution.json').read_text(encoding='utf-8'))
+          unknown = json.loads((root / 'data/unknown-items.json').read_text(encoding='utf-8'))
+          assert manifest['schemaVersion'] == 3
+          assert len(manifest['chunks']) == 3494
+          assert sorted({int(chunk['z']) for chunk in manifest['chunks']}) == list(range(16))
+          assert statistics['chunks'] == 3494
+          assert statistics['populatedFloors'] == list(range(16))
+          assert verification['ok'] is True
+          assert verification['chunks'] == 3494
+          assert sorted(map(int, verification['floors'].keys())) == list(range(16))
+          assert verification['missingSprites'] == {}
+          evidence = {
+              'schemaVersion': manifest['schemaVersion'],
+              'chunks': len(manifest['chunks']),
+              'floors': sorted({int(chunk['z']) for chunk in manifest['chunks']}),
+              'statistics': statistics,
+              'verification': verification,
+              'mechanicsResolution': mechanics['statistics'],
+              'unknownItems': unknown['statistics'],
+          }
+          print(json.dumps(evidence, sort_keys=True))
+          PY
