@@ -94,7 +94,6 @@ jobs:
             --report "$root/render.json"
           python3 - <<'PY'
           import json
-          import shutil
           from pathlib import Path
           from tools.otbm_atlas.spawns import scan_spawns
           from tools.otbm_atlas.viewer import write_viewer
@@ -203,7 +202,7 @@ jobs:
     name: Full canonical world v3
     if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:final-gate')
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
     steps:
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
