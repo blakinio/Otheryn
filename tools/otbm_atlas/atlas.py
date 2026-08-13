@@ -25,7 +25,7 @@ from .spatial import write_spatial_data
 from .npc_sprites import enrich_npc_spawns
 
 SPOOL_VERSION = 1
-ATLAS_VERSION = 2
+ATLAS_VERSION = 3
 _WORKER_RENDERER: AssetRenderer | None = None
 
 
