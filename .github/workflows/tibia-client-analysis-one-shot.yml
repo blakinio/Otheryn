@@ -17,7 +17,7 @@ concurrency:
 jobs:
   bootstrap:
     name: Bootstrap isolated Tibia analysis container on dedicated OTS runner
-    runs-on: [self-hosted, ots, synology]
+    runs-on: [ots, synology]
     timeout-minutes: 15
     env:
       CONTAINER_NAME: oteryn-tibia-client-analysis
