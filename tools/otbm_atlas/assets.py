@@ -24,6 +24,11 @@ class SpriteInfo:
 	sprite_ids: tuple[int, ...]
 	animation_phases: int
 	default_start_phase: int
+	phase_durations: tuple[tuple[int, int], ...]
+	synchronized: bool
+	random_start_phase: bool
+	loop_type: int
+	loop_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,7 +121,14 @@ def _sprite_info(data: bytes) -> SpriteInfo:
 	values = _message_values(data)
 	animation = values.get(6, [])
 	animation_values = _message_values(animation[0]) if animation and isinstance(animation[0], bytes) else {}
-	phases = len(animation_values.get(6, []))
+	phase_messages = [value for value in animation_values.get(6, []) if isinstance(value, bytes)]
+	phase_durations = []
+	for phase_message in phase_messages:
+		phase = _message_values(phase_message)
+		minimum = max(1, _first_int(phase, 1, 100))
+		maximum = max(minimum, _first_int(phase, 2, minimum))
+		phase_durations.append((minimum, maximum))
+	phases = len(phase_messages)
 	return SpriteInfo(
 		pattern_width=max(1, _first_int(values, 1, 1)),
 		pattern_height=max(1, _first_int(values, 2, 1)),
@@ -125,6 +137,11 @@ def _sprite_info(data: bytes) -> SpriteInfo:
 		sprite_ids=tuple(int(value) for value in values.get(5, []) if isinstance(value, int)),
 		animation_phases=max(1, phases),
 		default_start_phase=_first_int(animation_values, 1),
+		phase_durations=tuple(phase_durations) if phase_durations else ((100, 100),),
+		synchronized=bool(_first_int(animation_values, 2)),
+		random_start_phase=bool(_first_int(animation_values, 3)),
+		loop_type=_first_int(animation_values, 4),
+		loop_count=_first_int(animation_values, 5),
 	)
 
 
@@ -180,7 +197,7 @@ def load_appearances(path: str | Path, category_field: int) -> dict[int, Appeara
 	"""Load one appearance category from the pinned Tibia asset file.
 
 	The asset protobuf keeps item, creature and effect appearances in separate
-	repeated fields.  Atlas tiles use items (field 1); NPC outfits use creatures
+	repeated fields. Atlas tiles use items (field 1); NPC outfits use creatures
 	(field 2) and must never be guessed from an item appearance.
 	"""
 	data = Path(path).read_bytes()
