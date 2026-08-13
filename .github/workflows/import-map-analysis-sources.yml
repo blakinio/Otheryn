@@ -20,7 +20,7 @@ jobs:
       CRYSTAL_COMMIT: 5e89bf8329ea406cb4ea8f4a18f32954f13e5418
       ASSETS_JSON_SHA256: 4cbdf80eee33901f2eb4f3391e23ad02805b65890ca856efcd9c32c54888405a
       ASSETS_VERSION: 15.25.bd5a04
-      TIBIA_UA: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151.0.0.0 Safari/537.36
+      MIRROR_URL: https://github.com/dudantas/tibia-client/releases/download/15.25.0a00a0/tibia-client-15.25.0a00a0.zip
     steps:
       - name: Checkout task branch without third-party actions
         env:
@@ -42,78 +42,70 @@ jobs:
           mkdir -p repo/vendor/map-analysis/crystalserver/data-global
           cp -a /tmp/crystalserver/data-global/world repo/vendor/map-analysis/crystalserver/data-global/world
 
-      - name: Import exact Tibia client assets
+      - name: Import exact Tibia client assets from verified mirror
         run: |
           set -euo pipefail
-          mkdir -p repo/vendor/map-analysis/tibia-client/$ASSETS_VERSION
-          curl --fail --location --http1.1 --retry 3 --retry-all-errors \
-            --user-agent "$TIBIA_UA" \
-            --header 'Accept: application/json,text/plain,*/*' \
-            --header 'Referer: https://www.tibia.com/' \
-            https://static.tibia.com/launcher/assets-current/assets.json \
-            -o /tmp/assets.json
-          echo "$ASSETS_JSON_SHA256  /tmp/assets.json" | sha256sum --check --strict
-          cp /tmp/assets.json repo/vendor/map-analysis/tibia-client/$ASSETS_VERSION/assets.json
+          rm -rf /tmp/tibia-mirror
+          mkdir -p /tmp/tibia-mirror
+          curl --fail --location --retry 3 --retry-all-errors "$MIRROR_URL" -o /tmp/tibia-client.zip
+          unzip -q /tmp/tibia-client.zip -d /tmp/tibia-mirror
+          mapfile -t manifests < <(find /tmp/tibia-mirror -type f -name assets.json -print)
+          test "${#manifests[@]}" -ge 1
+          exact=""
+          for candidate in "${manifests[@]}"; do
+            actual="$(sha256sum "$candidate" | awk '{print $1}')"
+            echo "candidate assets.json: $candidate $actual"
+            if [ "$actual" = "$ASSETS_JSON_SHA256" ]; then
+              exact="$candidate"
+              break
+            fi
+          done
+          test -n "$exact"
+          source_root="$(dirname "$exact")"
+          test -d "$source_root/assets"
+          rm -rf "repo/vendor/map-analysis/tibia-client/$ASSETS_VERSION"
+          mkdir -p "repo/vendor/map-analysis/tibia-client/$ASSETS_VERSION"
+          cp "$exact" "repo/vendor/map-analysis/tibia-client/$ASSETS_VERSION/assets.json"
+          cp -a "$source_root/assets" "repo/vendor/map-analysis/tibia-client/$ASSETS_VERSION/assets"
           python3 - <<'PY'
-          import concurrent.futures
           import hashlib
           import json
-          import lzma
           import os
           import pathlib
-          import urllib.request
 
           root = pathlib.Path('repo/vendor/map-analysis/tibia-client') / os.environ['ASSETS_VERSION']
-          assets_root = root / 'assets'
-          assets_root.mkdir(parents=True, exist_ok=True)
-          manifest = json.loads(pathlib.Path('/tmp/assets.json').read_text())
+          manifest_path = root / 'assets.json'
+          manifest = json.loads(manifest_path.read_text())
           rows = [x for x in manifest['files'] if x.get('localfile', '').startswith('assets/')]
-          base = 'https://static.tibia.com/launcher/assets-current/'
-          headers = {
-              'User-Agent': os.environ['TIBIA_UA'],
-              'Accept': '*/*',
-              'Referer': 'https://www.tibia.com/',
-          }
 
-          def digest(data):
-              return hashlib.sha256(data).hexdigest()
+          def sha(path):
+              h = hashlib.sha256()
+              with path.open('rb') as f:
+                  for chunk in iter(lambda: f.read(1024 * 1024), b''):
+                      h.update(chunk)
+              return h.hexdigest()
 
-          def fetch(entry):
-              url = base + entry['url']
-              target = root / entry['localfile']
-              target.parent.mkdir(parents=True, exist_ok=True)
-              req = urllib.request.Request(url, headers=headers)
-              with urllib.request.urlopen(req, timeout=120) as r:
-                  packed = r.read()
-              expected_packed = entry.get('packedhash')
-              if expected_packed and digest(packed) != expected_packed:
-                  raise RuntimeError(f"packed hash mismatch: {entry['url']}")
-              if entry.get('unpack', True):
-                  data = lzma.decompress(packed)
-                  expected = entry.get('unpackedhash')
-                  if expected and digest(data) != expected:
-                      raise RuntimeError(f"unpacked hash mismatch: {entry['localfile']}")
+          checked = 0
+          for entry in rows:
+              path = root / entry['localfile']
+              if not path.is_file():
+                  raise RuntimeError(f"missing asset: {entry['localfile']}")
+              unpacked_hash = entry.get('unpackedhash')
+              if unpacked_hash:
+                  if sha(path) != unpacked_hash:
+                      raise RuntimeError(f"asset hash mismatch: {entry['localfile']}")
               else:
-                  data = packed
+                  packed_hash = entry.get('packedhash')
+                  if packed_hash and sha(path) != packed_hash:
+                      raise RuntimeError(f"asset hash mismatch: {entry['localfile']}")
               expected_size = entry.get('unpackedsize') if entry.get('unpack', True) else entry.get('packedsize')
-              if expected_size is not None and len(data) != expected_size:
-                  raise RuntimeError(f"size mismatch: {entry['localfile']}")
-              target.write_bytes(data)
-              return entry['localfile']
-
-          with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
-              futures = [pool.submit(fetch, row) for row in rows]
-              done = 0
-              for future in concurrent.futures.as_completed(futures):
-                  future.result()
-                  done += 1
-                  if done % 500 == 0:
-                      print(f'imported {done}/{len(rows)} assets', flush=True)
-
-          actual = sum(1 for p in assets_root.rglob('*') if p.is_file())
-          if actual != len(rows):
-              raise RuntimeError(f'asset count mismatch: expected {len(rows)}, got {actual}')
-          print(f'verified {actual} asset files')
+              if expected_size is not None and path.stat().st_size != expected_size:
+                  raise RuntimeError(f"asset size mismatch: {entry['localfile']}")
+              checked += 1
+          actual = sum(1 for p in (root / 'assets').rglob('*') if p.is_file())
+          if actual != checked:
+              raise RuntimeError(f'asset count mismatch: manifest {checked}, directory {actual}')
+          print(f'verified {checked} exact asset files')
           PY
 
       - name: Record provenance and commit imported data
@@ -132,6 +124,7 @@ jobs:
           - Primary map: crystalserver/data-global/world/world.otbm
           - Tibia asset package: $ASSETS_VERSION
           - Exact assets manifest SHA-256: $ASSETS_JSON_SHA256
+          - Asset transport mirror is accepted only after exact manifest and per-file hash verification.
 
           Do not silently replace either source with a newer revision. Update provenance and hashes explicitly.
           EOF
