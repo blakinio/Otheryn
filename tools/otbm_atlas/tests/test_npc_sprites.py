@@ -46,6 +46,11 @@ class NpcSpriteTests(unittest.TestCase):
 		self.assertEqual(recolored[8:11], bytes(outfit_color(outfit.legs)))
 		self.assertEqual(recolored[12:15], bytes(outfit_color(outfit.feet)))
 
+	def test_mixed_mask_colors_are_not_selected_by_otclient_primary_masks(self) -> None:
+		outfit = NpcOutfit("Guide", 128, 1, 2, 3, 4, 0, "npc/guide.lua")
+		pixels = b"\x00\xff\xff\xff" + b"\xff\x00\xff\xff"
+		self.assertEqual(_recolor_outfit_mask(pixels, outfit), b"\x00" * 8)
+
 	def test_conflicting_same_name_is_left_unresolved(self) -> None:
 		with tempfile.TemporaryDirectory() as directory:
 			root = Path(directory); npc = root / "npc"; npc.mkdir()
