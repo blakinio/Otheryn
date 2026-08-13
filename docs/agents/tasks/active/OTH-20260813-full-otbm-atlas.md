@@ -4,7 +4,7 @@ status: ready
 created: 2026-08-13
 updated: 2026-08-13
 project_lane: otheryn-content
-related_pr: "373"
+related_pr: "374"
 modules_touched:
   - otbm-atlas
 ---
@@ -30,9 +30,9 @@ exact-head CI and PR closeout. No generated multi-gigabyte atlas is committed.
 checkpoint_version: 1
 policy_version: 2
 updated_at: 2026-08-13T13:00:00+02:00
-head: e7387a5b1
+head: 1880fc08cf7f92065e0940d7fc79bff7c4190d3e
 branch: blakinio/otbm-full-map-atlas
-pr: 373
+pr: 374
 status: ready
 phase: full-world-render-verified
 session_id: codex-20260813-001
