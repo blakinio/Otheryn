@@ -51,7 +51,7 @@ Build resumable 128×128-map-tile chunks and the static viewer:
 python -m tools.otbm_atlas.atlas `
   vendor/map-analysis/crystalserver/data-global/world/world.otbm `
   vendor/map-analysis/tibia-client/15.25.bd5a04/assets `
-  build/full-map-atlas
+  build/full-map-atlas --workers 4
 python -m http.server 8000 --directory build/full-map-atlas
 ```
 
@@ -59,6 +59,10 @@ The first pass spools each tile once into bounded per-chunk binary files. Chunk
 reports retain source/spool fingerprints and PNG checksums; matching chunks are
 reused on subsequent runs. The viewer supports pan, zoom, floor selection,
 coordinate display/jump, and factual mechanics/spawn overlay toggles.
+Chunks are cropped to their populated bounds plus a conservative two-tile sprite
+gutter. This preserves 64×64 sprites and canonical displacement across chunk
+edges without allocating a full 4096×4096 canvas for sparse chunks. Workers use
+separate bounded renderers; manifest ordering remains deterministic.
 
 The atlas build also writes `data/mechanics.json` from the same OTBM pass and
 `data/spawns.json` from every canonical `*-monster.xml` and `*-npc.xml`. Spawn

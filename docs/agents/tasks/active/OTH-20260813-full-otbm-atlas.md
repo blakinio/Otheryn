@@ -34,7 +34,7 @@ head: b1f5169fd37f4eb0c78fdcbeccf24e4c6236a9d2
 branch: blakinio/otbm-full-map-atlas
 pr: 373
 status: ready
-phase: mechanics-spawns-composition-implemented
+phase: full-world-render-ready
 session_id: codex-20260813-001
 session_role: implementer
 execution_mode: codex
@@ -85,6 +85,8 @@ proven:
   - conservative Lua resolution yields 496 RESOLVED, 18 AMBIGUOUS and 819 UNRESOLVED unique AID/UID values; 103 dynamic registrations remain UNKNOWN
   - AID 5555 resolves only to scripts/movements/teleport/sorcerer_guild_thais.lua and UID 65207 only to the literal dispatch table in quest_system2.lua
   - composition inventory classifies 1 base map, 1 conditional custom overlay, 28 runtime-loaded overlays and 2 UNKNOWN maps; none are flattened into the base atlas
+  - cropped rendering preserves a conservative two-tile 64x64/displacement gutter; a one-tile canonical chunk renders at 96x96 in 0.032 seconds
+  - two-process Windows spawn smoke test renders two real canonical chunks successfully
 derived:
   - semantic parsing must operate incrementally over node events to preserve bounded memory
   - current 77.074 second framing scan needs profiling before it can be accepted for repeated full runs
@@ -167,7 +169,10 @@ validation:
   - command: python -m tools.otbm_atlas.composition canonical-world repository output
     result: PASS
     evidence: 32 OTBMs classified; only winterlight island and ferumbras habitats remain UNKNOWN; mergedIntoBaseAtlas false for every source
+  - command: python -m tools.otbm_atlas._parallel_smoke
+    result: PASS
+    evidence: two Windows spawn workers rendered separate real canonical chunks and returned [1, 1]; temporary smoke module removed afterward
 blockers:
   - none
-next_action: harden cross-chunk sprite composition, parallelize bounded chunk rendering, then run the full atlas and E2E verification
+next_action: run the complete four-worker atlas build, collect time/size/missing-resource totals, then perform static-viewer E2E and exact-head CI
 ```
