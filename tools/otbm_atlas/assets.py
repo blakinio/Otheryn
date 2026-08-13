@@ -34,6 +34,9 @@ class Appearance:
 	clip: bool
 	bottom: bool
 	top: bool
+	stackable: bool
+	splash: bool
+	fluid_container: bool
 	shift: tuple[int, int] | None
 	height: int | None
 	frames: tuple[SpriteInfo, ...]
@@ -68,6 +71,7 @@ def _fields(data: bytes) -> Iterator[tuple[int, int, int | bytes]]:
 	offset = 0
 	while offset < len(data):
 		key, offset = _varint(data, offset)
+		offset += 0
 		field = key >> 3
 		wire = key & 7
 		if field == 0:
@@ -155,6 +159,9 @@ def _appearance(data: bytes) -> Appearance:
 		clip=2 in flags,
 		bottom=3 in flags,
 		top=4 in flags,
+		stackable=bool(_first_int(flags, 6)),
+		splash=bool(_first_int(flags, 12)),
+		fluid_container=bool(_first_int(flags, 19)),
 		shift=shift,
 		height=height,
 		frames=tuple(frames),
