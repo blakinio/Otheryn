@@ -95,6 +95,45 @@ NPCs, houses, AIDs, UIDs and teleports should be fetched for the visible region
 rather than loading a world-sized overlay payload when that becomes materially
 large. Floor data remains independently addressable for Z=0..15.
 
+### Toggleable factual layers
+
+The viewer must expose a persistent layers panel so users can independently enable
+or disable factual overlays without changing the base map imagery. At minimum the
+following logical layers should be supported when the corresponding verified data
+exists:
+
+- NPCs;
+- monster spawns;
+- boss spawns only when boss classification is authoritative, otherwise no guessed
+  boss layer;
+- ActionIDs;
+- UniqueIDs;
+- teleport sources and destinations;
+- houses and house doors;
+- towns/temples;
+- waypoints;
+- quest/mechanic script links after factual AID/UID/position resolution;
+- zones or other OTBM metadata that has been parsed with known semantics.
+
+Layers should be grouped in the UI where useful (for example Creatures, Mechanics,
+World/Navigation) and must remain independently toggleable. Overlay state should be
+serializable in the URL or other stable viewer state so a selected map position,
+floor, zoom and active layers can be shared/reopened.
+
+The default view should remain visually clean: heavy diagnostic/mechanics overlays
+such as AID/UID should normally start disabled, while lightweight user-facing
+layers such as NPCs may use a conservative default chosen during UX testing.
+Monster/NPC marker density must not overload zoomed-out views; clustering,
+zoom-threshold visibility or equivalent level-of-detail behavior should be used
+where needed. At maximum/detail zoom, individual exact positions should be
+inspectable and selectable.
+
+Selecting a marker or mechanic should open the existing-style information panel
+rather than forcing navigation away from the map. Where verified data exists, the
+panel may show name/type, exact X/Y/Z, spawn time, server item ID, AID/UID,
+teleport destination, house ID/door ID, source file and script-resolution status.
+UNKNOWN or AMBIGUOUS values must remain explicitly labeled as such.
+
 `https://github.com/tibiamaps/tibia-map` should be evaluated as an implementation
 reference and potential viewer-core source before writing equivalent frontend
 behavior from scratch. Its map data must not replace the canonical Otheryn OTBM.
