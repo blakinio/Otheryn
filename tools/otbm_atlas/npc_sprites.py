@@ -15,6 +15,8 @@ HSI_SI_VALUES = 7
 _NAME = re.compile(r'local\s+internalNpcName\s*=\s*["\']([^"\']+)["\']')
 _OUTFIT = re.compile(r'npcConfig\.outfit\s*=\s*\{(.*?)\}', re.DOTALL)
 _VALUE = re.compile(r'\b(lookType|lookHead|lookBody|lookLegs|lookFeet|lookAddons)\s*=\s*(\d+)')
+# Pinned OTClient constants and draw order: yellow=head, red=body, green=legs, blue=feet.
+_OUTFIT_MASKS = ((4, "head"), (1, "body"), (2, "legs"), (3, "feet"))
 
 
 @dataclass(frozen=True)
@@ -98,25 +100,30 @@ def _blend(canvas: bytearray, source: bytes, width: int, height: int) -> None:
 		canvas[index + 3] = alpha + (canvas[index + 3] * inverse + 127) // 255
 
 
+def _multiply_tinted_mask(canvas: bytearray, source: bytes, width: int, height: int, color: tuple[int, int, int]) -> None:
+	"""Reproduce OTClient textured draw + CompositionMode::MULTIPLY for one outfit mask layer."""
+	for index in range(0, width * height * 4, 4):
+		alpha = source[index + 3]
+		if not alpha:
+			continue
+		inverse = 255 - alpha
+		for channel in range(3):
+			# Fragment shader: texture.rgb * u_Color.rgb. OpenGL MULTIPLY then uses
+			# srcFactor=DST_COLOR and dstFactor=ONE_MINUS_SRC_ALPHA.
+			tinted = (source[index + channel] * color[channel] + 127) // 255
+			destination = canvas[index + channel]
+			value = (tinted * destination + destination * inverse + 127) // 255
+			canvas[index + channel] = min(255, value)
+		# The client does not enable alpha writing specially for outfit masks; keep
+		# the already-rendered base alpha stable for the deterministic marker PNG.
+
+
 def _enabled_y_patterns(pattern_height: int, addons: int) -> tuple[int, ...]:
 	return tuple([0] + [value for value in range(1, pattern_height) if addons & (1 << (value - 1))])
 
 
 def _sprite_index(frame, layer: int, x_pattern: int, y_pattern: int, z_pattern: int, phase: int) -> int:
 	return ((((phase * frame.pattern_depth + z_pattern) * frame.pattern_height + y_pattern) * frame.pattern_width + x_pattern) * frame.layers + layer)
-
-
-def _recolor_outfit_mask(pixels: bytes, outfit: NpcOutfit) -> bytes:
-	# Pinned OTClient: yellow=head, red=body, green=legs, blue=feet.
-	fields = {(255, 255, 0): outfit.head, (255, 0, 0): outfit.body, (0, 255, 0): outfit.legs, (0, 0, 255): outfit.feet}
-	mask = bytearray(len(pixels))
-	for index in range(0, len(pixels), 4):
-		red, green, blue, alpha = pixels[index:index + 4]
-		if not alpha or (red, green, blue) not in fields:
-			continue
-		mask[index:index + 3] = bytes(outfit_color(fields[(red, green, blue)]))
-		mask[index + 3] = alpha
-	return bytes(mask)
 
 
 class NpcSpriteRenderer:
@@ -163,17 +170,21 @@ class NpcSpriteRenderer:
 				return None
 			_blend(canvas, base[2], width, height)
 			if frame.layers > 1:
-				mask_index = _sprite_index(frame, 1, x_pattern, y_pattern, z_pattern, phase)
-				if mask_index >= len(frame.sprite_ids):
+				# OTClient draws four independent mask layers in this exact order with
+				# CompositionMode::MULTIPLY; mixed RGB mask pixels remain meaningful.
+				if frame.layers <= max(layer for layer, _field in _OUTFIT_MASKS):
 					return None
-				mask = self.sprite(frame.sprite_ids[mask_index])
-				if mask is None or (mask[0], mask[1]) != (width, height):
-					return None
-				_blend(canvas, _recolor_outfit_mask(mask[2], outfit), width, height)
+				for layer, field in _OUTFIT_MASKS:
+					mask_index = _sprite_index(frame, layer, x_pattern, y_pattern, z_pattern, phase)
+					if mask_index >= len(frame.sprite_ids):
+						return None
+					mask = self.sprite(frame.sprite_ids[mask_index])
+					if mask is None or (mask[0], mask[1]) != (width, height):
+						return None
+					_multiply_tinted_mask(canvas, mask[2], width, height, outfit_color(getattr(outfit, field)))
 		if canvas is None:
 			return None
 		return encode_png(width, height, bytes(canvas))
-
 
 
 def enrich_npc_spawns(asset_dir: Path, scripts_dir: Path, output: Path, records: list[dict[str, object]]) -> dict[str, int]:
