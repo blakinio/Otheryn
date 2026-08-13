@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Oteryn World Atlas — Thais prototype</title><link rel="stylesheet" href="app.css"></head>
+<body><div class="app">
+<header><div class="brand">✦ OTERYN MAPS<small>WORLD ATLAS · REAL DATA PROTOTYPE</small></div>
+<div class="search"><input id="search" placeholder="Szukaj NPC po prawdziwych danych Canary…"><div id="results" class="results"></div></div>
+<div class="head-actions"><button class="btn">Warstwy</button><button class="btn">Piętro Z=7</button><button class="btn">⛶</button></div></header>
+<main>
+<aside class="side"><h1>Thais</h1><div class="sub">interaktywny prototyp · floor 7</div>
+<div class="section"><h3>POZYCJA</h3><div class="coord" id="picked">32369, 32220, 7</div><button id="copy" class="btn">Kopiuj kordy</button></div>
+<div class="section"><h3>LEGENDA</h3><div class="legend"><div class="legend-row"><span class="dot"></span> NPC — dane Canary</div><div class="legend-row"><span class="dot off"></span> Respawn — niezaindeksowany w tym demo</div></div></div>
+<div class="section source"><b>Baza mapy</b><br>rzeczywiste minimap tiles z przesłanego assets(1).zip.<br><br>Brak grafiki generowanej przez AI.</div></aside>
+<section class="map-shell"><div class="map-note">Najedź myszą: <strong id="liveCoord">—</strong></div>
+<div class="viewport"><img class="map-img" src="thais-z7-minimap.png" width="161" height="151" alt="Real Thais minimap floor 7"><div class="markers"></div></div>
+<div class="controls"><button class="btn" id="minus">−</button><button class="btn" id="plus">+</button><button class="btn" id="fit">⌗</button></div></section>
+<aside class="side right"><div class="section" style="padding-top:0"><h3>WARSTWY</h3><div class="layers">
+<label><input id="layerNpc" type="checkbox" checked> NPC <span class="badge" id="npcCount">0</span></label>
+<label class="disabled"><input type="checkbox" disabled> Respawny potworów <span class="badge">niezweryfikowane</span></label>
+<label class="disabled"><input type="checkbox" disabled> Bossowie</label>
+<label class="disabled"><input type="checkbox" disabled> Questy</label>
+<label class="disabled"><input type="checkbox" disabled> Teleporty</label>
+<label class="disabled"><input type="checkbox" disabled> AID / UID (DEV)</label>
+</div></div><div class="section"><h3>INFO</h3><div id="info" class="empty-info">Kliknij zielony marker NPC. Możesz przeciągać mapę, zoomować kółkiem, wyszukiwać NPC i klikać kafle, aby odczytać współrzędne.</div></div>
+<div class="section source"><b>NPC source</b><br>blakinio/canary<br>commit cfca0e11a000535cf7f611c89f14aabdad360cd3<br>data-otservbr-global/world/otservbr-npc.xml</div></aside>
+</main>
+<footer><span>Cursor: <strong id="liveCoordFooter"></strong></span><span>Floor: <strong>7</strong></span><span>Zoom: <strong id="zoomVal">400%</strong></span><span>Base: <strong>real client minimap</strong></span><span>AI pixels: <strong>0</strong></span></footer>
+</div><script src="app.js"></script><script>
+const a=document.querySelector('#liveCoord'),b=document.querySelector('#liveCoordFooter');new MutationObserver(()=>b.textContent=a.textContent).observe(a,{childList:true,subtree:true});b.textContent=a.textContent;
+</script></body></html>

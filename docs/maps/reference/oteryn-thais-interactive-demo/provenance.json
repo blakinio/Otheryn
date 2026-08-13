@@ -1,0 +1,12 @@
+{
+  "prototype": "Oteryn Thais Interactive Map",
+  "originalArchive": "oteryn-thais-interactive-demo(1).zip",
+  "originalArchiveSha256": "def2d4348a31f06362eec707a07c29a55235a1b55cb51470b0919ea6d7b6ffa5",
+  "bounds": {"minX":32280,"minY":32155,"maxX":32440,"maxY":32305,"z":7},
+  "npcSource": {"repository":"blakinio/canary","commit":"cfca0e11a000535cf7f611c89f14aabdad360cd3","path":"data-otservbr-global/world/otservbr-npc.xml"},
+  "limitations": [
+    "This prototype is a UI/interaction reference, not authoritative production map data.",
+    "Its original base raster came from the uploaded client minimap assets.",
+    "Monster spawns were intentionally disabled in this historical prototype."
+  ]
+}
