@@ -264,6 +264,7 @@ def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int =
 	unique_records=[{**entry,"mechanics":resolution_by_key.get(("UniqueID",int(entry["uniqueId"])),{"status":"UNKNOWN","candidates":[]})} for entry in mechanics["uniqueIds"]]
 	spatial_statistics=write_spatial_data(output,chunk_size,{
 		**{key:mechanics[key] for key in ("teleports","houseTiles","houseDoors","towns","waypoints")},"actionIds":action_records,"uniqueIds":unique_records,
+		"mechanics":action_records+unique_records,
 		"monsterSpawns":spawns["monsterSpawns"],"npcSpawns":spawns["npcSpawns"],"houses":houses["houses"],
 	})
 	statistics["spatialData"]=spatial_statistics

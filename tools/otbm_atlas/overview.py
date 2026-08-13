@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import struct
 import zlib
+from io import BytesIO
 
 from .assets import encode_png
 
 OVERVIEW_FACTOR = 4
 LOW_OVERVIEW_FACTOR = 8
-OVERVIEW_VERSION = 1
+OVERVIEW_VERSION = 2
 
 
 def decode_rgba_png(payload: bytes) -> tuple[int, int, bytes]:
@@ -35,6 +36,16 @@ def decode_rgba_png(payload: bytes) -> tuple[int, int, bytes]:
 
 
 def make_overview(payload: bytes, factor: int = OVERVIEW_FACTOR) -> bytes:
+	try:
+		from PIL import Image
+		with Image.open(BytesIO(payload)) as image:
+			rgba_image=image.convert("RGBA")
+			if rgba_image.width%factor or rgba_image.height%factor:raise ValueError("PNG dimensions must be divisible by overview factor")
+			# NEAREST chooses canonical source pixels and is independent of color profiles or floating-point resampling.
+			result=rgba_image.resize((rgba_image.width//factor,rgba_image.height//factor),Image.Resampling.NEAREST)
+			return encode_png(result.width,result.height,result.tobytes())
+	except ImportError:
+		pass
 	width, height, rgba = decode_rgba_png(payload)
 	if factor <= 0 or width % factor or height % factor: raise ValueError("PNG dimensions must be divisible by overview factor")
 	out_width, out_height = width // factor, height // factor

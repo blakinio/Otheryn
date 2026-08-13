@@ -29,12 +29,12 @@ exact-head CI and PR closeout. No generated multi-gigabyte atlas is committed.
 ```yaml
 checkpoint_version: 1
 policy_version: 2
-updated_at: 2026-08-13T20:20:00+02:00
-head: ea3088e6a7258c2ec9df8dc2abaabe4947987761
+updated_at: 2026-08-13T22:00:00+02:00
+head: a9e8c1d965545aa0b1441caed80a2c29c158ba50
 branch: blakinio/otbm-full-map-atlas
 pr: 374
-status: implementing
-phase: multi-resolution-viewer
+status: validating
+phase: exact-head-validation
 session_id: codex-20260813-001
 session_role: implementer
 execution_mode: codex
@@ -64,14 +64,11 @@ context_routes:
   - vendor/map-analysis/README.md
   - docs/oam-040-otbm-tooling-do-not-migrate.md
 proven:
-  - all 8 canonical spawn XML files parse strictly to 87565 monster and 1068 NPC records
-  - canonical spawn coordinates use center-relative X/Y and absolute child Z; all 88633 canonical records agree with their group center Z
+  - all 8 canonical spawn XML files parse strictly to 87565 monster and 1068 NPC records using center-relative X/Y and absolute Z
   - full factual scan finds 2311 AID records (736 unique), 597 UID records, 2406 teleports, 109744 house tiles, 4527 house doors, 33 towns and 18 waypoints
   - conservative Lua resolution yields 496 RESOLVED, 18 AMBIGUOUS and 819 UNRESOLVED unique AID/UID values; 103 dynamic registrations remain UNKNOWN
-  - AID 5555 resolves only to scripts/movements/teleport/sorcerer_guild_thais.lua and UID 65207 only to the literal dispatch table in quest_system2.lua
   - composition inventory classifies 1 base map, 1 conditional custom overlay, 28 runtime-loaded overlays and 2 UNKNOWN maps; none are flattened into the base atlas
   - cropped rendering preserves a conservative two-tile 64x64/displacement gutter; a one-tile canonical chunk renders at 96x96 in 0.032 seconds
-  - two-process Windows spawn smoke test renders two real canonical chunks successfully
   - full four-worker atlas build completes all 3494 chunks in 3367.867 seconds and writes 10996609082 PNG bytes
   - independent verification recomputes every PNG checksum/header/dimension with zero manifest or file-set errors
   - full atlas has 24504222 render operations, 18996181 ground items and 5508042 child items
@@ -80,15 +77,16 @@ proven:
   - unchanged full-atlas cache verification completes in 19.418 seconds without rerendering chunks
   - viewer exposes relative floor labels -8 through +7 while preserving raw OTBM Z=0..15 in manifests and data
   - render-mode runtime tests pass for URL precedence, persistence, state preservation, layer selection and bounded LRU
+  - full world has 3494 verified detail, 3494 4x overview and 3494 8x overview PNGs plus 2595 spatial overlay shards
+  - historical 15037 versus canonical 14993 Thais child-item totals reproduce exactly from different OTBM SHA-256 inputs
+  - browser E2E proves Auto low/high, Detailed low, Performance high, floor switch, search, URL state and marker details without page errors
 derived:
   - semantic parsing must operate incrementally over node events to preserve bounded memory
   - current 77.074 second framing scan needs profiling before it can be accepted for repeated full runs
-  - Thais child-item discrepancy requires asset-aware ground/appearance classification rather than counter adjustment
-  - current Thais output is semantically coherent but the old reference counters are not reproducible from the pinned OTBM node inventory
+  - the 44-item Thais discrepancy is source revision drift, not a counting-definition mismatch
 unknown:
-  - exact semantic item total
-  - effective overlay composition
-  - full atlas runtime, size and peak memory
+  - peak browser and pipeline memory on owner hardware
+  - owner-hardware performance beyond the owner's qualitative smoothness report
 conflicts:
   - historical OAM-040 excluded target-local tooling; the later explicit owner task requests repository-owned atlas tooling
 first_failure:
@@ -134,10 +132,10 @@ validation:
   - command: cached python -m tools.otbm_atlas.atlas canonical inputs same output
     result: PASS
     evidence: 19.418 seconds; no chunk rerender required
-  - command: HTTP GET viewer manifest mechanics spawns real z7 chunk
+  - command: python -m tools.otbm_atlas.verify build/full-map-atlas; Playwright Thais E2E
     result: PASS
-    evidence: all return 200 with correct HTML JSON and image/png content types
+    evidence: 3494 chunks per imagery layer verify; mode request routing, floor, search and details pass
 blockers:
   - none
-next_action: finish spatial overlay and URL-state UX, then generate and verify all full-world overview chunks
+next_action: commit and push final fixes, then run exact-head CI and PR closeout checks
 ```

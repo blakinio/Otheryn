@@ -8,7 +8,7 @@ canonical CrystalServer world documented in `docs/maps/crystalserver-canonical-s
 The pipeline incrementally parses the pinned gzip-wrapped OTBM, spools bounded
 128×128 world chunks, renders canonical detailed PNGs from the pinned 6031-file
 Tibia 15.25 asset subset, and derives lightweight overview PNGs by deterministic
-4× and 8× alpha-aware downsampling of those exact detailed pixels. All layers retain
+4× and 8× deterministic nearest-pixel downsampling of those exact detailed pixels. All layers retain
 per-chunk SHA-256 checksums in the manifest. No external map geometry or imagery
 is used.
 
@@ -94,6 +94,23 @@ Large factual overlay collections are additionally partitioned under
 chunks plus one 128-tile prefetch margin. `data/search-index.json` contains one
 compact factual navigation entry per unique category/label, while details come
 from the spatial records.
+Monster markers are suppressed below zoom 0.25 to avoid drawing tens of
+thousands of individual points; their factual shards remain available and no
+records are reclassified. Bosses remain explicitly UNKNOWN because the canonical
+sources provide no authoritative boss classification.
+
+## Prototype evolution
+
+The owner-provided `oteryn-thais-interactive-demo.zip` was inspected as the
+primary UI reference. PRESERVED: its dark Otheryn Maps language, dominant map,
+top search/current coordinates, compact layer controls, drag/wheel/zoom buttons,
+clickable markers, details surface, and shareable view state. ADAPTED: the fixed
+Thais image becomes viewport-loaded multi-floor chunks; the NPC-only search and
+layer panel use generated factual world indexes; the fixed right sidebar becomes
+a floating responsive details panel. REPLACED: prototype demo JSON, single-region
+bounds, image-wide transforms, and DOM marker collection are replaced by
+canonical generated shards, canvas drawing, bounded caches, and URL/localStorage
+state. No prototype map pixels or demo records are authoritative inputs.
 `data/unknown-items.json` lists every server ID without a canonical appearance,
 including occurrence counts and source chunk bounds. These items remain visibly
 unresolved; the renderer never substitutes another sprite.
@@ -126,3 +143,15 @@ python -m tools.otbm_atlas.verify build/full-map-atlas `
 The node framing follows the authoritative Remere's Map Editor implementation in
 `source/filehandle.h` and `source/filehandle.cpp`; semantic work must likewise be
 cross-checked against its `source/iomap_otbm.*` implementation.
+
+## Thais counter reconciliation
+
+The historical 15,037 child-item reference and the pinned-world 14,993 result use
+the same semantic definition: every decoded non-ground item, including nested
+container children. The 44-item difference is source revision drift. Running the
+same strict parser over the owner prototype's `otservbr.otbm` (SHA-256
+`a80de1dda6a9aca3956a9d5b7fb2e0caebb451570d26853fc21beb40d5f31da2`)
+reproduces 15,037 exactly; the pinned canonical `world.otbm` (SHA-256
+`3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034`)
+contains 14,993 in the same bounds. Both contain 24,311 tiles and 24,292 ground
+items. The pipeline therefore does not force the historical total.
