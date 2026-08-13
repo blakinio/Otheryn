@@ -85,6 +85,7 @@ class MapHeader:
 @dataclass(frozen=True, slots=True)
 class Item:
 	server_id: int
+	subtype: int | None = None
 	action_id: int | None = None
 	unique_id: int | None = None
 	text: str | None = None
@@ -224,6 +225,7 @@ def _finish_item(value: dict[str, Any], children: list[Any]) -> Item:
 	attributes = value["attributes"]
 	return Item(
 		server_id=value["server_id"],
+		subtype=value.get("count", value.get("charges")),
 		action_id=value.get("action_id", attributes.get("aid")),
 		unique_id=value.get("unique_id", attributes.get("uid")),
 		text=value.get("text", attributes.get("text")),

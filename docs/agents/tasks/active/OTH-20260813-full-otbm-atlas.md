@@ -34,7 +34,7 @@ head: e7f7cbe0d55183c070050e83a81b83150b67f344
 branch: blakinio/otbm-full-map-atlas
 pr: 373
 status: ready
-phase: asset-decoder-ready
+phase: chunk-pipeline-ready
 session_id: codex-20260813-001
 session_role: implementer
 execution_mode: codex
@@ -46,7 +46,7 @@ context_score: 12
 decomposition_decision: phased
 decomposition_reason: one integrated product with seven sequential evidence gates
 invocation_started_at: 2026-08-13T12:10:00+02:00
-last_progress_at: 2026-08-13T13:38:00+02:00
+last_progress_at: 2026-08-13T14:08:00+02:00
 ci_checks_for_current_head: 0
 unchanged_state_checks: 0
 identical_failure_retries: 0
@@ -73,14 +73,16 @@ proven:
   - semantic parser strict scan covers 18997668 tiles across every Z level 0 through 15 with zero diagnostics
   - Thais scan exactly matches 24311 tiles and 24292 ground items and independently locates AID 5555 and UID 65207
   - canonical scan CLI output fingerprints world.otbm as 3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034
+  - pinned assets decode to 42107 object appearances and 4927 sprite sheets with 75623 referenced sprite IDs and zero missing catalog sprites
+  - Thais renders at 5152x4832 from vendored sprites with zero missing appearances and zero missing sprites
 derived:
   - semantic parsing must operate incrementally over node events to preserve bounded memory
   - current 77.074 second framing scan needs profiling before it can be accepted for repeated full runs
   - Thais child-item discrepancy requires asset-aware ground/appearance classification rather than counter adjustment
+  - current Thais output is semantically coherent but the old reference counters are not reproducible from the pinned OTBM node inventory
 unknown:
   - exact semantic tile and item totals
   - effective overlay composition
-  - appearance-to-sprite decoding completeness
   - full atlas runtime, size and peak memory
 conflicts:
   - historical OAM-040 excluded target-local tooling; the later explicit owner task requests repository-owned atlas tooling
@@ -100,6 +102,10 @@ changed_paths:
   - tools/otbm_atlas/scan.py
   - tools/otbm_atlas/tests/test_semantic.py
   - tools/otbm_atlas/tests/test_scan.py
+  - tools/otbm_atlas/assets.py
+  - tools/otbm_atlas/render.py
+  - tools/otbm_atlas/tests/test_assets.py
+  - tools/otbm_atlas/tests/test_render.py
   - docs/agents/tasks/active/OTH-20260813-full-otbm-atlas.md
 validation:
   - command: python -m unittest discover -s tools/otbm_atlas/tests -v
@@ -114,7 +120,13 @@ validation:
   - command: python -m tools.otbm_atlas.scan world.otbm --bounds 32280 32440 32155 32305 7
     result: PASS
     evidence: build/otbm-atlas/thais-scan.json; 24311 tiles, 24292 ground, 14993 decoded child items, zero diagnostics
+  - command: python -m unittest discover -s tools/otbm_atlas/tests -v
+    result: PASS
+    evidence: 17 tests pass including protobuf wire decoding, catalog layout, PNG and alpha compositing
+  - command: python -m tools.otbm_atlas.render world.otbm assets --bounds 32280 32440 32155 32305 7
+    result: PASS
+    evidence: build/otbm-atlas/thais.png and thais-render.json; 39285 operations, 863 appearances, 1002 sprites, zero missing
 blockers:
   - none
-next_action: decode the pinned appearances protobuf and catalog-to-sprite-sheet mapping, then classify the Thais item discrepancy without guesses
+next_action: implement the single-pass disk-spooled chunk builder, resumable manifest, and static atlas viewer
 ```

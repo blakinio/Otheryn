@@ -1,0 +1,135 @@
+"""Deterministic region renderer using only canonical OTBM and Tibia assets."""
+
+from __future__ import annotations
+
+import argparse
+from collections import Counter
+from dataclasses import dataclass
+import json
+from pathlib import Path
+from typing import Iterator
+
+from .assets import Appearance, SpriteSheet, decode_sheet, encode_png, extract_sprite, load_object_appearances, load_sprite_catalog, sheet_for_sprite
+from .semantic import Item, Tile, iter_map_records, walk_items
+
+
+@dataclass(slots=True)
+class RenderStats:
+	tiles: int = 0
+	ground_items: int = 0
+	child_items: int = 0
+	render_operations: int = 0
+
+
+def _blend(canvas: bytearray, canvas_width: int, canvas_height: int, source: bytes, width: int, height: int, x: int, y: int) -> None:
+	for source_y in range(height):
+		destination_y = y + source_y
+		if not 0 <= destination_y < canvas_height: continue
+		for source_x in range(width):
+			destination_x = x + source_x
+			if not 0 <= destination_x < canvas_width: continue
+			source_index = (source_y * width + source_x) * 4
+			alpha = source[source_index + 3]
+			if alpha == 0: continue
+			destination_index = (destination_y * canvas_width + destination_x) * 4
+			if alpha == 255:
+				canvas[destination_index : destination_index + 4] = source[source_index : source_index + 4]
+				continue
+			inverse = 255 - alpha
+			for channel in range(3):
+				canvas[destination_index + channel] = (source[source_index + channel] * alpha + canvas[destination_index + channel] * inverse + 127) // 255
+			canvas[destination_index + 3] = alpha + (canvas[destination_index + 3] * inverse + 127) // 255
+
+
+class AssetRenderer:
+	def __init__(self, asset_dir: Path) -> None:
+		appearance_path = next(asset_dir.glob("appearances-*.dat"))
+		self.appearances = load_object_appearances(appearance_path)
+		self.sheets = load_sprite_catalog(asset_dir)
+		self.sheet_cache: dict[Path, bytes] = {}
+		self.sprite_cache: dict[int, tuple[int, int, bytes]] = {}
+		self.missing_appearances: Counter[int] = Counter()
+		self.missing_sprites: Counter[int] = Counter()
+		self.appearance_ids: set[int] = set()
+		self.sprite_ids: set[int] = set()
+
+	def sprite(self, sprite_id: int) -> tuple[int, int, bytes] | None:
+		if sprite_id in self.sprite_cache: return self.sprite_cache[sprite_id]
+		sheet = sheet_for_sprite(self.sheets, sprite_id)
+		if sheet is None:
+			self.missing_sprites[sprite_id] += 1; return None
+		if sheet.path not in self.sheet_cache:
+			_width, _height, pixels = decode_sheet(sheet.path)
+			self.sheet_cache[sheet.path] = pixels
+		result = extract_sprite(sheet, self.sheet_cache[sheet.path], sprite_id)
+		self.sprite_cache[sprite_id] = result
+		return result
+
+	def item_sprites(self, item: Item, position_x: int, position_y: int, position_z: int) -> Iterator[tuple[Appearance, int, tuple[int, int, bytes]]]:
+		appearance = self.appearances.get(item.server_id)
+		self.appearance_ids.add(item.server_id)
+		if appearance is None or not appearance.frames:
+			self.missing_appearances[item.server_id] += 1; return
+		frame = appearance.frames[0]
+		pattern_x = position_x % frame.pattern_width
+		pattern_y = position_y % frame.pattern_height
+		pattern_z = position_z % frame.pattern_depth
+		phase = frame.default_start_phase % frame.animation_phases
+		for layer in range(frame.layers):
+			index = ((((phase * frame.pattern_depth + pattern_z) * frame.pattern_height + pattern_y) * frame.pattern_width + pattern_x) * frame.layers + layer)
+			if index >= len(frame.sprite_ids):
+				self.missing_sprites[-item.server_id] += 1; continue
+			sprite_id = frame.sprite_ids[index]
+			self.sprite_ids.add(sprite_id)
+			decoded = self.sprite(sprite_id)
+			if decoded is not None: yield appearance, sprite_id, decoded
+
+
+def render_region(map_path: Path, asset_dir: Path, bounds: tuple[int, int, int, int, int]) -> tuple[bytes, dict[str, object]]:
+	x1, x2, y1, y2, z = bounds
+	width, height = (x2 - x1 + 1) * 32, (y2 - y1 + 1) * 32
+	canvas = bytearray(width * height * 4)
+	renderer = AssetRenderer(asset_dir)
+	stats = RenderStats()
+	for tile in (record for record in iter_map_records(map_path, strict=True) if isinstance(record, Tile)):
+		if tile.position.z != z or not (x1 <= tile.position.x <= x2 and y1 <= tile.position.y <= y2): continue
+		stats.tiles += 1
+		items: list[Item] = []
+		if tile.ground is not None:
+			stats.ground_items += 1; items.append(tile.ground)
+		children = tuple(walk_items(tile.items)); stats.child_items += len(children); items.extend(children)
+		for item in items:
+			for appearance, _sprite_id, (sprite_width, sprite_height, pixels) in renderer.item_sprites(item, tile.position.x, tile.position.y, tile.position.z):
+				shift_x, shift_y = appearance.shift or (0, 0)
+				draw_x = (tile.position.x - x1) * 32 - (sprite_width - 32) - shift_x
+				draw_y = (tile.position.y - y1) * 32 - (sprite_height - 32) - shift_y
+				if appearance.height: draw_x -= appearance.height; draw_y -= appearance.height
+				_blend(canvas, width, height, pixels, sprite_width, sprite_height, draw_x, draw_y)
+				stats.render_operations += 1
+	report: dict[str, object] = {
+		"bounds": list(bounds), "imageWidth": width, "imageHeight": height,
+		"tiles": stats.tiles, "groundItems": stats.ground_items, "childItems": stats.child_items,
+		"renderOperations": stats.render_operations,
+		"uniqueAppearanceIds": len(renderer.appearance_ids), "uniqueSpriteIds": len(renderer.sprite_ids),
+		"missingAppearances": dict(sorted(renderer.missing_appearances.items())),
+		"missingSprites": dict(sorted(renderer.missing_sprites.items())),
+		"animationPolicy": "first frame group, declared default_start_phase, no elapsed-time advancement",
+	}
+	return encode_png(width, height, bytes(canvas)), report
+
+
+def main() -> int:
+	parser = argparse.ArgumentParser(description=__doc__)
+	parser.add_argument("map", type=Path); parser.add_argument("assets", type=Path)
+	parser.add_argument("--bounds", nargs=5, type=int, required=True, metavar=("X1", "X2", "Y1", "Y2", "Z"))
+	parser.add_argument("--output", type=Path, required=True); parser.add_argument("--report", type=Path)
+	args = parser.parse_args()
+	png, report = render_region(args.map, args.assets, tuple(args.bounds))
+	args.output.parent.mkdir(parents=True, exist_ok=True); args.output.write_bytes(png)
+	if args.report:
+		args.report.parent.mkdir(parents=True, exist_ok=True)
+		args.report.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
+	return 1 if report["missingAppearances"] or report["missingSprites"] else 0
+
+
+if __name__ == "__main__": raise SystemExit(main())

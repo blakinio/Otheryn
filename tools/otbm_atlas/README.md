@@ -29,6 +29,22 @@ python -m tools.otbm_atlas.scan `
 The command records the source SHA-256, header, tile/item statistics, populated
 floors, AIDs, UIDs, teleports, house doors, towns, waypoints, and diagnostics.
 
+Render the same region exclusively from the pinned appearance and sprite assets:
+
+```powershell
+python -m tools.otbm_atlas.render `
+  vendor/map-analysis/crystalserver/data-global/world/world.otbm `
+  vendor/map-analysis/tibia-client/15.25.bd5a04/assets `
+  --bounds 32280 32440 32155 32305 7 `
+  --output build/otbm-atlas/thais.png `
+  --report build/otbm-atlas/thais-render.json
+```
+
+Static rendering uses the first object frame group and its declared
+`default_start_phase`; elapsed time and random animation start are never used.
+Missing appearances, missing sprites, invalid protobuf wire data, malformed LZMA
+headers, and unexpected sheet dimensions are explicit failures/diagnostics.
+
 The node framing follows the authoritative Remere's Map Editor implementation in
 `source/filehandle.h` and `source/filehandle.cpp`; semantic work must likewise be
 cross-checked against its `source/iomap_otbm.*` implementation.
