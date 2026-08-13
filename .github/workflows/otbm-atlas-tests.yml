@@ -68,6 +68,137 @@ jobs:
           assert Path('/tmp/thais.png').read_bytes().startswith(b'\x89PNG\r\n\x1a\n')
           PY
 
+  browser-e2e:
+    name: Real browser Thais E2E
+    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:final-gate')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          persist-credentials: false
+      - name: Install Chromium browser harness
+        run: |
+          python3 -m pip install --disable-pip-version-check playwright==1.54.0
+          python3 -m playwright install --with-deps chromium
+      - name: Build canonical Thais browser fixture
+        run: |
+          root=/tmp/otheryn-atlas-e2e
+          mkdir -p "$root/tiles/z7" "$root/data/chunks/z7"
+          python3 -m tools.otbm_atlas.render \
+            vendor/map-analysis/crystalserver/data-global/world/world.otbm \
+            vendor/map-analysis/tibia-client/15.25.bd5a04/assets \
+            --bounds 32340 32371 32215 32246 7 \
+            --output "$root/tiles/z7/252_251.png" \
+            --report "$root/render.json"
+          python3 - <<'PY'
+          import json
+          import shutil
+          from pathlib import Path
+          from tools.otbm_atlas.spawns import scan_spawns
+          from tools.otbm_atlas.viewer import write_viewer
+
+          root = Path('/tmp/otheryn-atlas-e2e')
+          report = json.loads((root / 'render.json').read_text(encoding='utf-8'))
+          x1, x2, y1, y2, z = report['bounds']
+          spawns = scan_spawns(Path('vendor/map-analysis/crystalserver/data-global/world'))
+          candidates = [
+              record for record in spawns['npcSpawns']
+              if record['position']['z'] == z
+              and x1 <= record['position']['x'] <= x2
+              and y1 <= record['position']['y'] <= y2
+              and record.get('origin') == 'base-map'
+          ]
+          assert candidates, 'canonical Thais browser fixture contains no base-map NPC'
+          npc = sorted(candidates, key=lambda record: (record['name'].casefold(), record['position']['y'], record['position']['x']))[0]
+          source = root / 'tiles/z7/252_251.png'
+          chunk = {
+              'z': 7,
+              'chunkX': 252,
+              'chunkY': 251,
+              'logicalBounds': [32340, 32371, 32215, 32246, 7],
+              'bounds': report['bounds'],
+              'path': 'tiles/z7/252_251.png',
+              'overviewPath': 'tiles/z7/252_251.png',
+              'lowOverviewPath': 'tiles/z7/252_251.png',
+              'imageWidth': report['imageWidth'],
+              'imageHeight': report['imageHeight'],
+          }
+          (root / 'manifest.json').write_text(json.dumps({'schemaVersion': 3, 'chunkSize': 128, 'chunks': [chunk]}, sort_keys=True), encoding='utf-8')
+          (root / 'data/search-index.json').write_text(json.dumps({'records': [{'kind': 'npcSpawns', 'label': npc['name'], 'position': npc['position']}]}, sort_keys=True), encoding='utf-8')
+          (root / 'data/chunks/z7/252_251.json').write_text(json.dumps({'npcSpawns': [npc]}, sort_keys=True), encoding='utf-8')
+          (root / 'fixture.json').write_text(json.dumps({'npc': npc['name'], 'position': npc['position']}, sort_keys=True), encoding='utf-8')
+          write_viewer(root)
+          assert source.read_bytes().startswith(b'\x89PNG\r\n\x1a\n')
+          PY
+      - name: Exercise real browser journey
+        run: |
+          python3 -m http.server 8123 --directory /tmp/otheryn-atlas-e2e >/tmp/otheryn-atlas-http.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" || true' EXIT
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from urllib.parse import parse_qs, urlparse
+          from playwright.sync_api import sync_playwright
+
+          fixture = json.loads(Path('/tmp/otheryn-atlas-e2e/fixture.json').read_text(encoding='utf-8'))
+          npc = fixture['npc']
+          position = fixture['position']
+          errors = []
+          with sync_playwright() as playwright:
+              browser = playwright.chromium.launch(headless=True)
+              page = browser.new_page(viewport={'width': 1280, 'height': 720})
+              page.on('pageerror', lambda exc: errors.append(f'pageerror:{exc}'))
+              page.on('console', lambda msg: errors.append(f'console:{msg.text}') if msg.type == 'error' else None)
+              url = f"http://127.0.0.1:8123/?x={position['x']}&y={position['y']}&z=7&zoom=1&render=detailed&layers=npcSpawns"
+              page.goto(url, wait_until='networkidle')
+              page.wait_for_function("document.querySelector('#status').textContent.includes('Drag to pan')")
+              assert page.locator('#map').is_visible()
+              assert page.locator('#renderMode').input_value() == 'detailed'
+              assert 'X ' in page.locator('#coords').inner_text()
+
+              page.locator('#search').fill(npc)
+              result = page.locator('#searchResults button').first
+              result.wait_for(state='visible')
+              assert npc.casefold() in result.inner_text().casefold()
+              result.click()
+              query = parse_qs(urlparse(page.url).query)
+              assert int(float(query['x'][0])) == position['x']
+              assert int(float(query['y'][0])) == position['y']
+              assert int(float(query['z'][0])) == 7
+
+              page.wait_for_timeout(1000)
+              page.mouse.click(1280 / 2 + 16, 720 / 2 + 16)
+              page.locator('#details:not([hidden])').wait_for(state='visible')
+              assert npc.casefold() in page.locator('#details').inner_text().casefold()
+
+              page.locator('#renderMode').select_option('performance')
+              assert parse_qs(urlparse(page.url).query)['render'] == ['performance']
+              page.reload(wait_until='networkidle')
+              assert page.locator('#renderMode').input_value() == 'performance'
+
+              page.locator('[data-overlay="npcSpawns"]').uncheck()
+              layers = parse_qs(urlparse(page.url).query).get('layers', [''])[0].split(',')
+              assert 'npcSpawns' not in layers
+
+              page.locator('#search').fill(f"{position['x']},{position['y']},7")
+              coordinate_result = page.locator('#searchResults button').first
+              coordinate_result.wait_for(state='visible')
+              assert 'Go to' in coordinate_result.inner_text()
+              coordinate_result.click()
+
+              page.locator('#showDiagnostics').check()
+              assert page.locator('#diagnostics').is_visible()
+              assert 'Visible chunks' in page.locator('#diagnostics').inner_text()
+              page.screenshot(path='/tmp/otheryn-atlas-e2e.png', full_page=True)
+              browser.close()
+          assert not errors, errors
+          assert Path('/tmp/otheryn-atlas-e2e.png').stat().st_size > 0
+          print(json.dumps({'browser': 'chromium', 'canonicalNpc': npc, 'journey': 'PASS'}, sort_keys=True))
+          PY
+
   full-world:
     name: Full canonical world v3
     if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:final-gate')
