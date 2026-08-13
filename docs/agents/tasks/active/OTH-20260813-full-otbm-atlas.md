@@ -30,11 +30,11 @@ exact-head CI and PR closeout. No generated multi-gigabyte atlas is committed.
 checkpoint_version: 1
 policy_version: 2
 updated_at: 2026-08-13T13:00:00+02:00
-head: b1f5169fd37f4eb0c78fdcbeccf24e4c6236a9d2
+head: e7387a5b1
 branch: blakinio/otbm-full-map-atlas
 pr: 373
 status: ready
-phase: full-world-render-ready
+phase: full-world-render-verified
 session_id: codex-20260813-001
 session_role: implementer
 execution_mode: codex
@@ -46,7 +46,7 @@ context_score: 12
 decomposition_decision: phased
 decomposition_reason: one integrated product with seven sequential evidence gates
 invocation_started_at: 2026-08-13T12:10:00+02:00
-last_progress_at: 2026-08-13T16:25:00+02:00
+last_progress_at: 2026-08-13T18:05:00+02:00
 ci_checks_for_current_head: 0
 unchanged_state_checks: 0
 identical_failure_retries: 0
@@ -87,6 +87,12 @@ proven:
   - composition inventory classifies 1 base map, 1 conditional custom overlay, 28 runtime-loaded overlays and 2 UNKNOWN maps; none are flattened into the base atlas
   - cropped rendering preserves a conservative two-tile 64x64/displacement gutter; a one-tile canonical chunk renders at 96x96 in 0.032 seconds
   - two-process Windows spawn smoke test renders two real canonical chunks successfully
+  - full four-worker atlas build completes all 3494 chunks in 3367.867 seconds and writes 10996609082 PNG bytes
+  - independent verification recomputes every PNG checksum/header/dimension with zero manifest or file-set errors
+  - full atlas has 24504222 render operations, 18996181 ground items and 5508042 child items
+  - exactly one canonical item server ID 2141 at 33572,32528,14 lacks an appearance; it is recorded in unknown-items.json and is not substituted
+  - 995 canonical houses parse from world-house.xml
+  - unchanged full-atlas cache verification completes in 19.418 seconds without rerendering chunks
 derived:
   - semantic parsing must operate incrementally over node events to preserve bounded memory
   - current 77.074 second framing scan needs profiling before it can be accepted for repeated full runs
@@ -128,6 +134,10 @@ changed_paths:
   - tools/otbm_atlas/composition.py
   - tools/otbm_atlas/tests/test_mechanics.py
   - tools/otbm_atlas/tests/test_composition.py
+  - tools/otbm_atlas/houses.py
+  - tools/otbm_atlas/verify.py
+  - tools/otbm_atlas/tests/test_houses.py
+  - tools/otbm_atlas/tests/test_verify.py
   - docs/agents/tasks/active/OTH-20260813-full-otbm-atlas.md
 validation:
   - command: python -m unittest discover -s tools/otbm_atlas/tests -v
@@ -172,7 +182,19 @@ validation:
   - command: python -m tools.otbm_atlas._parallel_smoke
     result: PASS
     evidence: two Windows spawn workers rendered separate real canonical chunks and returned [1, 1]; temporary smoke module removed afterward
+  - command: python -m tools.otbm_atlas.atlas canonical-map canonical-assets build/full-map-atlas --workers 4
+    result: PASS
+    evidence: 3494 PNG/report pairs across Z0..15; 3367.867 seconds; 11642482558 total atlas bytes including spool/data
+  - command: python -m tools.otbm_atlas.verify build/full-map-atlas
+    result: PASS
+    evidence: all 3494 independent checksums and PNG dimensions pass; zero file-set errors; one explicit missing appearance and zero missing sprites
+  - command: cached python -m tools.otbm_atlas.atlas canonical inputs same output
+    result: PASS
+    evidence: 19.418 seconds; no chunk rerender required
+  - command: HTTP GET viewer manifest mechanics spawns real z7 chunk
+    result: PASS
+    evidence: all return 200 with correct HTML JSON and image/png content types
 blockers:
   - none
-next_action: run the complete four-worker atlas build, collect time/size/missing-resource totals, then perform static-viewer E2E and exact-head CI
+next_action: commit verification tooling, perform exact-head CI/PR checks, and complete browser E2E if the Chrome extension initialization blocker clears
 ```

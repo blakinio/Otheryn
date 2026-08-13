@@ -75,6 +75,9 @@ overlays are listed separately. `data/mechanics-resolution.json` links literal
 AID/UID registrations and legacy literal UID dispatch tables to Lua scripts with
 `RESOLVED`, `AMBIGUOUS`, or `UNRESOLVED` status. Dynamic registrations stay
 explicitly `UNKNOWN`.
+`data/unknown-items.json` lists every server ID without a canonical appearance,
+including occurrence counts and source chunk bounds. These items remain visibly
+unresolved; the renderer never substitutes another sprite.
 
 To build only the spawn index:
 
@@ -92,6 +95,13 @@ python -m tools.otbm_atlas.mechanics build/full-map-atlas/data/mechanics.json `
 python -m tools.otbm_atlas.composition `
   vendor/map-analysis/crystalserver/data-global/world . `
   build/full-map-atlas/data/composition.json
+```
+
+Verify every manifest entry, PNG header/dimension and checksum independently:
+
+```powershell
+python -m tools.otbm_atlas.verify build/full-map-atlas `
+  --output build/full-map-atlas/verification.json
 ```
 
 The node framing follows the authoritative Remere's Map Editor implementation in

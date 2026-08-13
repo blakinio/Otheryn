@@ -12,7 +12,7 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111;color:
 label{display:flex;gap:5px;align-items:center}input[type=number]{width:74px}button,select,input{background:#292929;color:#eee;border:1px solid #666;padding:3px}
 #status{position:absolute;z-index:2;right:12px;bottom:12px;background:#181818dd;padding:6px}
 </style></head><body><canvas id="map"></canvas><div id="controls">
-<label>Floor <select id="floor"></select></label><div><input id="x" type="number" placeholder="X"><input id="y" type="number" placeholder="Y"><button id="jump">Jump</button></div>
+<label>Floor <select id="floor"></select></label><div><input id="x" type="number" placeholder="X"><input id="y" type="number" placeholder="Y"><input id="z" type="number" min="0" max="15" placeholder="Z"><button id="jump">Jump</button></div>
 <label><input type="checkbox" data-overlay="actionIds"> AID</label><label><input type="checkbox" data-overlay="uniqueIds"> UID</label>
 <label><input type="checkbox" data-overlay="teleports"> Teleports</label><label><input type="checkbox" data-overlay="houseDoors"> House doors</label>
 <label><input type="checkbox" data-overlay="monsterSpawns"> Monsters</label><label><input type="checkbox" data-overlay="npcSpawns"> NPCs</label>
@@ -27,7 +27,7 @@ function draw(){if(!manifest)return;ctx.clearRect(0,0,canvas.width,canvas.height
  for(const group of enabled)for(const fact of overlays[group]||[]){const p=fact.position;if(!p||p.z!==z)continue;const [sx,sy]=worldToScreen(p.x+.5,p.y+.5);ctx.fillStyle=group==='teleports'?'#00ffff':group==='monsterSpawns'?'#ff3333':group==='npcSpawns'?'#33ff66':'#ffff00';ctx.beginPath();ctx.arc(sx,sy,Math.max(3,5*scale),0,Math.PI*2);ctx.fill()}}
 canvas.onpointerdown=e=>{drag=[e.clientX,e.clientY,centerX,centerY];canvas.setPointerCapture(e.pointerId)};canvas.onpointermove=e=>{const [wx,wy]=screenToWorld(e.clientX*devicePixelRatio,e.clientY*devicePixelRatio);status.textContent=`X ${Math.floor(wx)} Y ${Math.floor(wy)} Z ${z}`;if(drag){centerX=drag[2]-(e.clientX-drag[0])*devicePixelRatio/(32*scale);centerY=drag[3]-(e.clientY-drag[1])*devicePixelRatio/(32*scale);draw()}};canvas.onpointerup=()=>drag=null;
 canvas.onwheel=e=>{e.preventDefault();scale=Math.max(.03,Math.min(4,scale*Math.exp(-e.deltaY*.001)));draw()};
-floorSelect.onchange=()=>{z=+floorSelect.value;draw()};document.querySelector('#jump').onclick=()=>{centerX=+document.querySelector('#x').value||centerX;centerY=+document.querySelector('#y').value||centerY;draw()};
+floorSelect.onchange=()=>{z=+floorSelect.value;draw()};document.querySelector('#jump').onclick=()=>{centerX=+document.querySelector('#x').value||centerX;centerY=+document.querySelector('#y').value||centerY;const jumpZ=document.querySelector('#z').value;if(jumpZ!==''){z=Math.max(0,Math.min(15,+jumpZ));floorSelect.value=z}draw()};
 for(const box of document.querySelectorAll('[data-overlay]'))box.onchange=()=>{box.checked?enabled.add(box.dataset.overlay):enabled.delete(box.dataset.overlay);draw()};
 Promise.all([fetch('manifest.json').then(r=>r.json()),fetch('data/mechanics.json').then(r=>r.ok?r.json():{}).catch(()=>({})),fetch('data/spawns.json').then(r=>r.ok?r.json():{}).catch(()=>({}))]).then(([m,mechanics,spawns])=>{manifest=m;chunks=m.chunks;overlays={...mechanics,...spawns};const floors=[...new Set(chunks.map(c=>c.z))].sort((a,b)=>a-b);floorSelect.innerHTML=floors.map(v=>`<option ${v===z?'selected':''}>${v}</option>`).join('');status.textContent='Drag to pan · wheel to zoom';resize()});
 </script></body></html>'''
