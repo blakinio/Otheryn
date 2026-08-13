@@ -24,7 +24,7 @@ from .overview import make_overview, OVERVIEW_FACTOR, LOW_OVERVIEW_FACTOR, OVERV
 from .spatial import write_spatial_data
 
 SPOOL_VERSION = 1
-ATLAS_VERSION = 2
+ATLAS_VERSION = 3
 _WORKER_RENDERER: AssetRenderer | None = None
 
 
@@ -45,7 +45,7 @@ def _decode_item(handle: BinaryIO) -> Item:
 def encode_tile(tile: Tile) -> bytes:
 	house_id = 0xFFFFFFFF if tile.house_id is None else tile.house_id
 	items = (() if tile.ground is None else (tile.ground,)) + tile.items
-	payload = struct.pack("<HHBIIHH", tile.position.x, tile.position.y, tile.position.z, house_id, tile.flags, len(tile.zones), len(items))
+	payload = struct.pack("<HHBIIHH", tile.position.x, tile.position.y, tile.position.z, house_id, flags, len(tile.zones), len(items))
 	payload += b"".join(struct.pack("<H", zone) for zone in tile.zones)
 	payload += b"".join(_encode_item(item) for item in items)
 	return struct.pack("<I", len(payload)) + payload
