@@ -24,7 +24,7 @@ from .overview import make_overview, OVERVIEW_FACTOR, LOW_OVERVIEW_FACTOR, OVERV
 from .spatial import write_spatial_data
 
 SPOOL_VERSION = 1
-ATLAS_VERSION = 2
+ATLAS_VERSION = 3
 _WORKER_RENDERER: AssetRenderer | None = None
 
 
