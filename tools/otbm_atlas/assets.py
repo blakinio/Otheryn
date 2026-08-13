@@ -161,15 +161,29 @@ def _appearance(data: bytes) -> Appearance:
 	)
 
 
-def load_object_appearances(path: str | Path) -> dict[int, Appearance]:
+def load_appearances(path: str | Path, category_field: int) -> dict[int, Appearance]:
+	"""Load one appearance category from the pinned Tibia asset file.
+
+	The asset protobuf keeps item, creature and effect appearances in separate
+	repeated fields.  Atlas tiles use items (field 1); NPC outfits use creatures
+	(field 2) and must never be guessed from an item appearance.
+	"""
 	data = Path(path).read_bytes()
 	result: dict[int, Appearance] = {}
-	for payload in _embedded(data, 1):
+	for payload in _embedded(data, category_field):
 		appearance = _appearance(payload)
 		if appearance.appearance_id in result:
 			raise AssetError(f"duplicate appearance id {appearance.appearance_id}")
 		result[appearance.appearance_id] = appearance
 	return result
+
+
+def load_object_appearances(path: str | Path) -> dict[int, Appearance]:
+	return load_appearances(path, 1)
+
+
+def load_creature_appearances(path: str | Path) -> dict[int, Appearance]:
+	return load_appearances(path, 2)
 
 
 def load_sprite_catalog(asset_dir: str | Path) -> list[SpriteSheet]:
