@@ -14,6 +14,7 @@ from tools.otbm_atlas.semantic import Item, Position, Tile
 class AtlasTests(unittest.TestCase):
 	def test_authoritative_core_uses_v3_cache_schema(self) -> None:
 		self.assertEqual(_atlas_core.ATLAS_VERSION, 3)
+		self.assertEqual(_atlas_core.build_atlas.__globals__["ATLAS_VERSION"], 3)
 
 	def test_spool_codec_round_trip_preserves_render_structure(self) -> None:
 		tile = Tile(Position(123, 456, 7), 42, 3, Item(100), (Item(200, 5, children=(Item(201),)),), (8, 9))
