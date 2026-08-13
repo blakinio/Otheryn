@@ -1,0 +1,158 @@
+"""Single-pass, disk-spooled, resumable full-map atlas builder."""
+
+from __future__ import annotations
+
+import argparse
+from collections import OrderedDict
+from dataclasses import asdict
+import hashlib
+import json
+from pathlib import Path
+import shutil
+import struct
+from typing import BinaryIO, Iterator
+
+from .render import AssetRenderer, render_tiles
+from .semantic import Item, Position, Tile, iter_map_records
+from .viewer import write_viewer
+
+SPOOL_VERSION = 1
+ATLAS_VERSION = 1
+
+
+def _encode_item(item: Item) -> bytes:
+	subtype = 0xFFFF if item.subtype is None else item.subtype
+	children = b"".join(_encode_item(child) for child in item.children)
+	return struct.pack("<HHH", item.server_id, subtype, len(item.children)) + children
+
+
+def _decode_item(handle: BinaryIO) -> Item:
+	payload = handle.read(6)
+	if len(payload) != 6: raise ValueError("truncated spool item")
+	server_id, subtype, child_count = struct.unpack("<HHH", payload)
+	children = tuple(_decode_item(handle) for _ in range(child_count))
+	return Item(server_id, None if subtype == 0xFFFF else subtype, children=children)
+
+
+def encode_tile(tile: Tile) -> bytes:
+	house_id = 0xFFFFFFFF if tile.house_id is None else tile.house_id
+	items = (() if tile.ground is None else (tile.ground,)) + tile.items
+	payload = struct.pack("<HHBIIHH", tile.position.x, tile.position.y, tile.position.z, house_id, tile.flags, len(tile.zones), len(items))
+	payload += b"".join(struct.pack("<H", zone) for zone in tile.zones)
+	payload += b"".join(_encode_item(item) for item in items)
+	return struct.pack("<I", len(payload)) + payload
+
+
+def decode_tiles(path: Path) -> Iterator[Tile]:
+	with path.open("rb") as handle:
+		while size_data := handle.read(4):
+			if len(size_data) != 4: raise ValueError("truncated spool record size")
+			size = struct.unpack("<I", size_data)[0]
+			payload = handle.read(size)
+			if len(payload) != size: raise ValueError("truncated spool record")
+			from io import BytesIO
+			record = BytesIO(payload)
+			header = record.read(17)
+			if len(header) != 17: raise ValueError("truncated spool tile header")
+			x, y, z, house_id, flags, zone_count, item_count = struct.unpack("<HHBIIHH", header)
+			zones = []
+			for _ in range(zone_count):
+				zone_data = record.read(2)
+				if len(zone_data) != 2: raise ValueError("truncated spool tile zone")
+				zones.append(struct.unpack("<H", zone_data)[0])
+			items = tuple(_decode_item(record) for _ in range(item_count))
+			if record.read(1): raise ValueError("unconsumed spool payload")
+			yield Tile(Position(x, y, z), None if house_id == 0xFFFFFFFF else house_id, flags, items[0] if items else None, items[1:] if items else (), tuple(zones))
+
+
+class _WriterPool:
+	def __init__(self, directory: Path, limit: int = 64) -> None:
+		self.directory, self.limit = directory, limit
+		self.handles: OrderedDict[tuple[int, int, int], BinaryIO] = OrderedDict()
+
+	def write(self, key: tuple[int, int, int], payload: bytes) -> None:
+		handle = self.handles.pop(key, None)
+		if handle is None:
+			path = self.directory / f"z{key[0]}" / f"{key[1]}_{key[2]}.bin"
+			path.parent.mkdir(parents=True, exist_ok=True); handle = path.open("ab")
+		self.handles[key] = handle; handle.write(payload)
+		if len(self.handles) > self.limit:
+			_unused, old = self.handles.popitem(last=False); old.close()
+
+	def close(self) -> None:
+		for handle in self.handles.values(): handle.close()
+		self.handles.clear()
+
+
+def _sha256(path: Path) -> str:
+	digest = hashlib.sha256()
+	with path.open("rb") as handle:
+		while block := handle.read(1024 * 1024): digest.update(block)
+	return digest.hexdigest()
+
+
+def _tree_sha256(directory: Path) -> str:
+	"""Fingerprint asset names and bytes, independent of filesystem ordering."""
+	digest = hashlib.sha256()
+	for path in sorted((path for path in directory.rglob("*") if path.is_file()), key=lambda value: value.relative_to(directory).as_posix()):
+		relative = path.relative_to(directory).as_posix().encode("utf-8")
+		digest.update(struct.pack("<I", len(relative))); digest.update(relative)
+		with path.open("rb") as handle:
+			while block := handle.read(1024 * 1024): digest.update(block)
+	return digest.hexdigest()
+
+
+def spool_map(map_path: Path, spool_dir: Path, chunk_size: int) -> dict[str, int]:
+	if spool_dir.exists(): shutil.rmtree(spool_dir)
+	spool_dir.mkdir(parents=True)
+	pool = _WriterPool(spool_dir); tiles = 0
+	try:
+		for record in iter_map_records(map_path, strict=True):
+			if not isinstance(record, Tile): continue
+			pool.write((record.position.z, record.position.x // chunk_size, record.position.y // chunk_size), encode_tile(record)); tiles += 1
+	finally: pool.close()
+	metadata = {"version": SPOOL_VERSION, "chunkSize": chunk_size, "tiles": tiles}
+	(spool_dir / "spool.json").write_text(json.dumps(metadata, sort_keys=True) + "\n", encoding="utf-8")
+	return metadata
+
+
+def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int = 128) -> dict[str, object]:
+	spool_dir = output / ".spool"
+	map_sha, assets_sha = _sha256(map_path), _tree_sha256(asset_dir)
+	state_path = spool_dir / "source.json"
+	expected = {"mapSha256": map_sha, "assetsSha256": assets_sha, "chunkSize": chunk_size, "atlasVersion": ATLAS_VERSION}
+	if not state_path.exists() or json.loads(state_path.read_text()) != expected:
+		spool_map(map_path, spool_dir, chunk_size)
+		state_path.write_text(json.dumps(expected, sort_keys=True) + "\n", encoding="utf-8")
+	renderer = AssetRenderer(asset_dir); chunks = []
+	for path in sorted(spool_dir.glob("z*/*.bin"), key=lambda value: value.as_posix()):
+		z = int(path.parent.name[1:]); chunk_x, chunk_y = map(int, path.stem.split("_"))
+		bounds = (chunk_x * chunk_size, chunk_x * chunk_size + chunk_size - 1, chunk_y * chunk_size, chunk_y * chunk_size + chunk_size - 1, z)
+		tile_path = output / "tiles" / f"z{z}" / f"{chunk_x}_{chunk_y}.png"
+		report_path = tile_path.with_suffix(".json")
+		fingerprint = hashlib.sha256((expected["mapSha256"] + expected["assetsSha256"] + str(ATLAS_VERSION) + _sha256(path)).encode()).hexdigest()
+		cached_report = json.loads(report_path.read_text()) if report_path.exists() else {}
+		cache_valid = (
+			tile_path.exists()
+			and cached_report.get("fingerprint") == fingerprint
+			and cached_report.get("checksum") == _sha256(tile_path)
+		)
+		if cache_valid:
+			report = cached_report
+		else:
+			png, report = render_tiles(decode_tiles(path), renderer, bounds); tile_path.parent.mkdir(parents=True, exist_ok=True); tile_path.write_bytes(png)
+			report["fingerprint"] = fingerprint; report["checksum"] = hashlib.sha256(png).hexdigest()
+			report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+		chunks.append({"z": z, "chunkX": chunk_x, "chunkY": chunk_y, "path": tile_path.relative_to(output).as_posix(), **report})
+	manifest = {"schemaVersion": ATLAS_VERSION, "chunkSize": chunk_size, "tilePixels": 32, "sources": expected, "chunks": chunks}
+	(output / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+	write_viewer(output)
+	return manifest
+
+
+def main() -> int:
+	parser = argparse.ArgumentParser(description=__doc__); parser.add_argument("map", type=Path); parser.add_argument("assets", type=Path); parser.add_argument("output", type=Path); parser.add_argument("--chunk-size", type=int, default=128)
+	args = parser.parse_args(); build_atlas(args.map, args.assets, args.output, args.chunk_size); return 0
+
+
+if __name__ == "__main__": raise SystemExit(main())

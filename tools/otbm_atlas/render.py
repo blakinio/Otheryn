@@ -85,13 +85,16 @@ class AssetRenderer:
 			if decoded is not None: yield appearance, sprite_id, decoded
 
 
-def render_region(map_path: Path, asset_dir: Path, bounds: tuple[int, int, int, int, int]) -> tuple[bytes, dict[str, object]]:
+def render_tiles(tiles: Iterator[Tile], renderer: AssetRenderer, bounds: tuple[int, int, int, int, int]) -> tuple[bytes, dict[str, object]]:
 	x1, x2, y1, y2, z = bounds
 	width, height = (x2 - x1 + 1) * 32, (y2 - y1 + 1) * 32
 	canvas = bytearray(width * height * 4)
-	renderer = AssetRenderer(asset_dir)
 	stats = RenderStats()
-	for tile in (record for record in iter_map_records(map_path, strict=True) if isinstance(record, Tile)):
+	start_missing_appearances = renderer.missing_appearances.copy()
+	start_missing_sprites = renderer.missing_sprites.copy()
+	appearance_ids: set[int] = set()
+	sprite_ids: set[int] = set()
+	for tile in tiles:
 		if tile.position.z != z or not (x1 <= tile.position.x <= x2 and y1 <= tile.position.y <= y2): continue
 		stats.tiles += 1
 		items: list[Item] = []
@@ -99,7 +102,9 @@ def render_region(map_path: Path, asset_dir: Path, bounds: tuple[int, int, int, 
 			stats.ground_items += 1; items.append(tile.ground)
 		children = tuple(walk_items(tile.items)); stats.child_items += len(children); items.extend(children)
 		for item in items:
+			appearance_ids.add(item.server_id)
 			for appearance, _sprite_id, (sprite_width, sprite_height, pixels) in renderer.item_sprites(item, tile.position.x, tile.position.y, tile.position.z):
+				sprite_ids.add(_sprite_id)
 				shift_x, shift_y = appearance.shift or (0, 0)
 				draw_x = (tile.position.x - x1) * 32 - (sprite_width - 32) - shift_x
 				draw_y = (tile.position.y - y1) * 32 - (sprite_height - 32) - shift_y
@@ -110,12 +115,18 @@ def render_region(map_path: Path, asset_dir: Path, bounds: tuple[int, int, int, 
 		"bounds": list(bounds), "imageWidth": width, "imageHeight": height,
 		"tiles": stats.tiles, "groundItems": stats.ground_items, "childItems": stats.child_items,
 		"renderOperations": stats.render_operations,
-		"uniqueAppearanceIds": len(renderer.appearance_ids), "uniqueSpriteIds": len(renderer.sprite_ids),
-		"missingAppearances": dict(sorted(renderer.missing_appearances.items())),
-		"missingSprites": dict(sorted(renderer.missing_sprites.items())),
+		"uniqueAppearanceIds": len(appearance_ids), "uniqueSpriteIds": len(sprite_ids),
+		"missingAppearances": dict(sorted((renderer.missing_appearances - start_missing_appearances).items())),
+		"missingSprites": dict(sorted((renderer.missing_sprites - start_missing_sprites).items())),
 		"animationPolicy": "first frame group, declared default_start_phase, no elapsed-time advancement",
 	}
 	return encode_png(width, height, bytes(canvas)), report
+
+
+def render_region(map_path: Path, asset_dir: Path, bounds: tuple[int, int, int, int, int]) -> tuple[bytes, dict[str, object]]:
+	renderer = AssetRenderer(asset_dir)
+	tiles = (record for record in iter_map_records(map_path, strict=True) if isinstance(record, Tile))
+	return render_tiles(tiles, renderer, bounds)
 
 
 def main() -> int:

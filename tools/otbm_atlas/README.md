@@ -45,6 +45,21 @@ Static rendering uses the first object frame group and its declared
 Missing appearances, missing sprites, invalid protobuf wire data, malformed LZMA
 headers, and unexpected sheet dimensions are explicit failures/diagnostics.
 
+Build resumable 128×128-map-tile chunks and the static viewer:
+
+```powershell
+python -m tools.otbm_atlas.atlas `
+  vendor/map-analysis/crystalserver/data-global/world/world.otbm `
+  vendor/map-analysis/tibia-client/15.25.bd5a04/assets `
+  build/full-map-atlas
+python -m http.server 8000 --directory build/full-map-atlas
+```
+
+The first pass spools each tile once into bounded per-chunk binary files. Chunk
+reports retain source/spool fingerprints and PNG checksums; matching chunks are
+reused on subsequent runs. The viewer supports pan, zoom, floor selection,
+coordinate display/jump, and factual mechanics/spawn overlay toggles.
+
 The node framing follows the authoritative Remere's Map Editor implementation in
 `source/filehandle.h` and `source/filehandle.cpp`; semantic work must likewise be
 cross-checked against its `source/iomap_otbm.*` implementation.

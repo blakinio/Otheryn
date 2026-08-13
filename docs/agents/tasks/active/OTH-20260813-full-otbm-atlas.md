@@ -30,11 +30,11 @@ exact-head CI and PR closeout. No generated multi-gigabyte atlas is committed.
 checkpoint_version: 1
 policy_version: 2
 updated_at: 2026-08-13T13:00:00+02:00
-head: e7f7cbe0d55183c070050e83a81b83150b67f344
+head: 1befda0b6d80400cd63cd8735788224b7ee82f51
 branch: blakinio/otbm-full-map-atlas
 pr: 373
 status: ready
-phase: chunk-pipeline-ready
+phase: chunk-pipeline-implemented
 session_id: codex-20260813-001
 session_role: implementer
 execution_mode: codex
@@ -46,7 +46,7 @@ context_score: 12
 decomposition_decision: phased
 decomposition_reason: one integrated product with seven sequential evidence gates
 invocation_started_at: 2026-08-13T12:10:00+02:00
-last_progress_at: 2026-08-13T14:08:00+02:00
+last_progress_at: 2026-08-13T15:10:00+02:00
 ci_checks_for_current_head: 0
 unchanged_state_checks: 0
 identical_failure_retries: 0
@@ -75,13 +75,17 @@ proven:
   - canonical scan CLI output fingerprints world.otbm as 3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034
   - pinned assets decode to 42107 object appearances and 4927 sprite sheets with 75623 referenced sprite IDs and zero missing catalog sprites
   - Thais renders at 5152x4832 from vendored sprites with zero missing appearances and zero missing sprites
+  - a single canonical scan spools all 18997668 tiles into 3494 bounded 128x128 chunk files covering Z 0 through 15
+  - the canonical spool is 545977318 bytes and completed in 180.07 seconds
+  - canonical chunk z7/252_251 renders at 4096x4096 with 16384 tiles, 25205 render operations and zero missing appearances or sprites
+  - the static viewer implements pan, zoom, floor selection, coordinate display/jump and required overlay toggles without an external service
 derived:
   - semantic parsing must operate incrementally over node events to preserve bounded memory
   - current 77.074 second framing scan needs profiling before it can be accepted for repeated full runs
   - Thais child-item discrepancy requires asset-aware ground/appearance classification rather than counter adjustment
   - current Thais output is semantically coherent but the old reference counters are not reproducible from the pinned OTBM node inventory
 unknown:
-  - exact semantic tile and item totals
+  - exact semantic item total
   - effective overlay composition
   - full atlas runtime, size and peak memory
 conflicts:
@@ -106,6 +110,10 @@ changed_paths:
   - tools/otbm_atlas/render.py
   - tools/otbm_atlas/tests/test_assets.py
   - tools/otbm_atlas/tests/test_render.py
+  - tools/otbm_atlas/atlas.py
+  - tools/otbm_atlas/viewer.py
+  - tools/otbm_atlas/tests/test_atlas.py
+  - tools/otbm_atlas/tests/test_viewer.py
   - docs/agents/tasks/active/OTH-20260813-full-otbm-atlas.md
 validation:
   - command: python -m unittest discover -s tools/otbm_atlas/tests -v
@@ -126,7 +134,16 @@ validation:
   - command: python -m tools.otbm_atlas.render world.otbm assets --bounds 32280 32440 32155 32305 7
     result: PASS
     evidence: build/otbm-atlas/thais.png and thais-render.json; 39285 operations, 863 appearances, 1002 sprites, zero missing
+  - command: spool_map canonical world.otbm with chunk size 128
+    result: PASS
+    evidence: 18997668 tiles, 3494 chunks, 545977318 bytes, Z 0 through 15, 180.07 seconds
+  - command: render_tiles build/full-map-atlas/.spool/z7/252_251.bin
+    result: PASS
+    evidence: 4096x4096 PNG; 16384 tiles, 8821 child items, 25205 operations, zero missing, 10.966 seconds
+  - command: python -m unittest discover -s tools/otbm_atlas/tests -v
+    result: PASS
+    evidence: 20 tests pass including spool round-trip/corruption handling and static-viewer controls
 blockers:
   - none
-next_action: implement the single-pass disk-spooled chunk builder, resumable manifest, and static atlas viewer
+next_action: implement global mechanics/script resolution, spawn parsing, and evidence-based additional-map composition classification
 ```
