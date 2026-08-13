@@ -10,7 +10,8 @@ The pipeline incrementally parses the pinned gzip-wrapped OTBM, spools bounded
 Tibia 15.25 asset subset, and derives lightweight overview PNGs by deterministic
 4× and 8× nearest-pixel downsampling of those exact detailed pixels. All layers retain
 per-chunk SHA-256 checksums in the manifest. No external map geometry or imagery
-is used.
+is used. Atlas schema/cache version 3 invalidates detailed-render fingerprints
+created before the container-visibility and subtype-pattern corrections.
 
 Run its focused tests from the repository root:
 
@@ -43,8 +44,13 @@ python -m tools.otbm_atlas.render `
 
 Static rendering uses the first object frame group and its declared
 `default_start_phase`; elapsed time and random animation start are never used.
-Missing appearances, missing sprites, invalid protobuf wire data, malformed LZMA
-headers, and unexpected sheet dimensions are explicit failures/diagnostics.
+Only ground plus top-level tile-stack items are visible. Nested container
+contents remain available to structural/mechanics analysis but are not drawn on
+the map. Stackable and splash/fluid appearances select patterns from the OTBM
+item subtype/count using the pinned modern client semantics; ordinary positional
+patterns remain coordinate-derived. Missing appearances, missing sprites,
+invalid protobuf wire data, malformed LZMA headers, and unexpected sheet
+dimensions are explicit failures/diagnostics.
 
 Build resumable 128×128-map-tile chunks and the static viewer:
 
@@ -71,39 +77,45 @@ Render mode is URL-shareable (`render=auto|detailed|performance`) and persisted
 in localStorage; an explicit URL wins. Auto uses 8× overview below zoom 0.25,
 4× overview from 0.25 to native 1.0 scale, and canonical detail at or above 1.0.
 These boundaries follow the generated 4×/8× pixel densities and the canonical
-32-pixel native tile scale rather than an unmeasured performance claim. Detailed requests canonical detailed chunks at
-every zoom. Performance requests only overview chunks. Mode changes retain the
-view, floor, zoom, layers, and selected-marker state without reloading. Imagery
-uses a 128-entry/384 MiB approximate decoded-image LRU; spatial overlay data uses
-a 96-entry/32 MiB approximate LRU. Diagnostics are opt-in and report only actual
-state/load timings—never invented FPS.
+32-pixel native tile scale rather than an unmeasured performance claim. Detailed
+requests canonical detailed chunks at every zoom. Performance requests only
+overview chunks. Mode changes retain the view, floor, zoom, layers, and
+selected-marker state without reloading. Imagery uses a 128-entry/384 MiB
+approximate decoded-image LRU; spatial overlay data uses a 96-entry/32 MiB
+approximate LRU. Diagnostics are opt-in and report only actual state/load
+timings—never invented FPS.
 
 The atlas build also writes `data/mechanics.json` from the same OTBM pass and
 `data/spawns.json` from every canonical `*-monster.xml` and `*-npc.xml`. Spawn
 X/Y offsets are relative to their group center; the child `z` value is absolute,
 matching the canonical XML. Every record retains its source and an origin class.
-Additional/event/quest sources remain distinct instead of being silently merged.
+Spatial viewer shards put only `origin=base-map` creature records into the base
+`npcSpawns`/`monsterSpawns` layers. Verified event, quest, custom, conditional or
+runtime-loaded records use separate supplemental NPC/monster layer kinds instead
+of appearing as ordinary base creatures.
+
 `data/composition.json` records which supplemental OTBMs have direct runtime
 loading evidence. The base atlas always remains `world.otbm`; even proven runtime
-overlays are listed separately. `data/mechanics-resolution.json` links literal
-AID/UID registrations and legacy literal UID dispatch tables to Lua scripts with
-`RESOLVED`, `AMBIGUOUS`, or `UNRESOLVED` status. Dynamic registrations stay
-explicitly `UNKNOWN`.
+overlays are listed separately. `data/mechanics-resolution.json` resolves only
+literal numeric AID/UID registrations to Lua scripts with `RESOLVED`, `AMBIGUOUS`,
+or `UNRESOLVED` status. Dynamic or indexed registrations that cannot be proven by
+that literal registration stay explicit `UNKNOWN`/`UNRESOLVED`; the atlas does not
+promote arbitrary numeric Lua table keys to UIDs.
+
 Large factual overlay collections are additionally partitioned under
 `data/chunks/z<z>/<chunkX>_<chunkY>.json`; the browser requests only viewport
 chunks plus one 128-tile prefetch margin. `data/search-index.json` contains one
 compact factual navigation entry per unique category/label, while details come
-from the spatial records.
-Monster markers are suppressed below zoom 0.25 to avoid drawing tens of
-thousands of individual points; their factual shards remain available and no
-records are reclassified. Bosses remain explicitly UNKNOWN because the canonical
-sources provide no authoritative boss classification.
+from the spatial records. Base monster markers are suppressed below zoom 0.25 to
+avoid drawing tens of thousands of individual points; their factual shards remain
+available. Bosses remain explicitly UNKNOWN because the canonical sources provide
+no authoritative boss classification.
 
 ## Prototype evolution
 
-The owner-provided `oteryn-thais-interactive-demo.zip` was inspected as the
-primary UI reference. PRESERVED: its dark Otheryn Maps language, dominant map,
-top search/current coordinates, compact layer controls, drag/wheel/zoom buttons,
+The owner-provided `oteryn-thais-interactive-demo(1).zip` is the primary UI
+reference. PRESERVED: its dark Otheryn Maps language, dominant map, top
+search/current coordinates, compact layer controls, drag/wheel/zoom buttons,
 clickable markers, details surface, and shareable view state. ADAPTED: the fixed
 Thais image becomes viewport-loaded multi-floor chunks; the NPC-only search and
 layer panel use generated factual world indexes; the fixed right sidebar becomes
@@ -123,6 +135,7 @@ asset inputs. TibiaMaps.io was used only to assess familiar keyboard/pan/zoom an
 overlay-navigation affordances; TibiaRoute's bestiary tracker was used only as
 a compact layer/filter UX reference. Neither external service supplies Otheryn
 geometry, markers, spawn records, or mechanics.
+
 `data/unknown-items.json` lists every server ID without a canonical appearance,
 including occurrence counts and source chunk bounds. These items remain visibly
 unresolved; the renderer never substitutes another sprite.
