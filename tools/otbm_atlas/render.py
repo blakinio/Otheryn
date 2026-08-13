@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 from typing import Iterator
 
-from .assets import Appearance, SpriteSheet, decode_sheet, encode_png, extract_sprite, load_object_appearances, load_sprite_catalog, sheet_for_sprite
+from .assets import Appearance, SpriteInfo, decode_sheet, encode_png, extract_sprite, load_object_appearances, load_sprite_catalog, sheet_for_sprite
 from .semantic import Item, Tile, iter_map_records, walk_items
 
 
@@ -19,6 +19,38 @@ class RenderStats:
 	ground_items: int = 0
 	child_items: int = 0
 	render_operations: int = 0
+
+
+_MODERN_FLUID_COLORS = (0, 1, 7, 3, 3, 2, 4, 3, 5, 6, 7, 2, 5, 3, 5, 6, 3, 3, 8, 10, 9)
+
+
+def _item_patterns(appearance: Appearance, frame: SpriteInfo, item: Item, position_x: int, position_y: int, position_z: int) -> tuple[int, int, int]:
+	"""Match OTClient item pattern selection for the pinned modern asset format."""
+	pattern_x = position_x % frame.pattern_width
+	pattern_y = position_y % frame.pattern_height
+	pattern_z = position_z % frame.pattern_depth
+	if appearance.stackable and frame.pattern_width == 4 and frame.pattern_height == 2:
+		count = item.subtype or 0
+		if count <= 0:
+			pattern_x, pattern_y = 0, 0
+		elif count < 5:
+			pattern_x, pattern_y = count - 1, 0
+		elif count < 10:
+			pattern_x, pattern_y = 0, 1
+		elif count < 25:
+			pattern_x, pattern_y = 1, 1
+		elif count < 50:
+			pattern_x, pattern_y = 2, 1
+		else:
+			pattern_x, pattern_y = 3, 1
+		pattern_z = 0
+	elif appearance.splash or appearance.fluid_container:
+		subtype = item.subtype or 0
+		color = _MODERN_FLUID_COLORS[subtype] if 0 <= subtype < len(_MODERN_FLUID_COLORS) else 0
+		pattern_x = (color % 4) % frame.pattern_width
+		pattern_y = (color // 4) % frame.pattern_height
+		pattern_z = 0
+	return pattern_x, pattern_y, pattern_z
 
 
 def _blend(canvas: bytearray, canvas_width: int, canvas_height: int, source: bytes, width: int, height: int, x: int, y: int) -> None:
@@ -71,9 +103,7 @@ class AssetRenderer:
 		if appearance is None or not appearance.frames:
 			self.missing_appearances[item.server_id] += 1; return
 		frame = appearance.frames[0]
-		pattern_x = position_x % frame.pattern_width
-		pattern_y = position_y % frame.pattern_height
-		pattern_z = position_z % frame.pattern_depth
+		pattern_x, pattern_y, pattern_z = _item_patterns(appearance, frame, item, position_x, position_y, position_z)
 		phase = frame.default_start_phase % frame.animation_phases
 		for layer in range(frame.layers):
 			index = ((((phase * frame.pattern_depth + pattern_z) * frame.pattern_height + pattern_y) * frame.pattern_width + pattern_x) * frame.layers + layer)
@@ -100,7 +130,8 @@ def render_tiles(tiles: Iterator[Tile], renderer: AssetRenderer, bounds: tuple[i
 		items: list[Item] = []
 		if tile.ground is not None:
 			stats.ground_items += 1; items.append(tile.ground)
-		children = tuple(walk_items(tile.items)); stats.child_items += len(children); items.extend(children)
+		stats.child_items += sum(1 for _item in walk_items(tile.items))
+		items.extend(tile.items)
 		for item in items:
 			appearance_ids.add(item.server_id)
 			for appearance, _sprite_id, (sprite_width, sprite_height, pixels) in renderer.item_sprites(item, tile.position.x, tile.position.y, tile.position.z):
@@ -119,6 +150,7 @@ def render_tiles(tiles: Iterator[Tile], renderer: AssetRenderer, bounds: tuple[i
 		"missingAppearances": dict(sorted((renderer.missing_appearances - start_missing_appearances).items())),
 		"missingSprites": dict(sorted((renderer.missing_sprites - start_missing_sprites).items())),
 		"animationPolicy": "first frame group, declared default_start_phase, no elapsed-time advancement",
+		"itemPatternPolicy": "OTClient-compatible position, stack-count and modern-fluid patterns",
 	}
 	return encode_png(width, height, bytes(canvas)), report
 
