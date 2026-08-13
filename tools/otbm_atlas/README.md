@@ -111,6 +111,18 @@ a floating responsive details panel. REPLACED: prototype demo JSON, single-regio
 bounds, image-wide transforms, and DOM marker collection are replaced by
 canonical generated shards, canvas drawing, bounded caches, and URL/localStorage
 state. No prototype map pixels or demo records are authoritative inputs.
+
+## External viewer references
+
+`tibiamaps/tibia-map` was evaluated as a slippy-map interaction reference: its
+repository describes an online map viewer and is MIT licensed. No source code,
+assets, map data, or styles are copied into this atlas, so no attribution notice
+is required for reused code. The Otheryn viewer independently implements only
+the applicable navigation patterns with the repository's canonical OTBM and
+asset inputs. TibiaMaps.io was used only to assess familiar keyboard/pan/zoom and
+overlay-navigation affordances; TibiaRoute's bestiary tracker was used only as
+a compact layer/filter UX reference. Neither external service supplies Otheryn
+geometry, markers, spawn records, or mechanics.
 `data/unknown-items.json` lists every server ID without a canonical appearance,
 including occurrence counts and source chunk bounds. These items remain visibly
 unresolved; the renderer never substitutes another sprite.
