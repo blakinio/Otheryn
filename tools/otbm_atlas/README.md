@@ -64,6 +64,50 @@ gutter. This preserves 64×64 sprites and canonical displacement across chunk
 edges without allocating a full 4096×4096 canvas for sparse chunks. Workers use
 separate bounded renderers; manifest ordering remains deterministic.
 
+## Viewer UX contract
+
+The atlas must remain usable for the complete canonical OTBM, not just selected
+regions. The browser must therefore never load the full world sprite render or
+full OTBM into one canvas/document. The complete world is preprocessed once by
+the pipeline, while the browser loads only the current viewport plus a small
+prefetch margin.
+
+The default browsing experience should follow the lightweight slippy-map model
+used by TibiaMaps/TibiaRoute: users can pan over the world, zoom, switch floors,
+see world coordinates, and jump directly to an `X/Y/Z` position without first
+loading detailed sprites for the whole map.
+
+Rendering is intentionally layered by zoom level:
+
+- low and medium zoom use lightweight pre-generated overview/minimap tiles;
+- higher zoom uses progressively more detailed overview tiles as needed;
+- maximum/detail zoom switches to the canonical 32 px-per-map-tile sprite render
+  decoded from the pinned OTBM plus pinned Tibia assets;
+- exact zoom thresholds are implementation parameters and must be selected from
+  measured browser/runtime behavior rather than hard-coded from this document.
+
+Overview/minimap tiles are derived from the canonical world data; they are not a
+replacement source of map truth. The exact sprite layer remains authoritative for
+fine visual inspection.
+
+Map imagery and factual overlays must be spatially chunked. Mechanics, spawns,
+NPCs, houses, AIDs, UIDs and teleports should be fetched for the visible region
+rather than loading a world-sized overlay payload when that becomes materially
+large. Floor data remains independently addressable for Z=0..15.
+
+`https://github.com/tibiamaps/tibia-map` should be evaluated as an implementation
+reference and potential viewer-core source before writing equivalent frontend
+behavior from scratch. Its map data must not replace the canonical Otheryn OTBM.
+Any reused code must comply with its license and retain required attribution.
+`https://tibiamaps.io/map#32823,31962,7:0` and
+`https://tibiaroute.com/pl/bestiary-tracker` are UX references for the desired
+default map-navigation experience, not authoritative sources for Otheryn map
+content.
+
+The resulting user experience should allow both extremes efficiently: zoomed-out
+navigation over the entire indexed world and, after maximum zoom, exact canonical
+sprite-level inspection of the currently visible map fragment.
+
 The atlas build also writes `data/mechanics.json` from the same OTBM pass and
 `data/spawns.json` from every canonical `*-monster.xml` and `*-npc.xml`. Spawn
 X/Y offsets are relative to their group center; the child `z` value is absolute,
