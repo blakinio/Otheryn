@@ -17,6 +17,18 @@ Run its focused tests from the repository root:
 python -m unittest discover -s tools/otbm_atlas/tests -v
 ```
 
+Scan the mandatory Thais regression region into deterministic JSON:
+
+```powershell
+python -m tools.otbm_atlas.scan `
+  vendor/map-analysis/crystalserver/data-global/world/world.otbm `
+  --bounds 32280 32440 32155 32305 7 `
+  --output build/otbm-atlas/thais-scan.json
+```
+
+The command records the source SHA-256, header, tile/item statistics, populated
+floors, AIDs, UIDs, teleports, house doors, towns, waypoints, and diagnostics.
+
 The node framing follows the authoritative Remere's Map Editor implementation in
 `source/filehandle.h` and `source/filehandle.cpp`; semantic work must likewise be
 cross-checked against its `source/iomap_otbm.*` implementation.

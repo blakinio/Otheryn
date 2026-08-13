@@ -34,7 +34,7 @@ head: e7f7cbe0d55183c070050e83a81b83150b67f344
 branch: blakinio/otbm-full-map-atlas
 pr: 373
 status: ready
-phase: semantic-parser-ready
+phase: asset-decoder-ready
 session_id: codex-20260813-001
 session_role: implementer
 execution_mode: codex
@@ -46,7 +46,7 @@ context_score: 12
 decomposition_decision: phased
 decomposition_reason: one integrated product with seven sequential evidence gates
 invocation_started_at: 2026-08-13T12:10:00+02:00
-last_progress_at: 2026-08-13T13:00:00+02:00
+last_progress_at: 2026-08-13T13:38:00+02:00
 ci_checks_for_current_head: 0
 unchanged_state_checks: 0
 identical_failure_retries: 0
@@ -70,9 +70,13 @@ proven:
   - authoritative RME framing uses FE start, FF end and FD escape
   - focused node reader tests pass 6 of 6
   - full canonical framing scan sees 25170978 nodes, maximum depth 7 and 135815603 payload bytes
+  - semantic parser strict scan covers 18997668 tiles across every Z level 0 through 15 with zero diagnostics
+  - Thais scan exactly matches 24311 tiles and 24292 ground items and independently locates AID 5555 and UID 65207
+  - canonical scan CLI output fingerprints world.otbm as 3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034
 derived:
   - semantic parsing must operate incrementally over node events to preserve bounded memory
   - current 77.074 second framing scan needs profiling before it can be accepted for repeated full runs
+  - Thais child-item discrepancy requires asset-aware ground/appearance classification rather than counter adjustment
 unknown:
   - exact semantic tile and item totals
   - effective overlay composition
@@ -85,12 +89,17 @@ first_failure:
   evidence: magic bytes 1F 8B established gzip wrapper; fixed by magic-byte detection and regression test
 rejected_hypotheses:
   - canonical world.otbm is an uncompressed OTBM stream: file magic is gzip and decompressed framing validates
+  - 44 missing Thais child items are repeated compact tile items: preserving repeated compact items did not change the canonical count
 changed_paths:
   - tools/otbm_atlas/__init__.py
   - tools/otbm_atlas/nodefile.py
   - tools/otbm_atlas/tests/__init__.py
   - tools/otbm_atlas/tests/test_nodefile.py
   - tools/otbm_atlas/README.md
+  - tools/otbm_atlas/semantic.py
+  - tools/otbm_atlas/scan.py
+  - tools/otbm_atlas/tests/test_semantic.py
+  - tools/otbm_atlas/tests/test_scan.py
   - docs/agents/tasks/active/OTH-20260813-full-otbm-atlas.md
 validation:
   - command: python -m unittest discover -s tools/otbm_atlas/tests -v
@@ -99,7 +108,13 @@ validation:
   - command: full iter_node_events scan of canonical world.otbm
     result: PASS
     evidence: balanced 25170978 start/data/end events; depth 7; 77.074 seconds
+  - command: python -m unittest discover -s tools/otbm_atlas/tests -v
+    result: PASS
+    evidence: 13 tests pass for framing, gzip, semantics, attributes, nesting, mechanics and provenance
+  - command: python -m tools.otbm_atlas.scan world.otbm --bounds 32280 32440 32155 32305 7
+    result: PASS
+    evidence: build/otbm-atlas/thais-scan.json; 24311 tiles, 24292 ground, 14993 decoded child items, zero diagnostics
 blockers:
   - none
-next_action: implement incremental semantic decoding for root, map metadata, tile areas, tiles, items, towns and waypoints with fail-visible unknown diagnostics and focused fixtures
+next_action: decode the pinned appearances protobuf and catalog-to-sprite-sheet mapping, then classify the Thais item discrepancy without guesses
 ```
