@@ -1,0 +1,96 @@
+---
+name: OTBM Atlas Hangable Repair
+on:
+  push:
+    branches: [agent/oth-20260813-full-otbm-atlas-current-main]
+    paths: [.github/workflows/otbm-atlas-hangable-fix.yml]
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          ref: agent/oth-20260813-full-otbm-atlas-current-main
+          fetch-depth: 0
+      - name: Apply exact OTClient hangable semantics
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one match, got {count}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          replace(
+              'tools/otbm_atlas/assets.py',
+              '\tfluid_container: bool\n\tshift: tuple[int, int] | None\n',
+              '\tfluid_container: bool\n\thangable: bool\n\thook_direction: int | None\n\tshift: tuple[int, int] | None\n',
+          )
+          replace(
+              'tools/otbm_atlas/assets.py',
+              '\theight_data = _flag_message(flags, 27)\n',
+              '\thook_data = _flag_message(flags, 21)\n\thook_direction = None\n\tif hook_data is not None:\n\t\tdirection = _first_int(_message_values(hook_data), 1)\n\t\thook_direction = direction if direction in (1, 2) else None\n\theight_data = _flag_message(flags, 27)\n',
+          )
+          replace(
+              'tools/otbm_atlas/assets.py',
+              '\t\tfluid_container=bool(_first_int(flags, 19)),\n\t\tshift=shift,\n',
+              '\t\tfluid_container=bool(_first_int(flags, 19)),\n\t\thangable=bool(_first_int(flags, 20)),\n\t\thook_direction=hook_direction,\n\t\tshift=shift,\n',
+          )
+
+          p = Path('tools/otbm_atlas/render.py')
+          text = p.read_text(encoding='utf-8')
+          old = 'def _item_patterns(appearance:Appearance,frame:SpriteInfo,item:Item,x:int,y:int,z:int)->tuple[int,int,int]:\n\tpx=x%frame.pattern_width;py=y%frame.pattern_height;pz=z%frame.pattern_depth\n'
+          new = 'def _item_patterns(appearance:Appearance,frame:SpriteInfo,item:Item,x:int,y:int,z:int,hook_south:bool=False,hook_east:bool=False)->tuple[int,int,int]:\n\tpx=x%frame.pattern_width;py=y%frame.pattern_height;pz=z%frame.pattern_depth\n'
+          if text.count(old) != 1: raise SystemExit('render _item_patterns signature drifted')
+          text = text.replace(old, new, 1)
+          old = '\t\tpz=0\n\telif appearance.splash or appearance.fluid_container:\n'
+          new = '\t\tpz=0\n\telif appearance.hangable:\n\t\tpx=1 if hook_south and frame.pattern_width>=2 else 2 if hook_east and frame.pattern_width>=3 else 0\n\t\tpy=pz=0\n\telif appearance.splash or appearance.fluid_container:\n'
+          if text.count(old) != 1: raise SystemExit('render hangable insertion drifted')
+          text = text.replace(old, new, 1)
+          old = '\tdef item_sprites(self,item:Item,position_x:int,position_y:int,position_z:int)->Iterator[tuple[Appearance,int,tuple[int,int,bytes]]]:\n'
+          new = '\tdef item_sprites(self,item:Item,position_x:int,position_y:int,position_z:int,hook_south:bool=False,hook_east:bool=False)->Iterator[tuple[Appearance,int,tuple[int,int,bytes]]]:\n'
+          if text.count(old) != 1: raise SystemExit('renderer item_sprites signature drifted')
+          text = text.replace(old, new, 1)
+          old = 'frame=appearance.frames[0];px,py,pz=_item_patterns(appearance,frame,item,position_x,position_y,position_z);phase='
+          new = 'frame=appearance.frames[0];px,py,pz=_item_patterns(appearance,frame,item,position_x,position_y,position_z,hook_south,hook_east);phase='
+          if text.count(old) != 1: raise SystemExit('renderer pattern call drifted')
+          text = text.replace(old, new, 1)
+          old = '''\t\t# Item child nodes below top-level tile items are container contents, not visible map stack entries.\n\t\titems.extend(tile.items)\n\t\tfor item in items:\n\t\t\tappearance_ids.add(item.server_id)\n\t\t\tfor appearance, _sprite_id, (sprite_width, sprite_height, pixels) in renderer.item_sprites(item, tile.position.x, tile.position.y, tile.position.z):\n'''
+          new = '''\t\t# Item child nodes below top-level tile items are container contents, not visible map stack entries.\n\t\titems.extend(tile.items)\n\t\thook_south=hook_east=False\n\t\tfor visible_item in items:\n\t\t\tvisible_appearance=renderer.appearances.get(visible_item.server_id)\n\t\t\tif visible_appearance is not None:\n\t\t\t\thook_south=hook_south or visible_appearance.hook_direction==1\n\t\t\t\thook_east=hook_east or visible_appearance.hook_direction==2\n\t\tfor item in items:\n\t\t\tappearance_ids.add(item.server_id)\n\t\t\tfor appearance, _sprite_id, (sprite_width, sprite_height, pixels) in renderer.item_sprites(item, tile.position.x, tile.position.y, tile.position.z, hook_south, hook_east):\n'''
+          if text.count(old) != 1: raise SystemExit('render tile hook block drifted')
+          text = text.replace(old, new, 1)
+          text = text.replace('OTClient-compatible position, stack-count and modern-fluid subtype patterns', 'OTClient-compatible position, stack-count, hangable-hook and modern-fluid subtype patterns', 1)
+          p.write_text(text, encoding='utf-8')
+
+          p = Path('tools/otbm_atlas/tests/test_v3_core.py')
+          text = p.read_text(encoding='utf-8')
+          old = 'fluid_container=False,shift=None,height=None,frames=()'
+          new = 'fluid_container=False,hangable=False,hook_direction=None,shift=None,height=None,frames=()'
+          if text.count(old) != 1: raise SystemExit('test appearance defaults drifted')
+          text = text.replace(old, new, 1)
+          old = '\tdef test_nested_container_children_are_not_visible_stack(self):\n'
+          new = '''\tdef test_hangable_patterns_follow_tile_hook_orientation(self):\n\t\tframe=SpriteInfo(3,1,1,1,tuple(range(3)),1,0);item=Item(1)\n\t\tself.assertEqual(_item_patterns(app(hangable=True),frame,item,10,11,7,hook_south=True),(1,0,0))\n\t\tself.assertEqual(_item_patterns(app(hangable=True),frame,item,10,11,7,hook_east=True),(2,0,0))\n\t\tself.assertEqual(_item_patterns(app(hangable=True),frame,item,10,11,7),(0,0,0))\n\tdef test_nested_container_children_are_not_visible_stack(self):\n'''
+          if text.count(old) != 1: raise SystemExit('test hangable insertion drifted')
+          text = text.replace(old, new, 1)
+          old = '\tdef __init__(self):self.missing_appearances=Counter();self.missing_sprites=Counter();self.calls=[]\n\tdef item_sprites(self,item,x,y,z):self.calls.append(item.server_id);return iter(())\n'
+          new = '\tdef __init__(self):self.missing_appearances=Counter();self.missing_sprites=Counter();self.calls=[];self.appearances={}\n\tdef item_sprites(self,item,x,y,z,hook_south=False,hook_east=False):self.calls.append(item.server_id);return iter(())\n'
+          if text.count(old) != 1: raise SystemExit('fake renderer drifted')
+          text = text.replace(old, new, 1)
+          p.write_text(text, encoding='utf-8')
+          PY
+          git diff --check
+          python3 -m unittest discover -s tools/otbm_atlas/tests -p 'test_*.py' -v
+      - name: Commit only validated repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/otbm-atlas-hangable-fix.yml
+          git add tools/otbm_atlas/assets.py tools/otbm_atlas/render.py tools/otbm_atlas/tests/test_v3_core.py
+          git commit -m "fix(atlas): render canonical hangable patterns"
+          git push origin HEAD:agent/oth-20260813-full-otbm-atlas-current-main
