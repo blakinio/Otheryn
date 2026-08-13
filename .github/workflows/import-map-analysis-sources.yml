@@ -1,0 +1,136 @@
+---
+name: Import pinned map analysis sources
+
+on:
+  push:
+    branches:
+      - blakinio/vendor-crystalserver-world
+    paths:
+      - .github/workflows/import-map-analysis-sources.yml
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CRYSTAL_COMMIT: 5e89bf8329ea406cb4ea8f4a18f32954f13e5418
+      ASSETS_JSON_SHA256: 4cbdf80eee33901f2eb4f3391e23ad02805b65890ca856efcd9c32c54888405a
+      ASSETS_VERSION: 15.25.bd5a04
+    steps:
+      - name: Checkout task branch without third-party actions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git clone --depth=1 --branch "$GITHUB_REF_NAME" "https://github.com/${GITHUB_REPOSITORY}.git" repo
+          cd repo
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+      - name: Import exact CrystalServer world tree
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --no-checkout https://github.com/zimbadev/crystalserver.git /tmp/crystalserver
+          git -C /tmp/crystalserver fetch --depth=1 origin "$CRYSTAL_COMMIT"
+          git -C /tmp/crystalserver checkout --detach "$CRYSTAL_COMMIT"
+          test "$(git -C /tmp/crystalserver rev-parse HEAD)" = "$CRYSTAL_COMMIT"
+          rm -rf repo/vendor/map-analysis/crystalserver/data-global/world
+          mkdir -p repo/vendor/map-analysis/crystalserver/data-global
+          cp -a /tmp/crystalserver/data-global/world repo/vendor/map-analysis/crystalserver/data-global/world
+
+      - name: Import exact Tibia client assets
+        run: |
+          set -euo pipefail
+          mkdir -p repo/vendor/map-analysis/tibia-client/$ASSETS_VERSION
+          curl --fail --location --retry 5 --retry-all-errors \
+            https://static.tibia.com/launcher/assets-current/assets.json \
+            -o /tmp/assets.json
+          echo "$ASSETS_JSON_SHA256  /tmp/assets.json" | sha256sum --check --strict
+          cp /tmp/assets.json repo/vendor/map-analysis/tibia-client/$ASSETS_VERSION/assets.json
+          python3 - <<'PY'
+          import concurrent.futures
+          import hashlib
+          import json
+          import lzma
+          import os
+          import pathlib
+          import urllib.request
+
+          root = pathlib.Path('repo/vendor/map-analysis/tibia-client') / os.environ['ASSETS_VERSION']
+          assets_root = root / 'assets'
+          assets_root.mkdir(parents=True, exist_ok=True)
+          manifest = json.loads(pathlib.Path('/tmp/assets.json').read_text())
+          rows = [x for x in manifest['files'] if x.get('localfile', '').startswith('assets/')]
+          base = 'https://static.tibia.com/launcher/assets-current/'
+
+          def digest(data):
+              return hashlib.sha256(data).hexdigest()
+
+          def fetch(entry):
+              url = base + entry['url']
+              target = root / entry['localfile']
+              target.parent.mkdir(parents=True, exist_ok=True)
+              with urllib.request.urlopen(url, timeout=120) as r:
+                  packed = r.read()
+              expected_packed = entry.get('packedhash')
+              if expected_packed and digest(packed) != expected_packed:
+                  raise RuntimeError(f"packed hash mismatch: {entry['url']}")
+              if entry.get('unpack', True):
+                  data = lzma.decompress(packed)
+                  expected = entry.get('unpackedhash')
+                  if expected and digest(data) != expected:
+                      raise RuntimeError(f"unpacked hash mismatch: {entry['localfile']}")
+              else:
+                  data = packed
+              if len(data) != entry.get('unpackedsize', entry.get('packedsize', len(data))):
+                  # For unpack:false the package may omit unpackedsize.
+                  expected_size = entry.get('packedsize') if not entry.get('unpack', True) else entry.get('unpackedsize')
+                  if expected_size is not None and len(data) != expected_size:
+                      raise RuntimeError(f"size mismatch: {entry['localfile']}")
+              target.write_bytes(data)
+              return entry['localfile']
+
+          with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
+              futures = [pool.submit(fetch, row) for row in rows]
+              done = 0
+              for future in concurrent.futures.as_completed(futures):
+                  future.result()
+                  done += 1
+                  if done % 500 == 0:
+                      print(f'imported {done}/{len(rows)} assets', flush=True)
+
+          actual = sum(1 for p in assets_root.rglob('*') if p.is_file())
+          if actual != len(rows):
+              raise RuntimeError(f'asset count mismatch: expected {len(rows)}, got {actual}')
+          print(f'verified {actual} asset files')
+          PY
+
+      - name: Record provenance and commit imported data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd repo
+          mkdir -p vendor/map-analysis
+          cat > vendor/map-analysis/README.md <<EOF
+          # Map analysis source data
+
+          This directory is intentionally vendored for deterministic OTBM analysis and rendering.
+
+          - CrystalServer world source: zimbadev/crystalserver@$CRYSTAL_COMMIT
+          - Primary map: crystalserver/data-global/world/world.otbm
+          - Tibia asset package: $ASSETS_VERSION
+          - Exact assets manifest SHA-256: $ASSETS_JSON_SHA256
+
+          Do not silently replace either source with a newer revision. Update provenance and hashes explicitly.
+          EOF
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add vendor/map-analysis
+          git status --short
+          test -n "$(git status --porcelain)"
+          git commit -m "chore(maps): vendor pinned map analysis sources"
+          git push origin "HEAD:$GITHUB_REF_NAME"
