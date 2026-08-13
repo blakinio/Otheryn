@@ -1,6 +1,6 @@
 ---
 task_id: OTH-20260813-full-otbm-atlas
-status: implementing
+status: validating
 created: 2026-08-13
 updated: 2026-08-13
 project_lane: otheryn-content
@@ -29,8 +29,8 @@ exact-head CI and PR closeout. No generated multi-gigabyte atlas is committed.
 ```yaml
 checkpoint_version: 1
 policy_version: 2
-updated_at: 2026-08-13T22:00:00+02:00
-head: a9e8c1d965545aa0b1441caed80a2c29c158ba50
+updated_at: 2026-08-13T23:15:00+02:00
+head: df9d03ee7a92d2613992e3ac529138128e8a5431
 branch: blakinio/otbm-full-map-atlas
 pr: 374
 status: validating
@@ -80,6 +80,7 @@ proven:
   - full world has 3494 verified detail, 3494 4x overview and 3494 8x overview PNGs plus 2595 spatial overlay shards
   - historical 15037 versus canonical 14993 Thais child-item totals reproduce exactly from different OTBM SHA-256 inputs
   - browser E2E proves Auto low/high, Detailed low, Performance high, floor switch, search, URL state and marker details without page errors
+  - direct raw-Z coordinate search and marker hover tooltip pass browser E2E; external viewer references are documented with no copied code/data
 derived:
   - semantic parsing must operate incrementally over node events to preserve bounded memory
   - current 77.074 second framing scan needs profiling before it can be accepted for repeated full runs
@@ -101,7 +102,7 @@ changed_paths:
 validation:
   - command: node --check tools/otbm_atlas/viewer_app.js; python -m unittest discover -s tools/otbm_atlas/tests -v
     result: PASS
-    evidence: viewer syntax passes and 32 focused tests pass
+    evidence: viewer syntax passes and 33 focused tests pass
   - command: spool_map canonical world.otbm with chunk size 128
     result: PASS
     evidence: 18997668 tiles, 3494 chunks, 545977318 bytes, Z 0 through 15, 180.07 seconds
@@ -137,5 +138,5 @@ validation:
     evidence: 3494 chunks per imagery layer verify; mode request routing, floor, search and details pass
 blockers:
   - none
-next_action: push review fixes, dispatch required workflows, and verify exact-head CI
+next_action: verify exact-head CI for df9d03ee and allow the protected PR auto-merge to complete
 ```
