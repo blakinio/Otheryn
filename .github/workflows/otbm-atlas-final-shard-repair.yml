@@ -11,8 +11,6 @@ on:
 permissions:
   contents: read
 
-automation:
-
 jobs:
   upper-floor:
     name: Full canonical world v3 floor Z${{ matrix.floor }}
