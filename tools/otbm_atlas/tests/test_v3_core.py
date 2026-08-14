@@ -15,9 +15,9 @@ class FakeRenderer:
 class V3CoreTests(unittest.TestCase):
 	def test_authoritative_version(self):self.assertEqual(atlas.ATLAS_VERSION,3)
 	def test_stack_and_fluid_patterns(self):
-		stack=SpriteInfo(4,2,1,1,tuple(range(8)),1,0);fluid=SpriteInfo(4,3,1,1,tuple(range(12)),1,0);self.assertEqual(_item_patterns(app(stackable=True),stack,Item(1,25),10,11,7),(2,1,0));self.assertEqual(_item_patterns(app(fluid_container=True),fluid,Item(1,2),0,0,7),(3,1,0))
+		stack=SpriteInfo(4,2,1,1,tuple(range(8)),1,0,((100,100),),False,False,0,0);fluid=SpriteInfo(4,3,1,1,tuple(range(12)),1,0,((100,100),),False,False,0,0);self.assertEqual(_item_patterns(app(stackable=True),stack,Item(1,25),10,11,7),(2,1,0));self.assertEqual(_item_patterns(app(fluid_container=True),fluid,Item(1,2),0,0,7),(3,1,0))
 	def test_hangable_patterns_follow_tile_hook_orientation(self):
-		frame=SpriteInfo(3,1,1,1,tuple(range(3)),1,0);item=Item(1)
+		frame=SpriteInfo(3,1,1,1,tuple(range(3)),1,0,((100,100),),False,False,0,0);item=Item(1)
 		self.assertEqual(_item_patterns(app(hangable=True),frame,item,10,11,7,hook_south=True),(1,0,0))
 		self.assertEqual(_item_patterns(app(hangable=True),frame,item,10,11,7,hook_east=True),(2,0,0))
 		self.assertEqual(_item_patterns(app(hangable=True),frame,item,10,11,7),(0,0,0))
