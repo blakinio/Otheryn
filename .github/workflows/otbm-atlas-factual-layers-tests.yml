@@ -146,6 +146,20 @@ jobs:
           (root / 'data/spawns.json').write_text(json.dumps(spawns), encoding='utf-8')
           (root / 'data/statistics.json').write_text(json.dumps({'schemaVersion': 1}), encoding='utf-8')
           (root / 'data/search-index.json').write_text(json.dumps({'schemaVersion': 1, 'records': []}), encoding='utf-8')
+          animation_root = root / 'data/environment-animations'
+          animation_root.mkdir(parents=True, exist_ok=True)
+          (animation_root / 'index.json').write_text(json.dumps({
+              'schemaVersion': 1,
+              'animationZoom': 0.0,
+              'overlapSafetyRadiusTiles': 0,
+              'statistics': {'instances': 0, 'uniqueAnimations': 0, 'chunks': 0, 'staticFallbacks': 0},
+              'policy': {
+                  'cyclicAppearance': 'fixture contains no exported cyclic environment records',
+                  'statefulAppearance': 'not inferred',
+                  'eligibility': 'none',
+                  'fallback': 'canonical static pixels',
+              },
+          }, sort_keys=True), encoding='utf-8')
 
           report = enrich_existing_atlas(root, Path('.'))
           assert report['status'] == 'RESOLVED'
