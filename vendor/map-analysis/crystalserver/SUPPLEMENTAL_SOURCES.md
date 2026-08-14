@@ -9,3 +9,5 @@ Atlas-relevant supplemental source trees:
 - `data/npclib/npc_system/**` — upstream Git tree `8c95fc6faf1dc2c6c573cb57973838897a458a28`; shared NPC helper semantics needed to interpret calls such as bank and travel modules in the already-vendored `data-global/npc/**` definitions.
 
 These trees are provenance inputs. They must not be interpreted by directory name alone: atlas-derived facts should preserve the exact source path and use `RESOLVED`, `AMBIGUOUS` or `UNKNOWN` states whenever static analysis cannot prove runtime behavior.
+
+The supplemental package is source-only. It does not by itself claim that mechanics, raid/event overlays, boss evidence, or NPC-service indexing are implemented in the viewer; those consumers require separate implementation and validation against these pinned inputs.
