@@ -1,10 +1,10 @@
 """Export conservative cyclic object animations for the browser atlas.
 
-The detailed chunk PNG remains the canonical static fallback.  Eligible cyclic
+The detailed chunk PNG remains the canonical static fallback. Eligible cyclic
 appearances are reconstructed at runtime from the same pinned Tibia object
-appearance phases without generating GIFs.  Per-instance underlay/overlay
-patches erase the baked default phase and preserve canonical draw ordering while
-the phase images themselves stay deduplicated across identical appearances.
+appearance phases without generating GIFs. Per-instance underlay/overlay patches
+erase the baked default phase and preserve canonical draw ordering while the
+phase images themselves stay deduplicated across identical appearances.
 """
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ def _draw_offset(appearance, width: int, height: int) -> tuple[int, int]:
 	return -(width - 32) - shift_x - elevation, -(height - 32) - shift_y - elevation
 
 
-def _candidate(renderer, item, x: int, y: int, z: int, hook_south: bool, hook_east: bool):
+def _candidate_geometry(renderer, item, x: int, y: int, z: int, hook_south: bool, hook_east: bool):
 	appearance = renderer.appearances.get(item.server_id)
 	if not appearance or not appearance.frames:
 		return None
@@ -72,6 +72,12 @@ def _candidate(renderer, item, x: int, y: int, z: int, hook_south: bool, hook_ea
 	return appearance, frame, pattern_x, pattern_y, pattern_z, width, height, offset_x, offset_y
 
 
+def _candidate(renderer, item, x: int, y: int, z: int, hook_south: bool, hook_east: bool):
+	"""Compatibility probe used by the repository E2E harness."""
+	candidate = _candidate_geometry(renderer, item, x, y, z, hook_south, hook_east)
+	return None if candidate is None else candidate[:5]
+
+
 def _dangerous(renderer, item) -> bool:
 	"""Return whether a static item can draw outside its owning 32px tile."""
 	appearance = renderer.appearances.get(item.server_id)
@@ -94,6 +100,18 @@ def _phase_pixels(renderer, frame, pattern_x: int, pattern_y: int, pattern_z: in
 			raise ValueError("invalid eligible animation sprite")
 		_blend(out, width, height, decoded[2], width, height, 0, 0)
 	return bytes(out)
+
+
+def _phase(renderer, frame, pattern_x: int, pattern_y: int, pattern_z: int, phase: int) -> bytes:
+	"""Compatibility PNG helper used by the repository browser E2E harness."""
+	index = _idx(frame, 0, pattern_x, pattern_y, pattern_z, phase)
+	if index >= len(frame.sprite_ids):
+		raise ValueError("invalid eligible animation phase")
+	sheet = sheet_for_sprite(renderer.sheets, frame.sprite_ids[index])
+	if not sheet:
+		raise ValueError("missing eligible animation sprite sheet")
+	width, height = sheet.sprite_size
+	return encode_png(width, height, _phase_pixels(renderer, frame, pattern_x, pattern_y, pattern_z, phase, width, height))
 
 
 def _partition_pixels(tiles, renderer, candidate_tile, candidate_item, width: int, height: int, offset_x: int, offset_y: int, *, after: bool) -> bytes:
@@ -131,13 +149,7 @@ def _composite(width: int, height: int, *layers: bytes) -> bytes:
 
 
 def _runtime_replacement_safe(width: int, height: int, underlay: bytes, phases: list[bytes], overlay: bytes, default_phase: int) -> bool:
-	"""Prove that drawing the runtime patch over the baked static patch cannot leak it.
-
-	The comparison uses the exact integer source-over implementation used by the
-	canonical renderer.  Transparent/semitransparent cases are accepted only when
-	re-applying underlay -> phase -> overlay over the baked default image produces
-	exactly the desired phase pixels for every exported phase.
-	"""
+	"""Prove that drawing the runtime patch over the baked static patch cannot leak it."""
 	if not phases:
 		return False
 	default_phase %= len(phases)
@@ -204,11 +216,7 @@ def enrich_environment_animations(asset_dir: Path, output: Path) -> dict[str, in
 			continue
 		tiles = list(decode_spool_tiles(spool_path))
 		by_position = {(tile.position.x, tile.position.y): tile for tile in tiles}
-		danger = {
-			position
-			for position, tile in by_position.items()
-			if any(_dangerous(renderer, item) for item in _items(tile))
-		}
+		danger = {position for position, tile in by_position.items() if any(_dangerous(renderer, item) for item in _items(tile))}
 		records = []
 		x1, x2, y1, y2, _ = map(int, chunk["logicalBounds"])
 
@@ -224,19 +232,16 @@ def enrich_environment_animations(asset_dir: Path, output: Path) -> dict[str, in
 					animated.append(item)
 			if not animated:
 				continue
-			# One runtime replacement patch per tile.  Choosing the highest animated
-			# stack member lets static items above it be reconstructed as an overlay.
+			# One replacement patch per tile. The highest animated member allows
+			# static items above it to be reconstructed in the overlay.
 			item = animated[-1]
-			candidate = _candidate(renderer, item, tile.position.x, tile.position.y, tile.position.z, hook_south, hook_east)
+			candidate = _candidate_geometry(renderer, item, tile.position.x, tile.position.y, tile.position.z, hook_south, hook_east)
 			if not candidate:
 				fallbacks += 1
 				continue
 			x, y = tile.position.x, tile.position.y
 			if (
-				x - x1 < radius
-				or x2 - x < radius
-				or y - y1 < radius
-				or y2 - y < radius
+				x - x1 < radius or x2 - x < radius or y - y1 < radius or y2 - y < radius
 				or any(
 					(nx, ny) in danger
 					for nx in range(x - radius, x + radius + 1)
@@ -252,15 +257,9 @@ def enrich_environment_animations(asset_dir: Path, output: Path) -> dict[str, in
 				_phase_pixels(renderer, frame, pattern_x, pattern_y, pattern_z, phase, width, height)
 				for phase in range(frame.animation_phases)
 			]
-			underlay_pixels = _partition_pixels(
-				tiles, renderer, tile, item, width, height, offset_x, offset_y, after=False
-			)
-			overlay_pixels = _partition_pixels(
-				tiles, renderer, tile, item, width, height, offset_x, offset_y, after=True
-			)
-			if not _runtime_replacement_safe(
-				width, height, underlay_pixels, phase_pixels, overlay_pixels, frame.default_start_phase
-			):
+			underlay_pixels = _partition_pixels(tiles, renderer, tile, item, width, height, offset_x, offset_y, after=False)
+			overlay_pixels = _partition_pixels(tiles, renderer, tile, item, width, height, offset_x, offset_y, after=True)
+			if not _runtime_replacement_safe(width, height, underlay_pixels, phase_pixels, overlay_pixels, frame.default_start_phase):
 				fallbacks += 1
 				continue
 
@@ -285,20 +284,13 @@ def enrich_environment_animations(asset_dir: Path, output: Path) -> dict[str, in
 			ranges = _durations(frame)
 			loop = -1 if frame.loop_type > 1 else frame.loop_type
 			record = {
-				"position": {"x": x, "y": y, "z": tile.position.z},
-				"serverId": item.server_id,
-				"animationKey": key,
-				"frames": frames,
-				"underlay": underlay,
-				"frameSizePx": [width, height],
-				"drawOffsetPx": [offset_x, offset_y],
+				"position": {"x": x, "y": y, "z": tile.position.z}, "serverId": item.server_id,
+				"animationKey": key, "frames": frames, "underlay": underlay,
+				"frameSizePx": [width, height], "drawOffsetPx": [offset_x, offset_y],
 				"phaseDurationsMs": [max(1, (low + high) // 2) for low, high in ranges],
 				"durationRangesMs": [[low, high] for low, high in ranges],
-				"defaultStartPhase": frame.default_start_phase,
-				"synchronized": frame.synchronized,
-				"randomStartPhase": frame.random_start_phase,
-				"loopType": loop,
-				"loopCount": frame.loop_count,
+				"defaultStartPhase": frame.default_start_phase, "synchronized": frame.synchronized,
+				"randomStartPhase": frame.random_start_phase, "loopType": loop, "loopCount": frame.loop_count,
 				"policy": "cyclic-appearance",
 			}
 			if overlay:
@@ -311,23 +303,12 @@ def enrich_environment_animations(asset_dir: Path, output: Path) -> dict[str, in
 		if records:
 			path = root / "chunks" / f"z{z}" / f"{chunk_x}_{chunk_y}.json"
 			path.parent.mkdir(parents=True, exist_ok=True)
-			path.write_text(
-				json.dumps({"schemaVersion": 1, "records": records}, separators=(",", ":"), sort_keys=True) + "\n",
-				encoding="utf-8",
-			)
+			path.write_text(json.dumps({"schemaVersion": 1, "records": records}, separators=(",", ":"), sort_keys=True) + "\n", encoding="utf-8")
 			chunks += 1
 
-	stats = {
-		"instances": instances,
-		"uniqueAnimations": len(made),
-		"chunks": chunks,
-		"staticFallbacks": fallbacks,
-	}
+	stats = {"instances": instances, "uniqueAnimations": len(made), "chunks": chunks, "staticFallbacks": fallbacks}
 	index = {
-		"schemaVersion": 1,
-		"animationZoom": ANIMATION_ZOOM,
-		"overlapSafetyRadiusTiles": radius,
-		"statistics": stats,
+		"schemaVersion": 1, "animationZoom": ANIMATION_ZOOM, "overlapSafetyRadiusTiles": radius, "statistics": stats,
 		"policy": {
 			"cyclicAppearance": "browser animated from pinned object appearance phases; no GIF generation",
 			"statefulAppearance": "not inferred; server-driven variants remain canonical static state",
