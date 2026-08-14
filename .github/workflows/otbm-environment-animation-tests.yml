@@ -25,7 +25,7 @@ jobs:
           import json
           from pathlib import Path
           from tools.otbm_atlas.atlas import ATLAS_VERSION, _sha256, _tree_sha256, build_atlas, decode_tiles, spool_map
-          from tools.otbm_atlas.environment_animation import _candidate, _dangerous, _hooks, _items, _overlap_radius
+          from tools.otbm_atlas.environment_animation import _candidate_details, _dangerous, _hooks, _items, _overlap_radius
           from tools.otbm_atlas.render import AssetRenderer
 
           map_path = Path('vendor/map-analysis/crystalserver/data-global/world/world.otbm')
@@ -46,22 +46,26 @@ jobs:
               danger = {position for position, tile in by_pos.items() if any(_dangerous(renderer, item) for item in _items(tile))}
               for tile in tiles:
                   items = _items(tile)
-                  if not tile.items:
+                  if not items:
                       continue
                   south, east = _hooks(items, renderer)
-                  item = items[-1]
-                  if _candidate(renderer, item, tile.position.x, tile.position.y, tile.position.z, south, east) is None:
+                  animated = [(index, item, _candidate_details(renderer, item, tile.position.x, tile.position.y, tile.position.z, south, east)) for index, item in enumerate(items)]
+                  eligible = [(index, item, details) for index, item, details in animated if details is not None]
+                  if len(eligible) != 1:
+                      continue
+                  stack_index, item, details = eligible[0]
+                  if stack_index != len(items) - 1 or (details.width, details.height, details.offset_x, details.offset_y) != (32, 32, 0, 0):
                       continue
                   x, y = tile.position.x, tile.position.y
                   if x - x1 < radius or x2 - x < radius or y - y1 < radius or y2 - y < radius:
                       continue
                   if any((nx, ny) in danger for nx in range(x - radius, x + radius + 1) for ny in range(y - radius, y + radius + 1) if (nx, ny) != (x, y)):
                       continue
-                  chosen = (path, {'x': x, 'y': y, 'z': z, 'serverId': item.server_id})
+                  chosen = (path, {'x': x, 'y': y, 'z': z, 'serverId': item.server_id, 'stackIndex': stack_index})
                   break
               if chosen:
                   break
-          assert chosen is not None, 'canonical world contains no conservatively eligible animated object'
+          assert chosen is not None, 'canonical world contains no conservative cyclic object fixture'
           chosen_path, evidence = chosen
           for path in spool.glob('z*/*.bin'):
               if path != chosen_path:
@@ -72,16 +76,26 @@ jobs:
           statistics = json.loads((output / 'data/statistics.json').read_text(encoding='utf-8'))
           index = json.loads((output / 'data/environment-animations/index.json').read_text(encoding='utf-8'))
           animation = statistics['environmentAnimations']
+          assert index['schemaVersion'] == 2, index
           assert animation == index['statistics']
           assert animation['instances'] > 0, animation
           assert animation['uniqueAnimations'] > 0, animation
           assert animation['chunks'] == 1, animation
-          assert list((output / 'data/environment-animations/chunks').rglob('*.json'))
+          records = []
+          for shard_path in (output / 'data/environment-animations/chunks').rglob('*.json'):
+              shard = json.loads(shard_path.read_text(encoding='utf-8'))
+              assert shard['schemaVersion'] == 2
+              records.extend(shard['records'])
+          target = next((record for record in records if record['serverId'] == evidence['serverId'] and record['position'] == {'x': evidence['x'], 'y': evidence['y'], 'z': evidence['z']}), None)
+          assert target is not None, {'evidence': evidence, 'records': len(records), 'animation': animation}
+          assert target['spriteSize'] == [32, 32]
+          assert target['drawOffsetPixels'] == [0, 0]
+          assert target['stackIndex'] == evidence['stackIndex']
           print(json.dumps({'canonicalObject': evidence, 'environmentAnimations': animation, 'journey': 'PASS'}, sort_keys=True))
           PY
 
   browser:
-    name: Environment animation browser E2E
+    name: Extended item animation browser E2E
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -92,15 +106,15 @@ jobs:
         run: |
           python3 -m pip install --disable-pip-version-check playwright==1.54.0
           python3 -m playwright install --with-deps chromium
-      - name: Build fixture through production animation exporter
+      - name: Build extended pinned-asset fixture through production exporter
         run: |
           python3 - <<'PY'
           import json
           from pathlib import Path
           from tools.otbm_atlas.assets import encode_png
           from tools.otbm_atlas.atlas import encode_tile
-          from tools.otbm_atlas.environment_animation import _candidate, _durations, _hooks, _phase, enrich_environment_animations
-          from tools.otbm_atlas.render import AssetRenderer
+          from tools.otbm_atlas.environment_animation import _candidate_details, _durations, _hooks, _overlap_radius, _phase, enrich_environment_animations
+          from tools.otbm_atlas.render import AssetRenderer, _blend
           from tools.otbm_atlas.semantic import Item, Position, Tile
           from tools.otbm_atlas.viewer import write_viewer
 
@@ -110,30 +124,56 @@ jobs:
           (root / 'data').mkdir(parents=True)
           asset_dir = Path('vendor/map-analysis/tibia-client/15.25.bd5a04/assets')
           renderer = AssetRenderer(asset_dir)
+
+          ground_id = None
+          for server_id, appearance in sorted(renderer.appearances.items()):
+              if not appearance.is_ground or not appearance.frames or appearance.frames[0].animation_phases != 1:
+                  continue
+              item = Item(server_id)
+              canvas = bytearray(32 * 32 * 4)
+              valid = False
+              for rendered_appearance, _sprite_id, (width, height, pixels) in renderer.item_sprites(item, 64, 64, 7):
+                  if (width, height) != (32, 32) or rendered_appearance.shift not in (None, (0, 0)) or rendered_appearance.height not in (None, 0):
+                      valid = False
+                      break
+                  _blend(canvas, 32, 32, pixels, 32, 32, 0, 0)
+                  valid = True
+              if valid and all(canvas[index] == 255 for index in range(3, len(canvas), 4)):
+                  ground_id = server_id
+                  break
+          assert ground_id is not None, 'no opaque static 32x32 ground fixture found in pinned assets'
+
           chosen = None
           for server_id in sorted(renderer.appearances):
               item = Item(server_id)
-              probe = Tile(Position(64, 64, 7), None, 0, None, (item,), ())
               south, east = _hooks([item], renderer)
-              candidate = _candidate(renderer, item, 64, 64, 7, south, east)
-              if candidate is None:
+              details = _candidate_details(renderer, item, 64, 64, 7, south, east)
+              if details is None:
                   continue
-              _appearance, frame, px, py, pz = candidate
-              durations = [max(1, (lo + hi) // 2) for lo, hi in _durations(frame)]
+              if (details.width, details.height) == (32, 32) and (details.offset_x, details.offset_y) == (0, 0):
+                  continue
+              durations = [max(1, (low + high) // 2) for low, high in _durations(details.frame)]
               if max(durations) > 500:
                   continue
-              phases = [_phase(renderer, frame, px, py, pz, phase) for phase in range(frame.animation_phases)]
+              phases = [_phase(renderer, details.frame, details.px, details.py, details.pz, phase) for phase in range(details.frame.animation_phases)]
               if len(set(phases)) < 2:
                   continue
-              # SPOOL_VERSION=1 decodes the first serialized item as ground. Keep a
-              # second copy as the top stack item so the production exporter sees it.
-              chosen = (Tile(Position(64, 64, 7), None, 0, item, (Item(server_id),), ()), server_id)
+              chosen = (item, details, durations)
               break
-          assert chosen is not None, 'no deterministic multi-phase object fixture found in pinned assets'
-          tile, server_id = chosen
-          (root / '.spool/z7/0_0.bin').write_bytes(encode_tile(tile))
-          (root / '.spool/spool.json').write_text(json.dumps({'version': 1, 'chunkSize': 128, 'tiles': 1}), encoding='utf-8')
-          (root / 'tiles/z7/0_0.png').write_bytes(encode_png(32, 32, bytes((20, 20, 20, 255)) * 32 * 32))
+          assert chosen is not None, 'no extended cyclic object exists in pinned assets'
+          item, details, durations = chosen
+          radius = _overlap_radius(renderer)
+          assert radius < 64, radius
+          tiles = []
+          for y in range(64 - radius, 64 + radius + 1):
+              for x in range(64 - radius, 64 + radius + 1):
+                  ground = Item(ground_id)
+                  stack = (item,) if (x, y) == (64, 64) else ()
+                  tiles.append(Tile(Position(x, y, 7), None, 0, ground, stack, ()))
+          (root / '.spool/z7/0_0.bin').write_bytes(b''.join(encode_tile(tile) for tile in tiles))
+          (root / '.spool/spool.json').write_text(json.dumps({'version': 1, 'chunkSize': 128, 'tiles': len(tiles)}), encoding='utf-8')
+          base_pixels = bytes((20, 20, 20, 255)) * 32 * 32
+          (root / 'tiles/z7/0_0.png').write_bytes(encode_png(32, 32, base_pixels))
           chunk = {'z': 7, 'chunkX': 0, 'chunkY': 0, 'logicalBounds': [0, 127, 0, 127, 7], 'bounds': [64, 64, 64, 64, 7], 'path': 'tiles/z7/0_0.png', 'overviewPath': 'tiles/z7/0_0.png', 'lowOverviewPath': 'tiles/z7/0_0.png', 'imageWidth': 32, 'imageHeight': 32}
           (root / 'manifest.json').write_text(json.dumps({'schemaVersion': 3, 'chunkSize': 128, 'chunks': [chunk]}), encoding='utf-8')
           (root / 'data/search-index.json').write_text('{"schemaVersion":1,"records":[]}', encoding='utf-8')
@@ -143,18 +183,29 @@ jobs:
           assert statistics['chunks'] == 1, statistics
           index = json.loads((root / 'data/environment-animations/index.json').read_text(encoding='utf-8'))
           shard = json.loads((root / 'data/environment-animations/chunks/z7/0_0.json').read_text(encoding='utf-8'))
+          assert index['schemaVersion'] == 2
+          assert shard['schemaVersion'] == 2
           assert index['statistics'] == statistics
           assert len(shard['records']) == 1
           record = shard['records'][0]
-          assert record['serverId'] == server_id
+          assert record['serverId'] == item.server_id
+          assert record['spriteSize'] == [details.width, details.height]
+          assert record['drawOffsetPixels'] == [details.offset_x, details.offset_y]
+          assert record['stackIndex'] == 1 and record['stackSize'] == 2, record
+          assert record['spriteSize'] != [32, 32] or record['drawOffsetPixels'] != [0, 0]
           assert len(record['frames']) >= 2
           for frame_path in record['frames']:
-              assert (root / frame_path).is_file()
+              data = (root / frame_path).read_bytes()
+              assert data[:8] == b'\x89PNG\r\n\x1a\n'
+              assert [int.from_bytes(data[16:20], 'big'), int.from_bytes(data[20:24], 'big')] == record['spriteSize']
           assert (root / record['underlay']).is_file()
-          (root / 'fixture.json').write_text(json.dumps({'position': record['position'], 'phaseDurationsMs': record['phaseDurationsMs']}), encoding='utf-8')
+          if record.get('overdraw'):
+              assert (root / record['overdraw']).is_file()
+          (root / 'fixture.json').write_text(json.dumps({'position': record['position'], 'phaseDurationsMs': record['phaseDurationsMs'], 'spriteSize': record['spriteSize'], 'drawOffsetPixels': record['drawOffsetPixels'], 'serverId': record['serverId']}), encoding='utf-8')
           write_viewer(root)
+          print(json.dumps({'serverId': item.server_id, 'spriteSize': record['spriteSize'], 'drawOffsetPixels': record['drawOffsetPixels'], 'radius': radius}, sort_keys=True))
           PY
-      - name: Prove production-exported phases in Chromium
+      - name: Prove production-exported extended phases in Chromium
         run: |
           python3 -m http.server 8124 --directory /tmp/environment-e2e >/tmp/environment-http.log 2>&1 &
           pid=$!
@@ -167,18 +218,19 @@ jobs:
           fixture = json.loads(Path('/tmp/environment-e2e/fixture.json').read_text(encoding='utf-8'))
           position = fixture['position']
           interval = max(80, min(450, min(fixture['phaseDurationsMs']) + 40))
+          assert fixture['spriteSize'] != [32, 32] or fixture['drawOffsetPixels'] != [0, 0]
           with sync_playwright() as p:
               browser = p.chromium.launch(headless=True)
               page = browser.new_page(viewport={'width': 800, 'height': 600})
-              page.goto(f"http://127.0.0.1:8124/?x={position['x']}&y={position['y']}&zoom=2&render=detailed", wait_until='networkidle')
+              page.goto(f"http://127.0.0.1:8124/?x={position['x']}&y={position['y']}&z=7&zoom=2&render=detailed", wait_until='networkidle')
               page.locator('#environmentAnimations').wait_for(state='attached')
-              page.wait_for_timeout(400)
+              page.wait_for_timeout(500)
               assert page.locator('#floor').input_value() == '7'
               frames = []
               for _ in range(12):
                   frames.append(page.evaluate("""() => document.querySelector('#environmentAnimations').toDataURL()"""))
                   page.wait_for_timeout(interval)
               browser.close()
-          assert len(set(frames)) > 1, 'production-exported animation did not advance in Chromium'
-          print({'journey': 'PASS', 'defaultFloor': 7, 'distinctFrames': len(set(frames))})
+          assert len(set(frames)) > 1, 'production-exported extended animation did not advance in Chromium'
+          print({'journey': 'PASS', 'serverId': fixture['serverId'], 'spriteSize': fixture['spriteSize'], 'drawOffsetPixels': fixture['drawOffsetPixels'], 'distinctFrames': len(set(frames))})
           PY

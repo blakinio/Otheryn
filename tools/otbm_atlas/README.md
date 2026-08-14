@@ -56,7 +56,7 @@ python -m tools.otbm_atlas.atlas `
 python -m http.server 8000 --directory build/full-map-atlas
 ```
 
-The atlas build also runs the conservative cyclic-environment exporter against the same pinned object appearances and chunk spool. Eligible topmost 32x32 non-displaced objects are emitted under `data/environment-animations/`; unsupported, edge-risk, occluded, or server-driven state variants remain canonical static pixels. The browser only activates these exported phases at close zoom and keeps its animation image/shard caches bounded.
+The atlas build also runs the bounded cyclic-environment exporter against the same pinned object appearances and chunk spool. Decodable cyclic objects can use 32x32, 32x64, 64x32, or 64x64 sprite geometry with canonical shift/height offsets; safe ground and non-topmost stack entries preserve local composition through per-instance underlay/overdraw patches. Shared phase PNGs are deduplicated by canonical appearance/pattern and animated by the browser at runtime rather than prebuilt as GIF/WebP files. Overlapping animated rectangles, chunk-edge risks, undecodable or non-opaque replacement cases, and server-driven state variants remain canonical static pixels. The browser only activates exported phases at close zoom and keeps its animation image/shard caches bounded. See `tools/otbm_atlas/ANIMATION.md` for the full runtime contract.
 
 The first pass spools each tile once into bounded per-chunk binary files. Chunk
 reports retain source/spool fingerprints and PNG checksums; matching chunks are
