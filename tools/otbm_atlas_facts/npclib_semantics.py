@@ -2,7 +2,7 @@
 from __future__ import annotations
 from pathlib import Path
 import re
-from .lua_static import containing_function, strip_comments
+from .lua_static import function_regions, strip_comments
 
 TRAVEL_DECL = re.compile(r"\bfunction\s+StdModule\.travel\s*\(")
 
@@ -14,10 +14,13 @@ def verify_npc_system(npc_system_root: Path) -> dict[str, object]:
     travel = TRAVEL_DECL.search(modules)
     travel_proven = False
     if travel is not None:
-        region = containing_function(modules, travel.start())
+        region = next((candidate for candidate in function_regions(modules) if candidate.start == travel.start()), None)
         if region is not None:
             body = modules[region.body_start:region.body_end]
-            travel_proven = bool(re.search(r"\blocal\s+destination\s*=\s*parameters\.destination\b", body) and re.search(r"\bplayer:teleportTo\s*\(\s*destination\s*\)", body))
+            travel_proven = bool(
+                re.search(r"\blocal\s+destination\s*=\s*parameters\.destination\b", body)
+                and re.search(r"\bplayer:teleportTo\s*\(\s*destination\s*\)", body)
+            )
     bank = strip_comments(bank_path.read_text(encoding="utf-8"))
     bank_markers = {
         "parseBank": "parseBank" in bank,
