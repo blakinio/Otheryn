@@ -23,35 +23,91 @@ jobs:
         run: |
           python3 -m pip install --disable-pip-version-check playwright==1.54.0
           python3 -m playwright install --with-deps chromium
-      - name: Build deterministic animation fixture
+      - name: Build fixture through production animation exporter
         run: |
           python3 - <<'PY'
           import json
           from pathlib import Path
           from tools.otbm_atlas.assets import encode_png
+          from tools.otbm_atlas.atlas import encode_tile
+          from tools.otbm_atlas.environment_animation import _candidate, _durations, _hooks, _phase, enrich_environment_animations
+          from tools.otbm_atlas.render import AssetRenderer
+          from tools.otbm_atlas.semantic import Item, Position, Tile
           from tools.otbm_atlas.viewer import write_viewer
-          root=Path('/tmp/environment-e2e');(root/'tiles/z7').mkdir(parents=True);(root/'data/environment-animations/chunks/z7').mkdir(parents=True);(root/'data/environment-animations/frames/demo').mkdir(parents=True);(root/'data/environment-animations/underlays/z7/0_0').mkdir(parents=True);(root/'data').mkdir(exist_ok=True)
-          def image(rgb):return encode_png(32,32,bytes((*rgb,255))*32*32)
-          (root/'tiles/z7/0_0.png').write_bytes(image((20,20,20)));(root/'data/environment-animations/frames/demo/0.png').write_bytes(image((255,0,0)));(root/'data/environment-animations/frames/demo/1.png').write_bytes(image((0,255,0)));(root/'data/environment-animations/underlays/z7/0_0/100_100_1.png').write_bytes(image((20,20,20)))
-          chunk={'z':7,'chunkX':0,'chunkY':0,'logicalBounds':[0,127,0,127,7],'bounds':[100,100,100,100,7],'path':'tiles/z7/0_0.png','overviewPath':'tiles/z7/0_0.png','lowOverviewPath':'tiles/z7/0_0.png','imageWidth':32,'imageHeight':32}
-          (root/'manifest.json').write_text(json.dumps({'schemaVersion':3,'chunkSize':128,'chunks':[chunk]}),encoding='utf-8');(root/'data/search-index.json').write_text('{"records":[]}',encoding='utf-8');(root/'data/environment-animations/index.json').write_text(json.dumps({'schemaVersion':1,'animationZoom':1.5}),encoding='utf-8')
-          record={'position':{'x':100,'y':100,'z':7},'serverId':1,'animationKey':'demo','frames':['data/environment-animations/frames/demo/0.png','data/environment-animations/frames/demo/1.png'],'underlay':'data/environment-animations/underlays/z7/0_0/100_100_1.png','phaseDurationsMs':[150,150],'defaultStartPhase':0,'synchronized':True,'loopType':0,'loopCount':0}
-          (root/'data/environment-animations/chunks/z7/0_0.json').write_text(json.dumps({'schemaVersion':1,'records':[record]}),encoding='utf-8');write_viewer(root)
+
+          root = Path('/tmp/environment-e2e')
+          (root / '.spool/z7').mkdir(parents=True)
+          (root / 'tiles/z7').mkdir(parents=True)
+          (root / 'data').mkdir(parents=True)
+          asset_dir = Path('vendor/map-analysis/tibia-client/15.25.bd5a04/assets')
+          renderer = AssetRenderer(asset_dir)
+          chosen = None
+          for server_id in sorted(renderer.appearances):
+              item = Item(server_id)
+              tile = Tile(Position(64, 64, 7), None, 0, None, (item,), ())
+              south, east = _hooks([item], renderer)
+              candidate = _candidate(renderer, item, 64, 64, 7, south, east)
+              if candidate is None:
+                  continue
+              _appearance, frame, px, py, pz = candidate
+              durations = [max(1, (lo + hi) // 2) for lo, hi in _durations(frame)]
+              if max(durations) > 500:
+                  continue
+              phases = [_phase(renderer, frame, px, py, pz, phase) for phase in range(frame.animation_phases)]
+              if len(set(phases)) < 2:
+                  continue
+              chosen = (tile, server_id)
+              break
+          assert chosen is not None, 'no deterministic multi-phase object fixture found in pinned assets'
+          tile, server_id = chosen
+          (root / '.spool/z7/0_0.bin').write_bytes(encode_tile(tile))
+          (root / '.spool/spool.json').write_text(json.dumps({'version': 1, 'chunkSize': 128, 'tiles': 1}), encoding='utf-8')
+          (root / 'tiles/z7/0_0.png').write_bytes(encode_png(32, 32, bytes((20, 20, 20, 255)) * 32 * 32))
+          chunk = {'z': 7, 'chunkX': 0, 'chunkY': 0, 'logicalBounds': [0, 127, 0, 127, 7], 'bounds': [64, 64, 64, 64, 7], 'path': 'tiles/z7/0_0.png', 'overviewPath': 'tiles/z7/0_0.png', 'lowOverviewPath': 'tiles/z7/0_0.png', 'imageWidth': 32, 'imageHeight': 32}
+          (root / 'manifest.json').write_text(json.dumps({'schemaVersion': 3, 'chunkSize': 128, 'chunks': [chunk]}), encoding='utf-8')
+          (root / 'data/search-index.json').write_text('{"schemaVersion":1,"records":[]}', encoding='utf-8')
+          statistics = enrich_environment_animations(asset_dir, root)
+          assert statistics['instances'] == 1, statistics
+          assert statistics['uniqueAnimations'] == 1, statistics
+          assert statistics['chunks'] == 1, statistics
+          index = json.loads((root / 'data/environment-animations/index.json').read_text(encoding='utf-8'))
+          shard = json.loads((root / 'data/environment-animations/chunks/z7/0_0.json').read_text(encoding='utf-8'))
+          assert index['statistics'] == statistics
+          assert len(shard['records']) == 1
+          record = shard['records'][0]
+          assert record['serverId'] == server_id
+          assert len(record['frames']) >= 2
+          for frame_path in record['frames']:
+              assert (root / frame_path).is_file()
+          assert (root / record['underlay']).is_file()
+          (root / 'fixture.json').write_text(json.dumps({'position': record['position'], 'phaseDurationsMs': record['phaseDurationsMs']}), encoding='utf-8')
+          write_viewer(root)
           PY
-      - name: Prove default floor and phase changes in Chromium
+      - name: Prove production-exported phases in Chromium
         run: |
           python3 -m http.server 8124 --directory /tmp/environment-e2e >/tmp/environment-http.log 2>&1 &
-          pid=$!; trap 'kill "$pid" || true' EXIT
+          pid=$!
+          trap 'kill "$pid" || true' EXIT
           python3 - <<'PY'
+          import json
+          from pathlib import Path
           from playwright.sync_api import sync_playwright
+
+          fixture = json.loads(Path('/tmp/environment-e2e/fixture.json').read_text(encoding='utf-8'))
+          position = fixture['position']
+          interval = max(80, min(450, min(fixture['phaseDurationsMs']) + 40))
           with sync_playwright() as p:
-              browser=p.chromium.launch(headless=True);page=browser.new_page(viewport={'width':800,'height':600});page.goto('http://127.0.0.1:8124/?x=100&y=100&zoom=2&render=detailed',wait_until='networkidle');page.locator('#environmentAnimations').wait_for(state='attached');page.wait_for_timeout(400)
+              browser = p.chromium.launch(headless=True)
+              page = browser.new_page(viewport={'width': 800, 'height': 600})
+              page.goto(f"http://127.0.0.1:8124/?x={position['x']}&y={position['y']}&zoom=2&render=detailed", wait_until='networkidle')
+              page.locator('#environmentAnimations').wait_for(state='attached')
+              page.wait_for_timeout(400)
               assert page.locator('#floor').input_value() == '7'
-              colors=[]
-              for _ in range(8):
-                  colors.append(tuple(page.evaluate("""() => {const c=document.querySelector('#environmentAnimations'),x=Math.floor(c.width/2+32),y=Math.floor(c.height/2+32);return [...c.getContext('2d').getImageData(x,y,1,1).data.slice(0,3)]}""")));page.wait_for_timeout(170)
+              frames = []
+              for _ in range(12):
+                  frames.append(page.evaluate("""() => document.querySelector('#environmentAnimations').toDataURL()"""))
+                  page.wait_for_timeout(interval)
               browser.close()
-          assert (255,0,0) in colors,colors
-          assert (0,255,0) in colors,colors
-          print({'journey':'PASS','defaultFloor':7,'colors':colors})
+          assert len(set(frames)) > 1, 'production-exported animation did not advance in Chromium'
+          print({'journey': 'PASS', 'defaultFloor': 7, 'distinctFrames': len(set(frames))})
           PY
