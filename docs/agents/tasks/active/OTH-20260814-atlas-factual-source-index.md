@@ -5,7 +5,7 @@ owner: openai
 branch: agent/oth-20260814-atlas-factual-source-index
 base_branch: main
 created: 2026-08-14
-updated: 2026-08-14T18:50:00+02:00
+updated: 2026-08-14T18:58:00+02:00
 related_pr: "385"
 owned_paths:
   - tools/otbm_atlas_facts/**
@@ -29,13 +29,13 @@ Build a conservative static-analysis package for the exact pinned CrystalServer 
 - XML raids, static Lua raid/event evidence, exact single-spawn positions, bounded area-spawn rectangles, and UNKNOWN spatial status where dynamic behavior is not provable;
 - NPC shop/bank/guild-bank/travel service metadata from already-vendored NPC scripts;
 - pinned shared NPC-system semantics for travel/bank helpers;
-- `RESOLVED`, `AMBIGUOUS`, `UNRESOLVED` and `UNKNOWN` states with exact source provenance.
+- deterministic generated JSON and `RESOLVED`, `AMBIGUOUS`, `UNRESOLVED` / `UNKNOWN` states with exact source provenance.
 
 ## Context checkpoint
 
 ```yaml
-checkpoint_version: 2
-updated_at: 2026-08-14T18:50:00+02:00
+checkpoint_version: 3
+updated_at: 2026-08-14T18:58:00+02:00
 branch: agent/oth-20260814-atlas-factual-source-index
 pr: 385
 status: validating
@@ -47,11 +47,12 @@ proven:
   - Thais Orc raid produces factual areas/single spawns and dynamic scripted events remain UNKNOWN when spatial truth cannot be proven
   - Ray shop, Naji bank/guild-bank and Captain Bluebear travel routes are extracted from pinned NPC definitions
   - pinned npclib proves StdModule travel/bank helper semantics used by those NPC definitions
+  - deterministic regression test compiles the complete factual index twice and requires byte-identical JSON
 constraints:
   - do not execute Lua
   - never classify a boss solely from path or name
   - never turn conditional scripted transitions into unconditional routing claims
   - do not touch tools/otbm_atlas/** while PR 386 owns overlapping atlas runtime paths
 blockers: []
-next_action: reconcile PR 385 onto current main without retaining already-merged vendor history, run exact-head factual-index CI and independent audit, then merge and archive this task
+next_action: reconcile branch history with current main, run exact-head factual-index CI and independent audit, then merge and archive this task
 ```
