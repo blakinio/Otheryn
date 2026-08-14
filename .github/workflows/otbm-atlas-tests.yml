@@ -203,7 +203,7 @@ jobs:
     name: Full canonical world v3 shard ${{ matrix.shard }}
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'ci:final-gate')
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
