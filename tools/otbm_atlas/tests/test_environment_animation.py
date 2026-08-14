@@ -9,6 +9,7 @@ from tools.otbm_atlas.assets import Appearance, SpriteInfo, SpriteSheet
 from tools.otbm_atlas.environment_animation import (
 	ANIMATION_ZOOM,
 	_candidate,
+	_candidate_geometry,
 	_draw_offset,
 	_runtime_replacement_safe,
 	enrich_environment_animations,
@@ -67,11 +68,15 @@ class EnvironmentAnimationTests(unittest.TestCase):
 			appearances={200: appearance},
 			sheets=[SpriteSheet(Path("fixture.lzma"), 1, 2, 2)],  # layout 2 = 64x32
 		)
-		candidate = _candidate(renderer, Item(200), 100, 100, 7, False, False)
+		candidate = _candidate_geometry(renderer, Item(200), 100, 100, 7, False, False)
 		self.assertIsNotNone(candidate)
 		assert candidate is not None
 		self.assertEqual(candidate[5:9], (64, 32, -37, -6))
 		self.assertEqual(_draw_offset(appearance, 64, 32), (-37, -6))
+		legacy = _candidate(renderer, Item(200), 100, 100, 7, False, False)
+		self.assertIsNotNone(legacy)
+		assert legacy is not None
+		self.assertEqual(len(legacy), 5)
 
 	def test_replacement_proof_rejects_default_phase_leak(self):
 		transparent = bytes((0, 0, 0, 0))
