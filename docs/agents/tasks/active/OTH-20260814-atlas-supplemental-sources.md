@@ -1,6 +1,6 @@
 ---
 task_id: OTH-20260814-atlas-supplemental-sources
-status: in_progress
+status: validating
 owner: openai
 branch: agent/oth-20260814-atlas-supplemental-sources
 base_branch: main
@@ -12,7 +12,6 @@ owned_paths:
   - vendor/map-analysis/crystalserver/data/npclib/npc_system/**
   - vendor/map-analysis/crystalserver/SUPPLEMENTAL_SOURCES.md
   - vendor/map-analysis/crystalserver/supplemental-sources-manifest.json
-  - .github/workflows/import-crystal-atlas-supplemental-sources.yml
   - docs/agents/tasks/active/OTH-20260814-atlas-supplemental-sources.md
 required_reads:
   - AGENTS.md
@@ -37,16 +36,20 @@ Vendor the exact pinned CrystalServer source trees needed to prove scripted map 
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-08-14T09:29:00+02:00
+updated_at: 2026-08-14T09:33:00+02:00
 branch: agent/oth-20260814-atlas-supplemental-sources
-status: in_progress
+status: validating
+head_before_checkpoint: 79017fd68fa637edf25a16d96c638ed2c1f47f61
 proven:
-  - canonical world, monster and NPC source trees are already vendored
-  - atlas mechanics resolver must ultimately use sources from the same pinned CrystalServer revision as the map
-  - CrystalServer raids encode explicit event regions, single spawns, delays and monster identities
-  - vendored NPC definitions already contain shop, bank and travel behavior; shared npclib is only needed to prove helper semantics
-unknown:
-  - final imported file count and byte total for the three supplemental trees
+  - one-shot import workflow 31780269499 completed SUCCESS
+  - data-global/scripts has exact upstream tree 0e3b0102c7d841345dc5b9d4a3b81631930dc362
+  - data-global/raids has exact upstream tree 95da7008cf26e5b41ad9f6ef6b5666707feb295c
+  - data/npclib/npc_system has exact upstream tree 8c95fc6faf1dc2c6c573cb57973838897a458a28
+  - deterministic manifest contains 2054 files totaling 3285973 bytes
+  - manifest content fingerprint is c599e44454b3cd2ec0378f2b1ba296f0858db2f9c683d60ec1da19ffdc672f92
+  - scope counts are scripts=1897, raids=152, npc_system=5
+  - the one-shot importer workflow has been removed from the branch after successful import
+unknown: []
 blockers: []
-next_action: run a one-shot exact-tree import with deterministic manifest, verify tree SHAs, remove the importer workflow, then open a data-only PR
+next_action: open the data-only PR, require exact-head Required gate, then merge after it is green and reconcile with current main
 ```
