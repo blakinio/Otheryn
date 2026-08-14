@@ -38,9 +38,11 @@ class AtlasTests(unittest.TestCase):
 		for value in sources.values():
 			self.assertTrue(value.as_posix().startswith("/repo/vendor/map-analysis/"), value)
 		code_root = Path(__file__).parents[1]
-		for name in ("atlas.py", "composition.py", "render.py", "environment_animation.py", "creature_sprites.py", "npc_sprites.py", "monster_sprites.py"):
-			text = (code_root / name).read_text(encoding="utf-8")
-			self.assertNotIn("data-otservbr-global", text, name)
+		for path in sorted(code_root.iterdir()):
+			if not path.is_file() or path.suffix not in {".py", ".js"}:
+				continue
+			text = path.read_text(encoding="utf-8")
+			self.assertNotIn("data-otservbr-global", text, path.name)
 
 
 if __name__ == "__main__": unittest.main()
