@@ -31,7 +31,7 @@ jobs:
           from pathlib import Path
           from tools.otbm_atlas.environment_animation import ANIMATION_ZOOM
           from tools.otbm_atlas.npc_sprites import enrich_npc_spawns
-          from tools.otbm_atlas.render import render_map
+          from tools.otbm_atlas.render import render_region
           from tools.otbm_atlas.spawns import scan_spawns
           from tools.otbm_atlas.viewer import write_viewer
 
@@ -46,7 +46,10 @@ jobs:
           scripts = Path('vendor/map-analysis/crystalserver/data-global')
           bounds = (32340, 32371, 32215, 32246, 7)
           image = root / 'tiles/z7/252_251.png'
-          report = render_map(map_path, assets, image, bounds=bounds)
+          png, report = render_region(map_path, assets, bounds)
+          image.write_bytes(png)
+          assert not report['missingAppearances'], report['missingAppearances']
+          assert not report['missingSprites'], report['missingSprites']
           x1, x2, y1, y2, z = bounds
           spawns = scan_spawns(scripts / 'world')
           candidates = [r for r in spawns['npcSpawns'] if r['position']['z'] == z and x1 <= r['position']['x'] <= x2 and y1 <= r['position']['y'] <= y2 and r.get('origin') == 'base-map']
