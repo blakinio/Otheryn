@@ -199,11 +199,23 @@ jobs:
           print(json.dumps({'browser': 'chromium', 'canonicalNpc': npc, 'journey': 'PASS'}, sort_keys=True))
           PY
 
-  full-world:
-    name: Full canonical world v3
+  full-world-shards:
+    name: Full canonical world v3 shard ${{ matrix.shard }}
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'ci:final-gate')
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: 0
+            floors: "0,1,2,3"
+          - shard: 1
+            floors: "4,5,6,7"
+          - shard: 2
+            floors: "8,9,10,11"
+          - shard: 3
+            floors: "12,13,14,15"
     steps:
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
@@ -213,46 +225,124 @@ jobs:
         run: |
           sudo rm -rf /usr/local/lib/android /opt/ghc /usr/share/dotnet || true
           df -h /
-      - name: Build full canonical atlas
+      - name: Build canonical atlas shard
+        env:
+          ATLAS_SHARD: ${{ matrix.shard }}
+          ATLAS_FLOORS: ${{ matrix.floors }}
         run: |
-          python3 -m tools.otbm_atlas.atlas \
-            vendor/map-analysis/crystalserver/data-global/world/world.otbm \
-            vendor/map-analysis/tibia-client/15.25.bd5a04/assets \
-            build/full-map-atlas-v3 \
-            --workers 4
-      - name: Independently verify generated atlas
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from tools.otbm_atlas.atlas import ATLAS_VERSION, _sha256, _tree_sha256, build_atlas, spool_map
+
+          map_path = Path('vendor/map-analysis/crystalserver/data-global/world/world.otbm')
+          asset_dir = Path('vendor/map-analysis/tibia-client/15.25.bd5a04/assets')
+          output = Path(f"build/full-map-atlas-v3-shard-{os.environ['ATLAS_SHARD']}")
+          spool = output / '.spool'
+          floors = {int(value) for value in os.environ['ATLAS_FLOORS'].split(',')}
+          spool_map(map_path, spool, 128)
+          expected = {
+              'mapSha256': _sha256(map_path),
+              'assetsSha256': _tree_sha256(asset_dir),
+              'chunkSize': 128,
+              'atlasVersion': ATLAS_VERSION,
+          }
+          (spool / 'source.json').write_text(json.dumps(expected, sort_keys=True) + '\n', encoding='utf-8')
+          for path in spool.glob('z*/*.bin'):
+              if int(path.parent.name[1:]) not in floors:
+                  path.unlink()
+          build_atlas(map_path, asset_dir, output, workers=4)
+          PY
+      - name: Independently verify canonical atlas shard
+        env:
+          ATLAS_SHARD: ${{ matrix.shard }}
         run: |
-          python3 -m tools.otbm_atlas.verify \
-            build/full-map-atlas-v3 \
-            --output build/full-map-atlas-v3/verification.json
-      - name: Assert and print compact full-world evidence
+          root="build/full-map-atlas-v3-shard-${ATLAS_SHARD}"
+          python3 -m tools.otbm_atlas.verify "$root" --output "$root/verification.json"
+      - name: Assert shard and emit compact evidence
+        env:
+          ATLAS_SHARD: ${{ matrix.shard }}
+          ATLAS_FLOORS: ${{ matrix.floors }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          root = Path(f"build/full-map-atlas-v3-shard-{os.environ['ATLAS_SHARD']}")
+          manifest = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
+          statistics = json.loads((root / 'data/statistics.json').read_text(encoding='utf-8'))
+          verification = json.loads((root / 'verification.json').read_text(encoding='utf-8'))
+          expected_floors = sorted(int(value) for value in os.environ['ATLAS_FLOORS'].split(','))
+          floors = sorted({int(chunk['z']) for chunk in manifest['chunks']})
+          assert manifest['schemaVersion'] == 3
+          assert floors == expected_floors
+          assert statistics['chunks'] == len(manifest['chunks'])
+          assert statistics['populatedFloors'] == expected_floors
+          assert verification['ok'] is True
+          assert verification['chunks'] == len(manifest['chunks'])
+          assert sorted(map(int, verification['floors'].keys())) == expected_floors
+          assert verification['missingSprites'] == {}
+          evidence = {
+              'shard': int(os.environ['ATLAS_SHARD']),
+              'chunks': len(manifest['chunks']),
+              'floors': expected_floors,
+              'sources': manifest['sources'],
+              'verification': verification,
+          }
+          evidence_path = Path(f"build/full-world-shard-{os.environ['ATLAS_SHARD']}.json")
+          evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          print(json.dumps(evidence, sort_keys=True))
+          PY
+      - name: Upload shard evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: full-world-shard-${{ matrix.shard }}
+          path: build/full-world-shard-${{ matrix.shard }}.json
+          if-no-files-found: error
+          retention-days: 1
+
+  full-world:
+    name: Full canonical world v3
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'ci:final-gate')
+    needs: full-world-shards
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download shard evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          pattern: full-world-shard-*
+          path: build/full-world-evidence
+          merge-multiple: true
+      - name: Assert complete canonical world evidence
         run: |
           python3 - <<'PY'
           import json
           from pathlib import Path
-          root = Path('build/full-map-atlas-v3')
-          manifest = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
-          statistics = json.loads((root / 'data/statistics.json').read_text(encoding='utf-8'))
-          verification = json.loads((root / 'verification.json').read_text(encoding='utf-8'))
-          mechanics = json.loads((root / 'data/mechanics-resolution.json').read_text(encoding='utf-8'))
-          unknown = json.loads((root / 'data/unknown-items.json').read_text(encoding='utf-8'))
-          assert manifest['schemaVersion'] == 3
-          assert len(manifest['chunks']) == 3494
-          assert sorted({int(chunk['z']) for chunk in manifest['chunks']}) == list(range(16))
-          assert statistics['chunks'] == 3494
-          assert statistics['populatedFloors'] == list(range(16))
-          assert verification['ok'] is True
-          assert verification['chunks'] == 3494
-          assert sorted(map(int, verification['floors'].keys())) == list(range(16))
-          assert verification['missingSprites'] == {}
+          paths = sorted(Path('build/full-world-evidence').glob('full-world-shard-*.json'))
+          assert len(paths) == 4, paths
+          reports = [json.loads(path.read_text(encoding='utf-8')) for path in paths]
+          assert sorted(report['shard'] for report in reports) == [0, 1, 2, 3]
+          assert sum(int(report['chunks']) for report in reports) == 3494
+          floors = sorted({int(floor) for report in reports for floor in report['floors']})
+          assert floors == list(range(16))
+          source_fingerprints = {json.dumps(report['sources'], sort_keys=True) for report in reports}
+          assert len(source_fingerprints) == 1
+          sources = reports[0]['sources']
+          assert sources['mapSha256'] == '3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034'
+          assert sources['chunkSize'] == 128
+          assert sources['atlasVersion'] == 3
+          for report in reports:
+              verification = report['verification']
+              assert verification['ok'] is True
+              assert verification['missingSprites'] == {}
           evidence = {
-              'schemaVersion': manifest['schemaVersion'],
-              'chunks': len(manifest['chunks']),
-              'floors': sorted({int(chunk['z']) for chunk in manifest['chunks']}),
-              'statistics': statistics,
-              'verification': verification,
-              'mechanicsResolution': mechanics['statistics'],
-              'unknownItems': unknown['statistics'],
+              'schemaVersion': 3,
+              'chunks': 3494,
+              'floors': floors,
+              'shards': [{'shard': report['shard'], 'chunks': report['chunks'], 'floors': report['floors']} for report in reports],
+              'sources': sources,
+              'verification': 'PASS',
           }
           print(json.dumps(evidence, sort_keys=True))
           PY
