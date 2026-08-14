@@ -62,4 +62,6 @@ jobs:
           git add tools/otbm_atlas/atlas.py
           git diff --cached --check
           git commit -m "feat(atlas): consume pinned factual source layers"
+          git fetch origin agent/oth-20260814-atlas-factual-layers
+          git rebase origin/agent/oth-20260814-atlas-factual-layers
           git push origin HEAD:agent/oth-20260814-atlas-factual-layers
