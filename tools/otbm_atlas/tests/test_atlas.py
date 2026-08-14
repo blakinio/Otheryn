@@ -38,7 +38,7 @@ class AtlasTests(unittest.TestCase):
 		for value in sources.values():
 			self.assertTrue(value.as_posix().startswith("/repo/vendor/map-analysis/"), value)
 		code_root = Path(__file__).parents[1]
-		for name in ("atlas.py", "render.py", "environment_animation.py", "creature_sprites.py", "npc_sprites.py", "monster_sprites.py"):
+		for name in ("atlas.py", "composition.py", "render.py", "environment_animation.py", "creature_sprites.py", "npc_sprites.py", "monster_sprites.py"):
 			text = (code_root / name).read_text(encoding="utf-8")
 			self.assertNotIn("data-otservbr-global", text, name)
 
