@@ -1,12 +1,12 @@
 ---
 task_id: OTH-20260814-otbm-atlas-full-world-release-validation
-status: waiting
-owner: none
+status: validating
+owner: chatgpt
 created: 2026-08-14
-updated: 2026-08-14T17:18:00+02:00
+updated: 2026-08-14T17:54:00+02:00
 project_lane: otheryn-content
 related_pr: "381"
-ownership_released: true
+ownership_released: false
 modules_touched:
   - otbm-atlas
 ---
@@ -39,60 +39,49 @@ The previous four-floor-per-job gate repeatedly exceeded GitHub Actions 90- and 
 
 ## 2026-08-14 live analysis checkpoint
 
-FACT — current `main` is `1021d08978f078ff845e6f3f82fbbbc482cbf543` and contains the per-floor release workflow plus the completed PR #381 implementation closeout.
+FACT — canonical validation target is exact `main` SHA `1021d08978f078ff845e6f3f82fbbbc482cbf543`, containing the per-floor release workflow and completed PR #381 implementation closeout.
 
-FACT — `.github/workflows/otbm-atlas-full-world-release.yml` had not produced a workflow run on `main` before this validation invocation. Therefore complete-world release certification was still unproven on the exact merged `main` head at task start.
+FACT — historical recovery runs on the PR #381 branch proved upper floors individually against the same canonical map fingerprint. Z8 and Z9 completed successfully on head `417eaac6bf6e75475e4d3363f6e19c363f5eb2bf`; Z10..Z15 completed successfully on head `c09a4eccf78a4b15d4f529de5d842ee1b62c8ce2`. These are supporting evidence only, not a substitute for exact-main release certification.
 
-FACT — historical recovery runs on the PR #381 branch proved upper floors individually against the same canonical map fingerprint. Z8 and Z9 both completed successfully on head `417eaac6bf6e75475e4d3363f6e19c363f5eb2bf`; Z10..Z15 completed successfully on head `c09a4eccf78a4b15d4f529de5d842ee1b62c8ce2`. Example Z8 evidence reported 285 chunks, `verification.ok == true`, and `missingSprites == {}`. These runs are useful engineering evidence but are not a substitute for the exact-main release certification.
-
-FACT — the current release workflow still calls `spool_map()` independently in every floor job, then deletes spool files from the other 15 floors before calling `build_atlas()`. This means every one of the 16 jobs performs a complete canonical OTBM parse before floor-specific rendering.
-
-FACT — `build_atlas()` itself is resumable by spool/source fingerprint and chunk-render fingerprint, but the release workflow deliberately creates a fresh job-local output directory, so no spool or rendered chunk cache is shared between floor jobs.
-
-INFERENCE — the duplicated full-map spooling is avoidable compute, but it was not the dominant cause of the longest historical jobs. Successful upper-floor build steps ranged roughly from 31 minutes on Z15 to 66 minutes on Z9; most elapsed time remains in floor rendering and post-render atlas enrichment rather than in the initial OTBM parse alone.
-
-RECOMMENDATION — do not redesign the release gate around four-floor shards again. Keep one-floor failure isolation, and only optimize the implementation by adding an explicit floor-filtered spooling/build path (or a reusable pre-spool artifact) if profiling proves the duplicated parse materially affects cost. Any such change must preserve exact per-floor verification and the final 16-floor / 3494-chunk aggregate contract.
-
-UNKNOWN — exact Z0..Z7 per-floor runtimes on the final per-floor workflow and complete exact-main 16-floor evidence remain unavailable until `.github/workflows/otbm-atlas-full-world-release.yml` completes.
+FACT — the release workflow calls `spool_map()` independently in every floor job and deletes spools for other floors before `build_atlas()`. The duplicated full-map parse remains a later measured performance opportunity, not part of this certification task.
 
 ## 2026-08-14 execution checkpoint
 
-FACT — repository `main` was re-verified at `1021d08978f078ff845e6f3f82fbbbc482cbf543` immediately before dispatch preparation.
+FACT — the GitHub connector exposes workflow reads/reruns but no direct workflow-dispatch mutation. A minimal branch-only one-shot dispatcher was therefore used under the trusted-base `GITHUB_ONLY_EXECUTION.md` contract to dispatch the already-trusted release workflow on exact `main`.
 
-FACT — the connected GitHub toolset exposes workflow reads and reruns but no workflow-dispatch mutation. Under the trusted-base `GITHUB_ONLY_EXECUTION.md` temporary-workflow rule, a minimal branch-only dispatcher was added at `.github/workflows/otbm-atlas-release-dispatch-once.yml` on the checkpoint branch. It has no deploy path or secrets, grants only `contents: read` and `actions: write`, asserts the exact expected `main` SHA, and requests `workflow_dispatch` of the already-trusted release workflow on `ref: main`.
+FACT — dispatcher run `31813766316` completed `success` and produced canonical full-world release run `31813869825` on exact main SHA `1021d08978f078ff845e6f3f82fbbbc482cbf543`.
 
-FACT — dispatcher workflow run `31813766316` was created from branch head `4c248c81ea7a4de39483a5a92e9af10d8044cbcd`. Two bounded observations both reported it `queued`; no full-world release run existed at the first release-workflow observation. No further unchanged polling is permitted in this invocation.
+FACT — the temporary dispatcher workflow `.github/workflows/otbm-atlas-release-dispatch-once.yml` was removed from the checkpoint branch immediately after successful dispatch; removal commit `268c010820249b391659af891f36518efb43dc7b`.
+
+FACT — latest aggregate observation of run `31813869825`: Z0, Z1, Z2, Z3 and Z5 completed successfully through build, independent verification, evidence assertion and artifact upload. Z4, Z6, Z7, Z8, Z9, Z10, Z11 and Z12 were in progress; Z13, Z14 and Z15 were queued; zero floor failures were present. Five floor evidence artifacts were already published for the exact canonical main SHA.
 
 ```yaml
-checkpoint_version: 2
-updated_at: 2026-08-14T17:18:00+02:00
-status: waiting
+checkpoint_version: 3
+updated_at: 2026-08-14T17:54:00+02:00
+status: validating
 phase: full-world-release-certification
 source_task: OTH-20260813-full-otbm-atlas
 main_sha: 1021d08978f078ff845e6f3f82fbbbc482cbf543
 workflow: .github/workflows/otbm-atlas-full-world-release.yml
+release_run_id: 31813869825
+dispatcher_run_id: 31813766316
+dispatcher_result: success
+temporary_dispatcher_removed: true
 merge_blocking_for_pr_381: false
 execution_mode: github-actions
-execution_reason: trusted workflow_dispatch is required; the GitHub connector exposes workflow reads/reruns but no workflow-dispatch mutation, so a minimal temporary branch-only dispatcher is used under GITHUB_ONLY_EXECUTION.md
 validation_level: full
 heavy_validation_runs: 1
-dispatcher_workflow: .github/workflows/otbm-atlas-release-dispatch-once.yml
-dispatcher_run_id: 31813766316
-dispatcher_head: 4c248c81ea7a4de39483a5a92e9af10d8044cbcd
 verified:
-  - per-floor release workflow exists on main
-  - main remained 1021d08978f078ff845e6f3f82fbbbc482cbf543 before dispatcher creation
-  - historical Z8-Z15 per-floor recovery evidence passed verifier with canonical map fingerprint
-  - current per-floor workflow reparses the full OTBM independently in every job
-  - temporary dispatcher run 31813766316 exists and is queued
-inference:
-  - duplicated spooling is optimizable but historical timings indicate rendering/enrichment remains the larger cost
+  - trusted release workflow dispatched on exact canonical main SHA
+  - dispatcher run 31813766316 completed successfully
+  - temporary dispatcher workflow removed from checkpoint branch
+  - Z0 Z1 Z2 Z3 Z5 completed full per-floor validation successfully
+  - five exact-main floor evidence artifacts exist
+  - no floor failure observed
 unknown:
-  - whether dispatcher run 31813766316 succeeds
-  - full-world release run id
-  - final exact-main Z0-Z15 release evidence
+  - final status of remaining Z4 Z6 Z7 Z8 Z9 Z10 Z11 Z12 Z13 Z14 Z15
   - final exact-main aggregate 3494-chunk certification
-next_action: after dispatcher run 31813766316 reaches a terminal state, verify its result; on success capture the generated full-world release run for main SHA 1021d08978f078ff845e6f3f82fbbbc482cbf543 and remove the temporary dispatcher workflow
+next_action: continue observing release run 31813869825 under the bounded terminal validation wait; when it reaches a terminal state, inspect all floor jobs and aggregate evidence, repair only an evidence-backed owned failure if necessary, otherwise close out the certification task
 ```
 
 ## Recovery checkpoint
@@ -100,22 +89,22 @@ next_action: after dispatcher run 31813766316 reaches a terminal state, verify i
 ```yaml
 recovery:
   policy_version: 1
-  generation: 1
-  session_id: chatgpt-20260814T1714+0200
-  session_started_at: 2026-08-14T17:14:00+02:00
-  checkpointed_at: 2026-08-14T17:18:00+02:00
-  last_progress_at: 2026-08-14T17:18:00+02:00
+  generation: 2
+  session_id: chatgpt-20260814T1754+0200
+  session_started_at: 2026-08-14T17:54:00+02:00
+  checkpointed_at: 2026-08-14T17:54:00+02:00
+  last_progress_at: 2026-08-14T17:54:00+02:00
   phase: full-world-release-certification
   exact_head: 1021d08978f078ff845e6f3f82fbbbc482cbf543
   pull_request: none
-  active_operation: GitHub Actions dispatcher run 31813766316 queued
-  external_run_ids: [31813766316]
-  operation_started_at: 2026-08-14T17:17:45+02:00
-  wait_deadline_at: null
-  check_generation: dispatcher-4c248c81
-  checks_used: 2
-  status: waiting
+  active_operation: GitHub Actions full-world release validation run 31813869825
+  external_run_ids: [31813766316, 31813869825]
+  operation_started_at: 2026-08-14T17:19:01+02:00
+  wait_deadline_at: 2026-08-14T18:04:01+02:00
+  check_generation: full-world-release-main-1021d089
+  checks_used: 1
+  status: active
   safe_to_resume: true
-  resume_condition: dispatcher run 31813766316 is no longer queued
-  next_action: inspect dispatcher run 31813766316 after it leaves queued; if successful, capture the generated full-world release run for main SHA 1021d08978f078ff845e6f3f82fbbbc482cbf543 and remove `.github/workflows/otbm-atlas-release-dispatch-once.yml`
+  resume_condition: release run 31813869825 materially changes or reaches a terminal state
+  next_action: inspect aggregate state of release run 31813869825 after the bounded minimum interval; on terminal success verify all 16 floor evidence artifacts and the aggregate 3494-chunk contract, then finalize task closeout
 ```
