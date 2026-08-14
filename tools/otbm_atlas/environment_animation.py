@@ -161,6 +161,40 @@ def _intersects(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> b
 	return a[0] < b[2] and a[2] > b[0] and a[1] < b[3] and a[3] > b[1]
 
 
+def _rect_cells(rect: tuple[int, int, int, int], cell_size: int = 32):
+	"""Yield bounded spatial buckets touched by a half-open pixel rectangle."""
+	left, top, right, bottom = rect
+	if right <= left or bottom <= top:
+		return
+	for cell_y in range(top // cell_size, (bottom - 1) // cell_size + 1):
+		for cell_x in range(left // cell_size, (right - 1) // cell_size + 1):
+			yield cell_x, cell_y
+
+
+def _overlap_conflicts(rects: list[tuple[int, int, int, int]]) -> set[int]:
+	"""Find intersecting animation rectangles without an all-pairs chunk scan.
+
+	A 32-pixel spatial hash keeps dense non-overlapping animated grounds effectively
+	linear in candidate count. Candidates spanning multiple cells are compared only
+	with earlier rectangles that touched one of the same cells; a small per-candidate
+	set prevents duplicate comparisons when two rectangles share multiple buckets.
+	"""
+	buckets: dict[tuple[int, int], list[int]] = {}
+	conflicts: set[int] = set()
+	for index, rect in enumerate(rects):
+		cells = tuple(_rect_cells(rect))
+		nearby: set[int] = set()
+		for cell in cells:
+			nearby.update(buckets.get(cell, ()))
+		for other in nearby:
+			if _intersects(rect, rects[other]):
+				conflicts.add(other)
+				conflicts.add(index)
+		for cell in cells:
+			buckets.setdefault(cell, []).append(index)
+	return conflicts
+
+
 def _paint_item(canvas: bytearray, patch_left: int, patch_top: int, width: int, height: int, renderer: AssetRenderer, tile: Tile, item: Item, south: bool, east: bool) -> None:
 	for appearance, _sprite_id, (sprite_width, sprite_height, pixels) in renderer.item_sprites(item, tile.position.x, tile.position.y, tile.position.z, south, east):
 		shift_x, shift_y = appearance.shift or (0, 0)
@@ -254,12 +288,7 @@ def enrich_environment_animations(asset_dir: Path, output: Path) -> dict[str, in
 					fallbacks += 1
 					continue
 				candidates.append((tile, stack_index, item, details, _rect(details, tile.position.x, tile.position.y), south, east))
-		conflicts: set[int] = set()
-		for left_index in range(len(candidates)):
-			for right_index in range(left_index + 1, len(candidates)):
-				if _intersects(candidates[left_index][4], candidates[right_index][4]):
-					conflicts.add(left_index)
-					conflicts.add(right_index)
+		conflicts = _overlap_conflicts([candidate[4] for candidate in candidates])
 		records: list[dict[str, object]] = []
 		for index, (tile, stack_index, item, details, _visual_rect, south, east) in enumerate(candidates):
 			x, y = tile.position.x, tile.position.y
