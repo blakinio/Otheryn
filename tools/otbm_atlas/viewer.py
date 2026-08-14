@@ -12,8 +12,4 @@ VIEWER_HTML=VIEWER_HTML.replace('placeholder="Search NPC, monster, town, AID, UI
 def write_viewer(output:str|Path)->Path:
 	root=Path(output);root.mkdir(parents=True,exist_ok=True);path=root/"index.html";path.write_text(VIEWER_HTML,encoding="utf-8",newline="\n")
 	for source,target in (("viewer_runtime.js","viewer-runtime.js"),("viewer_app.js","viewer-app.js")):shutil.copyfile(Path(__file__).with_name(source),root/target)
-	animation_index=root/"data"/"environment-animations"/"index.json"
-	if not animation_index.exists():
-		animation_index.parent.mkdir(parents=True,exist_ok=True)
-		animation_index.write_text('{"animationZoom":1.5,"schemaVersion":1,"statistics":{"chunks":0,"instances":0,"staticFallbacks":0,"uniqueAnimations":0}}\n',encoding="utf-8",newline="\n")
 	return path

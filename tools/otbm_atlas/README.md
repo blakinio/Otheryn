@@ -56,6 +56,8 @@ python -m tools.otbm_atlas.atlas `
 python -m http.server 8000 --directory build/full-map-atlas
 ```
 
+The atlas build also runs the conservative cyclic-environment exporter against the same pinned object appearances and chunk spool. Eligible topmost 32x32 non-displaced objects are emitted under `data/environment-animations/`; unsupported, edge-risk, occluded, or server-driven state variants remain canonical static pixels. The browser only activates these exported phases at close zoom and keeps its animation image/shard caches bounded.
+
 The first pass spools each tile once into bounded per-chunk binary files. Chunk
 reports retain source/spool fingerprints and PNG checksums; matching chunks are
 reused on subsequent runs. The viewer supports pan, zoom, floor selection,
@@ -66,8 +68,7 @@ remain lightweight dots; an NPC without a decodable explicit `lookType` also sta
 a dot rather than receiving an invented image. Outfit PNGs are deduplicated by
 look type/colours/addons under `data/npc-sprites/` and loaded lazily through the
 existing bounded image LRU cache.
-Viewer floor labels are relative to the Tibia surface: raw OTBM Z=7 is floor 0,
-Z=0 is +7, and Z=15 is -8. Manifests and factual coordinates retain raw Z.
+Viewer floor selection and shared URLs use raw OTBM Z values 0 through 15, matching manifests and factual coordinates without a display-only remapping.
 Chunks are cropped to their populated bounds plus a conservative two-tile sprite
 gutter. This preserves 64×64 sprites and canonical displacement across chunk
 edges without allocating a full 4096×4096 canvas for sparse chunks. Workers use
