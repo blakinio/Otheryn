@@ -1,35 +1,65 @@
 ---
 task_id: OTH-20260813-full-otbm-atlas
-status: implementing
+status: validating
 owner: chatgpt-github-20260814-atlas-completion
 created: 2026-08-13
-updated: 2026-08-14T09:36:00+02:00
+updated: 2026-08-14T10:16:00+02:00
 project_lane: otheryn-content
 related_pr: "381"
 ownership_released: false
 execution_budget_minutes: 120
-execution_budget_reason: finish atlas functionality and focused validation before one final full-world acceptance build
+execution_budget_reason: implementation is complete; one deliberately-triggered full-world validation remains before merge/release certification
 modules_touched:
   - otbm-atlas
 ---
 
 # Full OTBM atlas continuation
 
-PR #381 remains the active atlas integration branch. Owner decision on 2026-08-14: do not repeatedly run the expensive 3494-chunk `Full canonical world v3` job during active atlas development. Finish the atlas first using focused/unit/canonical-region/browser validation, freeze the final code SHA, then perform one full canonical-world build and verifier pass as the final release/merge acceptance gate.
+PR #381 is the active atlas integration branch. Owner decision on 2026-08-14: the expensive 3494-chunk `Full canonical world v3` job is not a synchronize-time development test. Atlas implementation is completed first with focused/unit/canonical-region/browser validation, then the frozen implementation is subjected to one full canonical-world build and verifier pass as the final release/merge acceptance gate.
 
-The `ci:final-gate` label was removed from PR #381 so normal `synchronize` events no longer start the expensive full-world job. Re-apply `ci:final-gate` only after code freeze when the atlas is functionally complete and the exact final SHA is ready for acceptance. Any already-running historical full-world jobs are non-authoritative for later changed heads.
+## Frozen implementation
 
-Current implemented scope preserves the chunked/bounded architecture. It includes canonical item rendering semantics, conservative factual mechanics indexing, separated base/supplemental spawn provenance, canonical NPC outfit rendering, persistent URL/view state, `Auto | Detailed | Performance`, factual toggleable layers, bounded viewport/chunk/image caches, exact detailed pixels, and the owner-approved browser-side cyclic environment animation expansion. Stateful variants such as doors, switches, quest objects or on/off state remain separate and are not inferred as cyclic animation.
+The implementation is frozen at code SHA `e638c96f41a7fd3ad6a4c0f81c8e757adaf779ea`.
+
+The completed scope preserves the full chunked/bounded architecture and includes:
+
+- canonical item sprite selection including stack-count, fluid/splash subtype, hangable hook and container-visibility semantics;
+- canonical NPC outfit/addon rendering from pinned client appearances;
+- conservative factual AID/UID/mechanics resolution without heuristic guessing;
+- base-map versus supplemental NPC/monster provenance and separate layers;
+- multi-resolution complete-world chunk manifests with exact canonical detail imagery;
+- `Auto | Detailed | Performance` render modes with bounded viewport/chunk/image caches;
+- raw canonical OTBM `X/Y/Z` (`Z=0..15`) consistently across UI, jump, copy, search and URL state;
+- URL/local-storage persistence for position, zoom, render mode, layers and selected marker;
+- factual layers for NPCs, monsters, supplemental creatures, teleports, houses, house doors, AID, UID, towns/temples, waypoints and mechanics;
+- bosses kept explicitly disabled/`UNKNOWN` because no authoritative boss classification source is present;
+- search that navigates to the factual record, enables/persists its layer, selects the exact shard record and opens details;
+- hit testing restricted to current visible shards and currently enabled layers;
+- exact detailed pixels with image smoothing disabled;
+- bounded browser-side cyclic environment animation from pinned appearance metadata, while server-driven state variants remain separate and are not inferred;
+- durable UI classification/behavior contract in `docs/maps/atlas-viewer-ui-contract.md`.
+
+## CI policy
+
+`.github/workflows/otbm-atlas-tests.yml` now intentionally separates development and final acceptance:
+
+- unit/runtime tests run during normal PR development;
+- canonical Thais scan/render runs during normal PR development;
+- real Chromium Thais E2E runs during normal PR development;
+- environment-animation Chromium E2E remains a focused development gate;
+- `Full canonical world v3` runs only on explicit `workflow_dispatch` or the specific PR `labeled` event that adds `ci:final-gate`.
+
+Keeping `ci:final-gate` on a PR no longer causes every later `synchronize` event to rebuild the full world. The label is currently absent and must be added only when the owner is ready for the single final acceptance build.
 
 ```yaml
 checkpoint_version: 1
 policy_version: 2
-updated_at: 2026-08-14T09:36:00+02:00
-code_head_before_checkpoint: 8f429ab8dc8612012809f051d029d43634414875
+updated_at: 2026-08-14T10:16:00+02:00
+frozen_code_sha: e638c96f41a7fd3ad6a4c0f81c8e757adaf779ea
 branch: agent/oth-20260813-full-otbm-atlas-current-main
 pr: 381
-status: implementing
-phase: atlas-completion-before-final-full-world
+status: validating
+phase: ready-for-final-full-world-acceptance
 session_id: chatgpt-github-20260814-atlas-completion
 session_role: implementer
 execution_mode: chat-github
@@ -42,15 +72,18 @@ owned_paths:
   - docs/agents/tasks/active/OTH-20260813-full-otbm-atlas.md
 proven:
   - canonical world SHA-256 is 3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034
-  - focused atlas unit/runtime tests, canonical Thais render and real Chromium journeys are the development-time validation gates
-  - full-world generation is expensive enough to exceed the owner's 45-minute local target and has repeatedly consumed long GitHub runner time
-  - repeated full-world runs are not required while the implementation is still changing
-  - full-world verification remains required once, on the frozen final SHA, before final merge/release certification
-  - `ci:final-gate` is intentionally absent during active development
+  - full atlas unit/runtime suite PASS on frozen code SHA e638c96f41a7fd3ad6a4c0f81c8e757adaf779ea
+  - canonical Thais scan and pinned-asset render PASS on frozen code SHA e638c96f41a7fd3ad6a4c0f81c8e757adaf779ea
+  - real Chromium Thais navigation/search/layer/details journey PASS on frozen code SHA e638c96f41a7fd3ad6a4c0f81c8e757adaf779ea
+  - environment-animation real Chromium E2E PASS on frozen code SHA e638c96f41a7fd3ad6a4c0f81c8e757adaf779ea
+  - repository CI PASS, Required PASS and autofix.ci PASS on frozen code SHA e638c96f41a7fd3ad6a4c0f81c8e757adaf779ea
+  - Full canonical world v3 was SKIPPED on that development validation as intended
+  - PR #381 has zero unresolved review threads at implementation freeze
 unknown:
-  - final frozen SHA
-  - final canonical full-world statistics and verifier result
-  - final independent audit result after implementation is complete
-blockers: []
-next_action: finish remaining atlas functionality and UI using focused tests; when code and docs are complete, freeze the SHA, re-apply ci:final-gate once, run the 3494-chunk full-world build plus verifier, audit the unchanged head, then merge/archive
+  - final canonical full-world v3 statistics and verifier result for the frozen implementation
+  - fresh independent post-full-world audit result
+blockers:
+  - one explicit final 3494-chunk full-world build plus independent verifier is still required before final merge/release certification
+  - one fresh independent audit is still required after that full-world result and before merge
+next_action: when the owner chooses to run final acceptance, ensure no product-code change exists after frozen_code_sha, add ci:final-gate once (or workflow_dispatch), collect the 3494-chunk Z0..15 verifier result, perform the fresh independent audit, then merge PR #381 and archive this task
 ```
