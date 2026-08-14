@@ -3,7 +3,7 @@ task_id: OTH-20260814-otbm-atlas-full-world-release-validation
 status: validating
 owner: chatgpt
 created: 2026-08-14
-updated: 2026-08-14T19:08:00+02:00
+updated: 2026-08-14T19:11:32+02:00
 project_lane: otheryn-content
 related_pr: "381"
 ownership_released: false
@@ -15,13 +15,9 @@ modules_touched:
 
 This task owns the expensive complete-world certification intentionally deferred from `OTH-20260813-full-otbm-atlas` by explicit owner decision.
 
-## Trigger
-
-Run `.github/workflows/otbm-atlas-full-world-release.yml` manually only when a release/certification of the complete generated atlas is required. It is not a normal PR synchronize-time development gate.
-
 ## Required evidence
 
-The workflow must:
+The release certification must:
 
 - run one independent job per canonical floor Z0..15;
 - build from `vendor/map-analysis/crystalserver/data-global/world/world.otbm` and the pinned Tibia 15.25 vendored assets;
@@ -33,57 +29,63 @@ The workflow must:
 - require map SHA-256 `3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034`;
 - keep this certification separate from routine atlas implementation CI.
 
-## Rationale
+## Execution evidence
 
-The previous four-floor-per-job gate repeatedly exceeded GitHub Actions 90- and 120-minute limits. Those cancellations occurred inside `build_atlas()` and did not report a functional verifier/renderer failure. Per-floor isolation bounds each job independently and prevents one expensive floor group from invalidating all remaining evidence.
+FACT — validation target is exact SHA `1021d08978f078ff845e6f3f82fbbbc482cbf543`. Canonical release run is GitHub Actions `31813869825`.
 
-## Live execution evidence
+FACT — dispatcher run `31813766316` completed `success`. Its temporary branch-only workflow was removed immediately afterwards in commit `268c010820249b391659af891f36518efb43dc7b`; it is not part of the final branch diff.
 
-FACT — canonical validation target is exact `main` SHA `1021d08978f078ff845e6f3f82fbbbc482cbf543`, containing the completed PR #381 atlas implementation and the production environment-animation integration.
+FACT — all sixteen floor jobs Z0..Z15 have now completed `success`. Every job completed canonical build, independent verifier, floor evidence assertion and evidence artifact upload.
 
-FACT — because the connected GitHub toolset has no direct workflow-dispatch mutation, a minimal branch-only one-shot dispatcher was used to dispatch the already-trusted release workflow on exact `main`. Dispatcher run `31813766316` completed `success` and created canonical full-world release run `31813869825` on exact SHA `1021d08978f078ff845e6f3f82fbbbc482cbf543`.
+FACT — all sixteen floor evidence artifacts were downloaded and independently rechecked outside the workflow aggregate job. The independent check proves:
 
-FACT — temporary dispatcher `.github/workflows/otbm-atlas-release-dispatch-once.yml` was removed immediately after successful dispatch; removal commit `268c010820249b391659af891f36518efb43dc7b`. It is not part of the branch diff anymore.
+- floor set exactly `0..15`;
+- per-floor chunk counts: Z0=87, Z1=120, Z2=150, Z3=183, Z4=213, Z5=240, Z6=251, Z7=346, Z8=285, Z9=286, Z10=265, Z11=238, Z12=234, Z13=201, Z14=210, Z15=185;
+- total chunks exactly `3494`;
+- exactly one identical source fingerprint across all sixteen reports;
+- map SHA-256 `3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034`;
+- assets SHA-256 `4c78aa441bc6eed6a614092423a58dc6275cf2c36ea5d4bde13746c9b4ee7ee7`;
+- `chunkSize == 128` and `atlasVersion == 3`;
+- `verification.ok == true` for all sixteen floors;
+- `missingSprites == {}` for all sixteen floors.
 
-FACT — as of `2026-08-14T19:08:00+02:00`, fifteen floors have completed the complete per-floor chain with `success`: Z0, Z1, Z2, Z3, Z4, Z5, Z6, Z8, Z9, Z10, Z11, Z12, Z13, Z14 and Z15. Each completed canonical build, independent verifier, floor evidence assertion and artifact upload. Z7 is the only remaining in-progress floor. No floor has failed.
+FACT — repository aggregate job `94839712570` has been created and is queued. The overall workflow remains non-terminal until this separate aggregate runner validates the same complete evidence set.
 
-FACT — independent supporting inspection of the fifteen downloaded floor evidence artifacts reports 3148 chunks, one identical source fingerprint, `atlasVersion == 3`, `chunkSize == 128`, canonical map SHA `3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034`, `verification.ok == true` for every completed floor, and `missingSprites == {}` for every completed floor. The final 3494-chunk claim is deliberately not made until Z7 and the repository aggregate job pass.
-
-FACT — the release run remains non-terminal only because Z7 is still building. The aggregate job cannot start until all sixteen floor jobs are terminal.
-
-FACT — the release workflow still reparses the full OTBM independently in every floor job. That measured-performance optimization remains out of scope for this certification task.
+FACT — the release workflow still reparses the full OTBM independently in every floor job. That is a later measured performance optimization and is not part of this completed certification evidence.
 
 ```yaml
-checkpoint_version: 6
-updated_at: 2026-08-14T19:08:00+02:00
+checkpoint_version: 7
+updated_at: 2026-08-14T19:11:32+02:00
 status: validating
-phase: full-world-release-certification
+phase: aggregate-certification
 source_task: OTH-20260813-full-otbm-atlas
 validation_target_sha: 1021d08978f078ff845e6f3f82fbbbc482cbf543
 workflow: .github/workflows/otbm-atlas-full-world-release.yml
 release_run_id: 31813869825
+aggregate_job_id: 94839712570
 dispatcher_run_id: 31813766316
 dispatcher_result: success
 temporary_dispatcher_removed: true
 execution_mode: github-actions
 validation_level: full
 heavy_validation_runs: 1
-verified_floors: [0, 1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15]
-pending_floors: [7]
+verified_floors: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
 failed_floors: []
-partial_evidence:
-  artifacts: 15
-  chunks: 3148
+independent_artifact_audit:
+  result: PASS
+  artifacts: 16
+  chunks: 3494
   source_fingerprints: 1
   map_sha256: 3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034
+  assets_sha256: 4c78aa441bc6eed6a614092423a58dc6275cf2c36ea5d4bde13746c9b4ee7ee7
   atlas_version: 3
   chunk_size: 128
   all_verification_ok: true
   all_missing_sprites_empty: true
 unknown:
-  - terminal Z7 result
-  - final aggregate 3494-chunk certification
-next_action: continue bounded terminal observation of release run 31813869825; when Z7 becomes terminal, either verify the aggregate success and close the task or inspect the first actionable Z7 failure and perform only an evidence-backed owned repair
+  - terminal repository aggregate job result
+  - terminal overall workflow result
+next_action: wait for aggregate job 94839712570; if it passes and run 31813869825 concludes success, archive this task and complete the documentation-only PR closeout
 ```
 
 ## Recovery checkpoint
@@ -94,19 +96,19 @@ recovery:
   generation: 3
   session_id: chatgpt-20260814T1849+0200
   session_started_at: 2026-08-14T18:49:00+02:00
-  checkpointed_at: 2026-08-14T19:08:00+02:00
-  last_progress_at: 2026-08-14T19:01:40+02:00
-  phase: full-world-release-certification
+  checkpointed_at: 2026-08-14T19:11:32+02:00
+  last_progress_at: 2026-08-14T19:11:32+02:00
+  phase: aggregate-certification
   exact_head: 1021d08978f078ff845e6f3f82fbbbc482cbf543
   pull_request: none
-  active_operation: GitHub Actions full-world release validation run 31813869825; only Z7 remains in progress
+  active_operation: GitHub Actions aggregate job 94839712570 for release run 31813869825
   external_run_ids: [31813766316, 31813869825]
   operation_started_at: 2026-08-14T17:19:01+02:00
   wait_deadline_at: 2026-08-14T19:34:00+02:00
-  check_generation: full-world-release-main-1021d089-continuation-3
-  checks_used: 7
+  check_generation: full-world-release-aggregate-94839712570
+  checks_used: 8
   status: active
   safe_to_resume: true
-  resume_condition: Z7 or release run 31813869825 materially changes or reaches a terminal state
-  next_action: after at least three minutes, inspect release run 31813869825; on terminal success verify all sixteen floor artifacts and aggregate contract, then perform task archival and PR closeout
+  resume_condition: aggregate job 94839712570 reaches a terminal state
+  next_action: after at least three minutes, inspect aggregate job 94839712570 and overall run 31813869825; on success archive the task and complete PR/CI/merge closeout
 ```
