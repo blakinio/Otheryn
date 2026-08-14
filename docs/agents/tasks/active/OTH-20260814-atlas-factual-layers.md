@@ -1,11 +1,11 @@
 ---
 task_id: OTH-20260814-atlas-factual-layers
-status: implementing
+status: waiting
 owner: openai
 branch: agent/oth-20260814-atlas-factual-layers
 base_branch: main
 created: 2026-08-14
-updated: 2026-08-14T21:34:00+02:00
+updated: 2026-08-14T21:38:00+02:00
 project_lane: otheryn-content
 execution_budget_minutes: 120
 execution_budget_reason: full-stack atlas consumer integration requires pinned source compilation, real Chromium E2E, audit and exact-head CI
@@ -19,6 +19,7 @@ owned_paths:
   - tools/otbm_atlas/tests/test_factual_layers.py
   - tools/otbm_atlas/tests/test_viewer_factual_layers.py
   - .github/workflows/otbm-atlas-factual-layers-tests.yml
+  - .github/workflows/otbm-atlas-factual-layers-audit.yml
   - docs/maps/atlas-factual-layers.md
   - docs/agents/tasks/active/OTH-20260814-atlas-factual-layers.md
 required_reads:
@@ -62,11 +63,13 @@ Consume the merged `tools/otbm_atlas_facts` producer inside the canonical chunke
 ```yaml
 checkpoint_version: 1
 policy_version: 2
-updated_at: 2026-08-14T21:34:00+02:00
-status: implementing
-phase: consumer-integration
+updated_at: 2026-08-14T21:38:00+02:00
+status: waiting
+phase: exact-head-validation
 branch: agent/oth-20260814-atlas-factual-layers
 base_main: da553b1f2f157526e69e26d051ca3297db7abcf6
+implementation_head: 442f3bb95c19da55ac0670f8853f5029cfb29b55
+pull_request: 390
 producer_pr: 385
 producer_status: merged
 producer_merge: 2cf8035401a05873c307af7388872141a76309ef
@@ -77,12 +80,26 @@ decomposition_decision: phased
 proven:
   - factual producer is merged and exact pinned CrystalServer sources are on main
   - consumer branch is reconciled with current main after runtime animation merge
+  - canonical atlas.py now resolves mechanics from the pinned CrystalServer scripts and invokes factual enrichment explicitly
+  - direct OTBM teleports remain separate from proven scripted transitions
   - conservative transformation promotes only proven scripted transitions and explicit rewardBoss=true bosses
-  - raid rectangles are now sharded into every intersecting viewport chunk
+  - raid rectangles are sharded into every intersecting viewport chunk
   - viewer has separate OTBM/scripted teleport, raid, NPC-service and verified-boss controls
-  - dedicated real Chromium factual-layer E2E workflow is committed on the task branch
+  - temporary branch-only patch workflow is removed from the final implementation diff
+  - PR 390 is open as the integration PR with zero review threads at the first hygiene check
+validation:
+  code_head: 442f3bb95c19da55ac0670f8853f5029cfb29b55
+  runs:
+    CI: 31834022293
+    atlas: 31834021967
+    environment_animation: 31834021999
+    factual_contract_e2e: 31834021944
+    factual_independent_audit: 31834022151
+    required: 31834022025
+  observation_count: 2
+  observed_state: queued
 blockers: []
-next_action: finish atlas.py wiring from the queued branch-only patch run, remove the temporary patch workflow, open the integration PR and execute focused/E2E/audit/exact-head closeout
+next_action: observe the existing PR 390 validation generation after the bounded wait; repair only a concrete failed gate, otherwise mark ready and complete exact-head merge closeout
 ```
 
 ## Recovery checkpoint
@@ -90,22 +107,22 @@ next_action: finish atlas.py wiring from the queued branch-only patch run, remov
 ```yaml
 recovery:
   policy_version: 1
-  generation: 1
+  generation: 2
   session_id: chat-github-20260814-factual-layers
   session_started_at: 2026-08-14T21:24:00+02:00
-  checkpointed_at: 2026-08-14T21:34:00+02:00
-  last_progress_at: 2026-08-14T21:34:00+02:00
-  phase: consumer-integration
-  exact_head: bf5c73935eccf49f86b009324d351a29396bc3e8
-  pull_request: none
-  active_operation: branch-only atlas.py patch workflow
-  external_run_ids: [31833498321]
-  operation_started_at: 2026-08-14T21:29:45+02:00
-  wait_deadline_at: 2026-08-14T21:44:45+02:00
-  check_generation: atlas-build-wiring-1
-  checks_used: 1
-  status: active
+  checkpointed_at: 2026-08-14T21:38:00+02:00
+  last_progress_at: 2026-08-14T21:38:00+02:00
+  phase: exact-head-validation
+  exact_head: 442f3bb95c19da55ac0670f8853f5029cfb29b55
+  pull_request: 390
+  active_operation: PR validation generation
+  external_run_ids: [31834022293, 31834021944, 31834021967, 31834021999, 31834022025, 31834022151]
+  operation_started_at: 2026-08-14T21:36:22+02:00
+  wait_deadline_at: 2026-08-14T22:06:22+02:00
+  check_generation: factual-layers-pr-1
+  checks_used: 2
+  status: waiting
   safe_to_resume: true
-  resume_condition: patch run reaches a terminal state and no conflicting writer has moved the task branch unexpectedly
-  next_action: inspect patch run 31833498321 once, verify atlas.py diff, then delete the temporary patch workflow before opening the PR
+  resume_condition: PR 390 remains open, implementation head 442f3bb95c19da55ac0670f8853f5029cfb29b55 is unchanged except for lifecycle-only documentation, and the recorded workflows reach a terminal state
+  next_action: inspect one aggregate validation snapshot for PR 390; on failure inspect only the first actionable failed job, otherwise finish ready/merge/archive closeout
 ```
