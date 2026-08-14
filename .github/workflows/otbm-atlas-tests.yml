@@ -96,6 +96,7 @@ jobs:
           python3 - <<'PY'
           import json
           from pathlib import Path
+          from tools.otbm_atlas.environment_animation import ANIMATION_ZOOM
           from tools.otbm_atlas.spawns import scan_spawns
           from tools.otbm_atlas.viewer import write_viewer
 
@@ -128,6 +129,22 @@ jobs:
           (root / 'manifest.json').write_text(json.dumps({'schemaVersion': 3, 'chunkSize': 128, 'chunks': [chunk]}, sort_keys=True), encoding='utf-8')
           (root / 'data/search-index.json').write_text(json.dumps({'records': [{'kind': 'npcSpawns', 'label': npc['name'], 'position': npc['position']}]}, sort_keys=True), encoding='utf-8')
           (root / 'data/chunks/z7/252_251.json').write_text(json.dumps({'npcSpawns': [npc]}, sort_keys=True), encoding='utf-8')
+          animation_root = root / 'data/environment-animations'
+          animation_root.mkdir(parents=True, exist_ok=True)
+          animation_statistics = {'instances': 0, 'uniqueAnimations': 0, 'chunks': 0, 'staticFallbacks': 0}
+          animation_index = {
+              'schemaVersion': 1,
+              'animationZoom': ANIMATION_ZOOM,
+              'overlapSafetyRadiusTiles': 0,
+              'statistics': animation_statistics,
+              'policy': {
+                  'cyclicAppearance': 'browser animated from pinned object appearance phases',
+                  'statefulAppearance': 'not inferred; server-driven variants remain canonical static state',
+                  'eligibility': 'fixture contains no exported cyclic environment records',
+                  'fallback': 'fixture keeps canonical static pixels',
+              },
+          }
+          (animation_root / 'index.json').write_text(json.dumps(animation_index, indent=2, sort_keys=True) + '\n', encoding='utf-8')
           (root / 'fixture.json').write_text(json.dumps({'npc': npc['name'], 'position': npc['position']}, sort_keys=True), encoding='utf-8')
           write_viewer(root)
           assert source.read_bytes().startswith(b'\x89PNG\r\n\x1a\n')
