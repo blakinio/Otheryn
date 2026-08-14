@@ -1,0 +1,50 @@
+---
+name: OTBM Atlas CI Policy Repair
+on:
+  push:
+    branches: [agent/oth-20260813-full-otbm-atlas-current-main]
+    paths: [.github/workflows/otbm-atlas-ci-policy-fix.yml]
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          fetch-depth: 0
+      - name: Apply focused and final gate policy
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('.github/workflows/otbm-atlas-tests.yml'); text=p.read_text(encoding='utf-8')
+          old="    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:final-gate')"
+          if text.count(old)!=2: raise SystemExit(f'expected two final-gate conditions, got {text.count(old)}')
+          text=text.replace(old,"    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",1)
+          text=text.replace(old,"    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'ci:final-gate')",1)
+          old_journey="              result.click()\n              query = parse_qs(urlparse(page.url).query)\n              assert int(float(query['x'][0])) == position['x']"
+          new_journey="              result.click()\n              page.locator('#details:not([hidden])').wait_for(state='visible')\n              assert npc.casefold() in page.locator('#details').inner_text().casefold()\n              assert page.locator('[data-overlay=\"npcSpawns\"]').is_checked()\n              query = parse_qs(urlparse(page.url).query)\n              assert 'npcSpawns' in query.get('layers', [''])[0].split(',')\n              assert int(float(query['x'][0])) == position['x']"
+          if text.count(old_journey)!=1: raise SystemExit('browser search journey drifted')
+          text=text.replace(old_journey,new_journey,1)
+          old_click="\n              page.wait_for_timeout(1000)\n              page.mouse.click(1280 / 2 + 16, 720 / 2 + 16)\n              page.locator('#details:not([hidden])').wait_for(state='visible')\n              assert npc.casefold() in page.locator('#details').inner_text().casefold()\n"
+          if text.count(old_click)!=1: raise SystemExit('legacy manual marker click block drifted')
+          text=text.replace(old_click,'\n',1)
+          p.write_text(text,encoding='utf-8')
+          PY
+          git diff --check
+          python3 - <<'PY'
+          from pathlib import Path
+          t=Path('.github/workflows/otbm-atlas-tests.yml').read_text()
+          assert "if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'" in t
+          assert "github.event.action == 'labeled'" in t
+          assert "github.event.label.name == 'ci:final-gate'" in t
+          assert "is_checked()" in t
+          PY
+      - name: Commit validated policy only
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/otbm-atlas-ci-policy-fix.yml
+          git add .github/workflows/otbm-atlas-tests.yml
+          git commit -m "ci(atlas): separate focused and full-world gates"
+          git push origin HEAD:agent/oth-20260813-full-otbm-atlas-current-main
