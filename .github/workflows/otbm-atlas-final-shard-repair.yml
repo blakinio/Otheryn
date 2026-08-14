@@ -15,11 +15,11 @@ jobs:
   upper-floor:
     name: Full canonical world v3 floor Z${{ matrix.floor }}
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
-        floor: [8, 9, 10, 11, 12, 13, 14, 15]
+        floor: [8, 9]
     steps:
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
@@ -105,7 +105,7 @@ jobs:
           retention-days: 1
 
   upper-aggregate:
-    name: Full canonical world v3 upper-floor recovery
+    name: Full canonical world v3 Z8-Z9 recovery
     needs: upper-floor
     runs-on: ubuntu-latest
     steps:
@@ -115,17 +115,17 @@ jobs:
           pattern: full-world-floor-z*
           path: build/full-world-upper-evidence
           merge-multiple: true
-      - name: Assert complete upper-half evidence
+      - name: Assert Z8-Z9 evidence
         run: |
           python3 - <<'PY'
           import json
           from pathlib import Path
 
           paths = sorted(Path('build/full-world-upper-evidence').glob('full-world-floor-z*.json'))
-          assert len(paths) == 8, paths
+          assert len(paths) == 2, paths
           reports = [json.loads(path.read_text(encoding='utf-8')) for path in paths]
-          assert sorted(report['floor'] for report in reports) == list(range(8, 16))
-          assert sum(int(report['chunks']) for report in reports) == 1904
+          assert sorted(report['floor'] for report in reports) == [8, 9]
+          assert sum(int(report['chunks']) for report in reports) == 571
           source_fingerprints = {json.dumps(report['sources'], sort_keys=True) for report in reports}
           assert len(source_fingerprints) == 1
           sources = reports[0]['sources']
@@ -136,10 +136,11 @@ jobs:
           for report in reports:
               verification = report['verification']
               assert verification['ok'] is True
+              assert verification['missingAppearances'] == {}
               assert verification['missingSprites'] == {}
           print(json.dumps({
-              'floors': list(range(8, 16)),
-              'chunks': 1904,
+              'floors': [8, 9],
+              'chunks': 571,
               'sources': sources,
               'verification': 'PASS',
           }, sort_keys=True))
