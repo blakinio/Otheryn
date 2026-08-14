@@ -1,12 +1,12 @@
 ---
 task_id: OTH-20260814-otbm-atlas-full-world-release-validation
-status: ready
-owner: none
+status: validating
+owner: chatgpt
 created: 2026-08-14
-updated: 2026-08-14T17:13:00+02:00
+updated: 2026-08-14T17:14:00+02:00
 project_lane: otheryn-content
 related_pr: "381"
-ownership_released: true
+ownership_released: false
 modules_touched:
   - otbm-atlas
 ---
@@ -57,13 +57,17 @@ UNKNOWN — exact Z0..Z7 per-floor runtimes on the final per-floor workflow and 
 
 ```yaml
 checkpoint_version: 2
-updated_at: 2026-08-14T17:13:00+02:00
-status: ready
-phase: deferred-release-validation
+updated_at: 2026-08-14T17:14:00+02:00
+status: validating
+phase: full-world-release-certification
 source_task: OTH-20260813-full-otbm-atlas
 main_sha: 1021d08978f078ff845e6f3f82fbbbc482cbf543
 workflow: .github/workflows/otbm-atlas-full-world-release.yml
 merge_blocking_for_pr_381: false
+execution_mode: github-actions
+execution_reason: trusted workflow_dispatch is required; the GitHub connector exposes workflow reads/reruns but no workflow-dispatch mutation, so a minimal temporary branch-only dispatcher is used under GITHUB_ONLY_EXECUTION.md
+validation_level: full
+heavy_validation_runs: 1
 verified:
   - per-floor release workflow exists on main
   - no exact-main release workflow run exists yet
@@ -74,5 +78,30 @@ inference:
 unknown:
   - final exact-main Z0-Z15 release evidence
   - final exact-main aggregate 3494-chunk certification
-next_action: run the manual full-world release workflow when certification is required; optimize floor-filtered spooling only as a separate measured performance slice if needed
+next_action: dispatch the trusted full-world release workflow on exact main SHA 1021d08978f078ff845e6f3f82fbbbc482cbf543 via a minimal temporary branch-only GitHub Actions dispatcher
+```
+
+## Recovery checkpoint
+
+```yaml
+recovery:
+  policy_version: 1
+  generation: 1
+  session_id: chatgpt-20260814T1714+0200
+  session_started_at: 2026-08-14T17:14:00+02:00
+  checkpointed_at: 2026-08-14T17:14:00+02:00
+  last_progress_at: 2026-08-14T17:14:00+02:00
+  phase: full-world-release-certification
+  exact_head: 1021d08978f078ff845e6f3f82fbbbc482cbf543
+  pull_request: none
+  active_operation: prepare one-shot branch-only dispatcher for trusted full-world workflow_dispatch on main
+  external_run_ids: []
+  operation_started_at: null
+  wait_deadline_at: null
+  check_generation: full-world-release-main-1021d089
+  checks_used: 0
+  status: active
+  safe_to_resume: true
+  resume_condition: one-shot dispatcher has been pushed or can be pushed without changing main
+  next_action: create the temporary branch-only dispatcher workflow and confirm that it creates a release run on main SHA 1021d08978f078ff845e6f3f82fbbbc482cbf543
 ```
