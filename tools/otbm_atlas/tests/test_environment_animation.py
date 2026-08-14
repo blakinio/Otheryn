@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from tools.otbm_atlas.assets import Appearance, SpriteInfo, SpriteSheet
 from tools.otbm_atlas.environment_animation import (
@@ -11,6 +12,7 @@ from tools.otbm_atlas.environment_animation import (
 	_geometry,
 	_intersects,
 	_opaque_composite,
+	_overlap_conflicts,
 	_phase,
 	enrich_environment_animations,
 )
@@ -88,6 +90,13 @@ class EnvironmentAnimationTests(unittest.TestCase):
 	def test_visual_overlap_is_strict_not_edge_touching(self):
 		self.assertTrue(_intersects((0, 0, 64, 64), (32, 32, 96, 96)))
 		self.assertFalse(_intersects((0, 0, 32, 32), (32, 0, 64, 32)))
+
+	def test_dense_tile_grid_uses_bounded_spatial_overlap_scan(self):
+		rects = [(x * 32, y * 32, x * 32 + 32, y * 32 + 32) for y in range(128) for x in range(128)]
+		with patch("tools.otbm_atlas.environment_animation._intersects", wraps=_intersects) as intersects:
+			self.assertEqual(_overlap_conflicts(rects), set())
+			self.assertEqual(intersects.call_count, 0)
+		self.assertEqual(_overlap_conflicts([(0, 0, 64, 64), (32, 32, 96, 96), (96, 0, 128, 32)]), {0, 1})
 
 
 if __name__ == "__main__":
