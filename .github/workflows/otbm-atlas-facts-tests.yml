@@ -48,3 +48,82 @@ jobs:
           assert summary['statistics']['raidsEvents']['areaSpawns']>0
           print(json.dumps(summary['statistics'], sort_keys=True))
           PY
+
+  audit-contract:
+    name: Independent pinned-fact contract audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          persist-credentials: false
+      - name: Build clean-room audit fixture
+        run: |
+          cat > /tmp/mechanics.json <<'JSON'
+          {
+            "actionIds": [
+              {"actionId": 50011},
+              {"actionId": 50390},
+              {"actionId": 999999}
+            ],
+            "uniqueIds": []
+          }
+          JSON
+          python3 -m tools.otbm_atlas_facts.build \
+            vendor/map-analysis/crystalserver \
+            /tmp/atlas-facts-audit \
+            --mechanics /tmp/mechanics.json
+      - name: Falsify factual promotion errors from primary sources
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          repo = Path('.')
+          out = Path('/tmp/atlas-facts-audit')
+          global_root = repo/'vendor/map-analysis/crystalserver/data-global'
+          mechanics = json.loads((out/'mechanics-resolution.json').read_text(encoding='utf-8'))
+          by_value = {entry['value']: entry for entry in mechanics['resolutions']}
+          assert by_value[50011]['status'] == 'RESOLVED'
+          assert by_value[50390]['status'] == 'RESOLVED'
+          assert by_value[999999]['status'] == 'UNRESOLVED'
+          assert by_value[50011]['candidates'][0]['transitions'][0]['destination'] == {'x': 32636, 'y': 31881, 'z': 2}
+          assert by_value[50390]['candidates'][0]['transitions'][0]['destination'] == {'x': 33651, 'y': 31942, 'z': 7}
+          assert all(t['conditional'] is True and t['proofStatus'] == 'PROVEN_STATIC'
+                     for value in (50011, 50390)
+                     for candidate in by_value[value]['candidates']
+                     for t in candidate.get('transitions', []))
+
+          monsters = json.loads((out/'monster-metadata.json').read_text(encoding='utf-8'))
+          pythius_source = (global_root/'monster/bosses/pythius_the_rotten.lua').read_text(encoding='utf-8')
+          rat_source = (global_root/'monster/mammals/rat.lua').read_text(encoding='utf-8')
+          assert 'rewardBoss = true' in pythius_source
+          assert 'rewardBoss = false' in rat_source
+          pythius = monsters['definitions']['pythius the rotten']
+          rat = monsters['definitions']['rat']
+          assert pythius['status'] == 'RESOLVED' and pythius['rewardBoss'] is True and pythius['verifiedBoss'] is True
+          assert rat['status'] == 'RESOLVED' and rat['rewardBoss'] is False and rat['verifiedBoss'] is False
+          for record in monsters['definitions'].values():
+              if record.get('verifiedBoss') is True:
+                  assert record['status'] == 'RESOLVED' and record.get('rewardBoss') is True
+
+          raids = json.loads((out/'raids-events.json').read_text(encoding='utf-8'))
+          thais = [record for record in raids['areaSpawns'] if record['event'] == 'thais.orcs']
+          assert thais
+          assert all(record['origin'] == 'raid-event' for record in thais)
+          assert all(record['bounds']['x1'] <= record['bounds']['x2'] and record['bounds']['y1'] <= record['bounds']['y2'] for record in thais)
+          assert any(event['spatialStatus'] == 'UNKNOWN' for event in raids['dynamicEvents'])
+
+          npcs = json.loads((out/'npc-services.json').read_text(encoding='utf-8'))['npcs']
+          assert 'shop' in npcs['ray']['services']
+          assert {'bank', 'guildBank'} <= set(npcs['naji']['services'])
+          carlin = next(route for route in npcs['captain bluebear']['travel']['routes'] if route['keyword'] == 'carlin')
+          assert carlin['cost'] == 110
+          assert carlin['destination'] == {'x': 32387, 'y': 31820, 'z': 6}
+          assert carlin['proofStatus'] == 'PROVEN_STATIC'
+
+          semantics = json.loads((out/'npc-system-semantics.json').read_text(encoding='utf-8'))
+          assert semantics['travel']['status'] == 'RESOLVED' and semantics['travel']['teleportsToDestination'] is True
+          assert semantics['bank']['status'] == 'RESOLVED'
+          print(json.dumps({'audit': 'PASS', 'materialFindings': 0}, sort_keys=True))
+          PY
