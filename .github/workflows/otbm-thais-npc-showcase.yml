@@ -1,0 +1,106 @@
+---
+name: OTBM Thais NPC Showcase
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/otbm-thais-npc-showcase.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  showcase:
+    name: Render real Thais NPC showcase
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          persist-credentials: false
+      - name: Install Chromium
+        run: |
+          python3 -m pip install --disable-pip-version-check playwright==1.54.0
+          python3 -m playwright install --with-deps chromium
+      - name: Build canonical Thais fixture with NPC outfit
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from tools.otbm_atlas.environment_animation import ANIMATION_ZOOM
+          from tools.otbm_atlas.npc_sprites import enrich_npc_spawns
+          from tools.otbm_atlas.render import render_map
+          from tools.otbm_atlas.spawns import scan_spawns
+          from tools.otbm_atlas.viewer import write_viewer
+
+          root = Path('/tmp/thais-npc-showcase')
+          root.mkdir(parents=True, exist_ok=True)
+          (root / 'tiles/z7').mkdir(parents=True, exist_ok=True)
+          (root / 'data/chunks/z7').mkdir(parents=True, exist_ok=True)
+          (root / 'data/environment-animations').mkdir(parents=True, exist_ok=True)
+          (root / 'favicon.ico').write_bytes(b'')
+          map_path = Path('vendor/map-analysis/crystalserver/data-global/world/world.otbm')
+          assets = Path('vendor/map-analysis/tibia-client/15.25.bd5a04/assets')
+          scripts = Path('vendor/map-analysis/crystalserver/data-global')
+          bounds = (32340, 32371, 32215, 32246, 7)
+          image = root / 'tiles/z7/252_251.png'
+          report = render_map(map_path, assets, image, bounds=bounds)
+          x1, x2, y1, y2, z = bounds
+          spawns = scan_spawns(scripts / 'world')
+          candidates = [r for r in spawns['npcSpawns'] if r['position']['z'] == z and x1 <= r['position']['x'] <= x2 and y1 <= r['position']['y'] <= y2 and r.get('origin') == 'base-map']
+          assert candidates, 'no canonical base-map NPC in Thais fixture'
+          records = [dict(r) for r in candidates]
+          stats = enrich_npc_spawns(assets, scripts, root, records)
+          rendered = [r for r in records if r.get('sprite')]
+          assert rendered, {'npcSpriteStats': stats, 'candidates': [r['name'] for r in records]}
+          npc = sorted(rendered, key=lambda r: (r['name'].casefold(), r['position']['y'], r['position']['x']))[0]
+          chunk = {'z': 7, 'chunkX': 252, 'chunkY': 251, 'logicalBounds': list(bounds), 'bounds': list(bounds), 'path': 'tiles/z7/252_251.png', 'overviewPath': 'tiles/z7/252_251.png', 'lowOverviewPath': 'tiles/z7/252_251.png', 'imageWidth': report['imageWidth'], 'imageHeight': report['imageHeight']}
+          (root / 'manifest.json').write_text(json.dumps({'schemaVersion': 3, 'chunkSize': 128, 'chunks': [chunk]}, sort_keys=True), encoding='utf-8')
+          (root / 'data/search-index.json').write_text(json.dumps({'records': [{'kind': 'npcSpawns', 'label': npc['name'], 'position': npc['position']}]}, sort_keys=True), encoding='utf-8')
+          (root / 'data/chunks/z7/252_251.json').write_text(json.dumps({'npcSpawns': [npc]}, sort_keys=True), encoding='utf-8')
+          (root / 'data/environment-animations/index.json').write_text(json.dumps({'schemaVersion': 2, 'animationZoom': ANIMATION_ZOOM, 'statistics': {'instances': 0, 'uniqueAnimations': 0, 'chunks': 0, 'staticFallbacks': 0}, 'policy': {'cyclicAppearance': 'not needed for NPC showcase', 'statefulAppearance': 'not inferred', 'eligibility': 'none', 'fallback': 'canonical static pixels'}}, sort_keys=True), encoding='utf-8')
+          (root / 'showcase.json').write_text(json.dumps({'npc': npc, 'npcSpriteStats': stats, 'bounds': bounds}, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          write_viewer(root)
+          PY
+      - name: Capture real Chromium screenshot
+        run: |
+          python3 -m http.server 8124 --directory /tmp/thais-npc-showcase >/tmp/thais-npc-http.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" || true' EXIT
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from playwright.sync_api import sync_playwright
+          root = Path('/tmp/thais-npc-showcase')
+          fixture = json.loads((root / 'showcase.json').read_text(encoding='utf-8'))
+          npc = fixture['npc']
+          p = npc['position']
+          errors = []
+          with sync_playwright() as pw:
+              browser = pw.chromium.launch(headless=True)
+              page = browser.new_page(viewport={'width': 1280, 'height': 900})
+              page.on('pageerror', lambda exc: errors.append(str(exc)))
+              page.goto(f"http://127.0.0.1:8124/?x={p['x']}&y={p['y']}&z=7&zoom=2&render=detailed&layers=npcSpawns", wait_until='networkidle')
+              page.wait_for_function("document.querySelector('#status').textContent.includes('Drag to pan')")
+              page.locator('#search').fill(npc['name'])
+              result = page.locator('#searchResults button').first
+              result.wait_for(state='visible')
+              result.click()
+              page.locator('#details:not([hidden])').wait_for(state='visible')
+              page.wait_for_timeout(1000)
+              page.screenshot(path=str(root / 'thais-npc-showcase.png'), full_page=True)
+              browser.close()
+          assert not errors, errors
+          assert (root / 'thais-npc-showcase.png').stat().st_size > 0
+          PY
+      - name: Upload showcase
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: thais-npc-showcase
+          path: |
+            /tmp/thais-npc-showcase/thais-npc-showcase.png
+            /tmp/thais-npc-showcase/showcase.json
+          if-no-files-found: error
+          retention-days: 7
