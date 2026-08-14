@@ -1,5 +1,5 @@
 ---
-name: OTBM Atlas Final Shard Repair
+name: OTBM Atlas Upper Floors Recovery
 
 on:
   push:
@@ -9,50 +9,140 @@ on:
       - ".github/workflows/otbm-atlas-final-shard-repair.yml"
 
 permissions:
-  contents: write
+  contents: read
+
+automation:
 
 jobs:
-  repair:
+  upper-floor:
+    name: Full canonical world v3 floor Z${{ matrix.floor }}
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        floor: [8, 9, 10, 11, 12, 13, 14, 15]
     steps:
-      - name: Checkout repair branch
+      - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
         with:
-          ref: agent/oth-20260813-full-otbm-atlas-current-main
-          persist-credentials: true
-      - name: Replace four-floor shards with one-floor shards
+          persist-credentials: false
+      - name: Free disk for generated atlas
+        run: |
+          sudo rm -rf /usr/local/lib/android /opt/ghc /usr/share/dotnet || true
+          df -h /
+      - name: Build one canonical floor
+        env:
+          ATLAS_FLOOR: ${{ matrix.floor }}
         run: |
           python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from tools.otbm_atlas.atlas import ATLAS_VERSION, _sha256, _tree_sha256, build_atlas, spool_map
+
+          floor = int(os.environ['ATLAS_FLOOR'])
+          map_path = Path('vendor/map-analysis/crystalserver/data-global/world/world.otbm')
+          asset_dir = Path('vendor/map-analysis/tibia-client/15.25.bd5a04/assets')
+          output = Path(f'build/full-map-atlas-v3-floor-z{floor}')
+          spool = output / '.spool'
+          spool_map(map_path, spool, 128)
+          expected = {
+              'mapSha256': _sha256(map_path),
+              'assetsSha256': _tree_sha256(asset_dir),
+              'chunkSize': 128,
+              'atlasVersion': ATLAS_VERSION,
+          }
+          (spool / 'source.json').write_text(json.dumps(expected, sort_keys=True) + '\n', encoding='utf-8')
+          for path in spool.glob('z*/*.bin'):
+              if int(path.parent.name[1:]) != floor:
+                  path.unlink()
+          build_atlas(map_path, asset_dir, output, workers=4)
+          PY
+      - name: Independently verify canonical floor
+        env:
+          ATLAS_FLOOR: ${{ matrix.floor }}
+        run: |
+          root="build/full-map-atlas-v3-floor-z${ATLAS_FLOOR}"
+          python3 -m tools.otbm_atlas.verify "$root" --output "$root/verification.json"
+      - name: Assert floor and emit evidence
+        env:
+          ATLAS_FLOOR: ${{ matrix.floor }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
           from pathlib import Path
 
-          path = Path('.github/workflows/otbm-atlas-tests.yml')
-          text = path.read_text(encoding='utf-8')
-          old = '''      matrix:\n        include:\n          - shard: 0\n            floors: "0,1,2,3"\n          - shard: 1\n            floors: "4,5,6,7"\n          - shard: 2\n            floors: "8,9,10,11"\n          - shard: 3\n            floors: "12,13,14,15"\n'''
-          entries = ''.join(f'          - shard: {floor}\\n            floors: "{floor}"\\n' for floor in range(16)).replace('\\n', '\n')
-          new = '      matrix:\n        include:\n' + entries
-          assert text.count(old) == 1, 'expected four-shard matrix not found exactly once'
-          text = text.replace(old, new, 1)
-          assert text.count('assert len(paths) == 4, paths') == 1
-          text = text.replace('assert len(paths) == 4, paths', 'assert len(paths) == 16, paths', 1)
-          old_shards = "assert sorted(report['shard'] for report in reports) == [0, 1, 2, 3]"
-          assert text.count(old_shards) == 1
-          text = text.replace(old_shards, "assert sorted(report['shard'] for report in reports) == list(range(16))", 1)
-          path.write_text(text, encoding='utf-8')
+          floor = int(os.environ['ATLAS_FLOOR'])
+          root = Path(f'build/full-map-atlas-v3-floor-z{floor}')
+          manifest = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
+          statistics = json.loads((root / 'data/statistics.json').read_text(encoding='utf-8'))
+          verification = json.loads((root / 'verification.json').read_text(encoding='utf-8'))
+          actual_floors = sorted({int(chunk['z']) for chunk in manifest['chunks']})
+          assert manifest['schemaVersion'] == 3
+          assert actual_floors == [floor]
+          assert statistics['chunks'] == len(manifest['chunks'])
+          assert statistics['populatedFloors'] == [floor]
+          assert verification['ok'] is True
+          assert verification['chunks'] == len(manifest['chunks'])
+          assert sorted(map(int, verification['floors'].keys())) == [floor]
+          assert verification['missingSprites'] == {}
+          evidence = {
+              'floor': floor,
+              'chunks': len(manifest['chunks']),
+              'sources': manifest['sources'],
+              'verification': verification,
+          }
+          path = Path(f'build/full-world-floor-z{floor}.json')
+          path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          print(json.dumps(evidence, sort_keys=True))
           PY
-          python3 - <<'PY'
-          from pathlib import Path
-          text = Path('.github/workflows/otbm-atlas-tests.yml').read_text(encoding='utf-8')
-          assert text.count('          - shard: ') == 16
-          assert 'assert len(paths) == 16, paths' in text
-          assert "assert sorted(report['shard'] for report in reports) == list(range(16))" in text
-          PY
-          rm .github/workflows/otbm-atlas-final-shard-repair.yml
-          git diff --check
-      - name: Commit verified CI-only repair
+      - name: Upload floor evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: full-world-floor-z${{ matrix.floor }}
+          path: build/full-world-floor-z${{ matrix.floor }}.json
+          if-no-files-found: error
+          retention-days: 1
+
+  upper-aggregate:
+    name: Full canonical world v3 upper-floor recovery
+    needs: upper-floor
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download floor evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          pattern: full-world-floor-z*
+          path: build/full-world-upper-evidence
+          merge-multiple: true
+      - name: Assert complete upper-half evidence
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A .github/workflows/otbm-atlas-tests.yml .github/workflows/otbm-atlas-final-shard-repair.yml
-          git diff --cached --check
-          git commit -m "ci(atlas): shard final gate by floor"
-          git push origin HEAD:agent/oth-20260813-full-otbm-atlas-current-main
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          paths = sorted(Path('build/full-world-upper-evidence').glob('full-world-floor-z*.json'))
+          assert len(paths) == 8, paths
+          reports = [json.loads(path.read_text(encoding='utf-8')) for path in paths]
+          assert sorted(report['floor'] for report in reports) == list(range(8, 16))
+          assert sum(int(report['chunks']) for report in reports) == 1904
+          source_fingerprints = {json.dumps(report['sources'], sort_keys=True) for report in reports}
+          assert len(source_fingerprints) == 1
+          sources = reports[0]['sources']
+          assert sources['mapSha256'] == '3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034'
+          assert sources['assetsSha256'] == '4c78aa441bc6eed6a614092423a58dc6275cf2c36ea5d4bde13746c9b4ee7ee7'
+          assert sources['chunkSize'] == 128
+          assert sources['atlasVersion'] == 3
+          for report in reports:
+              verification = report['verification']
+              assert verification['ok'] is True
+              assert verification['missingSprites'] == {}
+          print(json.dumps({
+              'floors': list(range(8, 16)),
+              'chunks': 1904,
+              'sources': sources,
+              'verification': 'PASS',
+          }, sort_keys=True))
+          PY
