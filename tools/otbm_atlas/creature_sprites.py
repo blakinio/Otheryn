@@ -103,9 +103,14 @@ def build_definition_index(
 			continue
 		alias_map[alias_key] = canonical_key
 	for alias_key, canonical_key in tuple(alias_map.items()):
-		if canonical_key not in resolved or alias_key in resolved or alias_key in invalid_map or alias_key in ambiguous:
+		target = resolved.get(canonical_key)
+		alias_outfit = resolved.get(alias_key)
+		if target is None or alias_key in invalid_map or alias_key in ambiguous:
 			alias_map.pop(alias_key, None)
-			if alias_key in resolved and resolved[alias_key].key != resolved[canonical_key].key:
+			continue
+		if alias_outfit is not None:
+			alias_map.pop(alias_key, None)
+			if alias_outfit.key != target.key:
 				ambiguous.add(alias_key)
 	return CreatureDefinitionIndex(resolved, frozenset(ambiguous), invalid_map, alias_map)
 
