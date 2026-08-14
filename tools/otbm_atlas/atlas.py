@@ -23,12 +23,35 @@ from .viewer import write_viewer
 from .overview import make_overview, OVERVIEW_FACTOR, LOW_OVERVIEW_FACTOR, OVERVIEW_VERSION
 from .spatial import write_spatial_data
 from .npc_sprites import enrich_npc_spawns
+from .monster_sprites import enrich_monster_spawns
 from .environment_animation import enrich_environment_animations
 from .factual_layers import enrich_existing_atlas
 
 SPOOL_VERSION = 1
 ATLAS_VERSION = 3
 _WORKER_RENDERER: AssetRenderer | None = None
+
+CANONICAL_WORLD_ROOT = Path("vendor/map-analysis/crystalserver/data-global/world")
+CANONICAL_NPC_ROOT = Path("vendor/map-analysis/crystalserver/data-global/npc")
+CANONICAL_MONSTER_ROOT = Path("vendor/map-analysis/crystalserver/data-global/monster")
+CANONICAL_CRYSTAL_DATA_ROOT = Path("vendor/map-analysis/crystalserver/data-global")
+CANONICAL_ASSET_ROOT = Path("vendor/map-analysis/tibia-client/15.25.bd5a04/assets")
+
+
+def canonical_source_paths(repository_root: Path) -> dict[str, Path]:
+	return {
+		"map": repository_root / CANONICAL_WORLD_ROOT / "world.otbm",
+		"worldRoot": repository_root / CANONICAL_WORLD_ROOT,
+		"npcDefinitionRoot": repository_root / CANONICAL_NPC_ROOT,
+		"monsterDefinitionRoot": repository_root / CANONICAL_MONSTER_ROOT,
+		"crystalDataRoot": repository_root / CANONICAL_CRYSTAL_DATA_ROOT,
+		"appearanceAssetRoot": repository_root / CANONICAL_ASSET_ROOT,
+	}
+
+
+def _require_canonical_source(actual: Path, expected: Path, label: str) -> None:
+	if actual.resolve() != expected.resolve():
+		raise ValueError(f"canonical OTBM Atlas {label} must be {expected.as_posix()}, got {actual.as_posix()}")
 
 
 def _encode_item(item: Item) -> bytes:
@@ -91,7 +114,7 @@ class _WriterPool:
 			_unused, old = self.handles.popitem(last=False); old.close()
 
 	def close(self) -> None:
-		for handle in self.handles.values(): handle.close()
+		for handle in self.handles.values(): old = handle; old.close()
 		self.handles.clear()
 
 
@@ -183,9 +206,14 @@ def spool_map(map_path: Path, spool_dir: Path, chunk_size: int) -> dict[str, int
 	return metadata
 
 
-def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int = 128, scripts_dir: Path = Path("data-otservbr-global"), repository_root: Path = Path("."), workers: int = 1) -> dict[str, object]:
+def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int = 128, scripts_dir: Path | None = None, repository_root: Path = Path("."), workers: int = 1) -> dict[str, object]:
 	if chunk_size <= 0: raise ValueError("chunk size must be positive")
 	if workers <= 0: raise ValueError("workers must be positive")
+	canonical = canonical_source_paths(repository_root)
+	_require_canonical_source(map_path, canonical["map"], "map")
+	_require_canonical_source(asset_dir, canonical["appearanceAssetRoot"], "appearance assets")
+	if scripts_dir is not None:
+		_require_canonical_source(scripts_dir, canonical["crystalDataRoot"], "CrystalServer data root")
 	spool_dir = output / ".spool"
 	map_sha, assets_sha = _sha256(map_path), _tree_sha256(asset_dir)
 	state_path = spool_dir / "source.json"
@@ -204,11 +232,7 @@ def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int =
 		report_path = tile_path.with_suffix(".json")
 		fingerprint = hashlib.sha256((expected["mapSha256"] + expected["assetsSha256"] + str(ATLAS_VERSION) + _sha256(path)).encode()).hexdigest()
 		cached_report = json.loads(report_path.read_text()) if report_path.exists() else {}
-		cache_valid = (
-			tile_path.exists()
-			and cached_report.get("fingerprint") == fingerprint
-			and cached_report.get("checksum") == _sha256(tile_path)
-		)
+		cache_valid = tile_path.exists() and cached_report.get("fingerprint") == fingerprint and cached_report.get("checksum") == _sha256(tile_path)
 		if cache_valid:
 			report = cached_report
 			entries.append(({"z": z, "chunkX": chunk_x, "chunkY": chunk_y, "logicalBounds": list(logical_bounds), "path": tile_path.relative_to(output).as_posix(), **report}, None))
@@ -226,14 +250,21 @@ def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int =
 			for (metadata, _job), future in zip(entries, futures): chunks.append({**metadata, **({} if future is None else future.result())})
 	for chunk in chunks:
 		detailed_path = output / str(chunk["path"])
-		for prefix,directory,factor in (("overview","overview",OVERVIEW_FACTOR),("lowOverview","overview-low",LOW_OVERVIEW_FACTOR)):
-			overview_path=output/directory/f"z{chunk['z']}"/f"{chunk['chunkX']}_{chunk['chunkY']}.png";fingerprint=hashlib.sha256(f"{OVERVIEW_VERSION}:{factor}:{chunk['checksum']}".encode()).hexdigest();report_path=overview_path.with_suffix(".json")
-			report=json.loads(report_path.read_text()) if report_path.exists() else {}
-			if not (overview_path.exists() and report.get("fingerprint")==fingerprint and report.get("checksum")==_sha256(overview_path)):
-				payload=make_overview(detailed_path.read_bytes(),factor);overview_path.parent.mkdir(parents=True,exist_ok=True);temporary=overview_path.with_suffix(".png.tmp");temporary.write_bytes(payload);temporary.replace(overview_path)
-				report={"fingerprint":fingerprint,"checksum":hashlib.sha256(payload).hexdigest(),"imageWidth":int(chunk["imageWidth"])//factor,"imageHeight":int(chunk["imageHeight"])//factor};report_path.write_text(json.dumps(report,sort_keys=True)+"\n",encoding="utf-8")
-			chunk.update({f"{prefix}Path":overview_path.relative_to(output).as_posix(),f"{prefix}Checksum":report["checksum"],f"{prefix}ImageWidth":report["imageWidth"],f"{prefix}ImageHeight":report["imageHeight"]})
-	manifest = {"schemaVersion": ATLAS_VERSION, "chunkSize": chunk_size, "tilePixels": 32, "overviewFactor": OVERVIEW_FACTOR,"lowOverviewFactor":LOW_OVERVIEW_FACTOR, "overviewVersion": OVERVIEW_VERSION, "chunks": chunks, "sources": expected}
+		for prefix, directory, factor in (("overview", "overview", OVERVIEW_FACTOR), ("lowOverview", "overview-low", LOW_OVERVIEW_FACTOR)):
+			overview_path = output / directory / f"z{chunk['z']}" / f"{chunk['chunkX']}_{chunk['chunkY']}.png"; fingerprint = hashlib.sha256(f"{OVERVIEW_VERSION}:{factor}:{chunk['checksum']}".encode()).hexdigest(); report_path = overview_path.with_suffix(".json")
+			report = json.loads(report_path.read_text()) if report_path.exists() else {}
+			if not (overview_path.exists() and report.get("fingerprint") == fingerprint and report.get("checksum") == _sha256(overview_path)):
+				payload = make_overview(detailed_path.read_bytes(), factor); overview_path.parent.mkdir(parents=True, exist_ok=True); temporary = overview_path.with_suffix(".png.tmp"); temporary.write_bytes(payload); temporary.replace(overview_path)
+				report = {"fingerprint": fingerprint, "checksum": hashlib.sha256(payload).hexdigest(), "imageWidth": int(chunk["imageWidth"]) // factor, "imageHeight": int(chunk["imageHeight"]) // factor}; report_path.write_text(json.dumps(report, sort_keys=True) + "\n", encoding="utf-8")
+			chunk.update({f"{prefix}Path": overview_path.relative_to(output).as_posix(), f"{prefix}Checksum": report["checksum"], f"{prefix}ImageWidth": report["imageWidth"], f"{prefix}ImageHeight": report["imageHeight"]})
+	provenance = {
+		"map": CANONICAL_WORLD_ROOT.joinpath("world.otbm").as_posix(),
+		"worldRoot": CANONICAL_WORLD_ROOT.as_posix(),
+		"npcDefinitionRoot": CANONICAL_NPC_ROOT.as_posix(),
+		"monsterDefinitionRoot": CANONICAL_MONSTER_ROOT.as_posix(),
+		"appearanceAssetRoot": CANONICAL_ASSET_ROOT.as_posix(),
+	}
+	manifest = {"schemaVersion": ATLAS_VERSION, "chunkSize": chunk_size, "tilePixels": 32, "overviewFactor": OVERVIEW_FACTOR, "lowOverviewFactor": LOW_OVERVIEW_FACTOR, "overviewVersion": OVERVIEW_VERSION, "chunks": chunks, "sources": expected, "provenance": provenance}
 	(output / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	data_dir = output / "data"; data_dir.mkdir(parents=True, exist_ok=True)
 	unknown_items: dict[int, dict[str, object]] = {}
@@ -245,12 +276,14 @@ def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int =
 	unknown_report = {"schemaVersion": 1, "items": list(unknown_items.values()), "statistics": {"uniqueServerIds": len(unknown_items), "occurrences": sum(int(value["occurrences"]) for value in unknown_items.values())}}
 	(data_dir / "unknown-items.json").write_text(json.dumps(unknown_report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	shutil.copyfile(spool_dir / "facts.json", data_dir / "mechanics.json")
-	spawns_report = scan_spawns(map_path.parent)
-	npc_sprite_statistics = enrich_npc_spawns(asset_dir, scripts_dir, output, spawns_report["npcSpawns"])
+	spawns_report = scan_spawns(canonical["worldRoot"])
+	npc_sprite_statistics = enrich_npc_spawns(asset_dir, canonical["npcDefinitionRoot"], output, spawns_report["npcSpawns"], repository_root)
+	monster_sprite_statistics = enrich_monster_spawns(asset_dir, canonical["monsterDefinitionRoot"], output, spawns_report["monsterSpawns"], repository_root)
+	spawns_report["provenance"] = {"worldRoot": provenance["worldRoot"], "npcDefinitionRoot": provenance["npcDefinitionRoot"], "monsterDefinitionRoot": provenance["monsterDefinitionRoot"], "appearanceAssetRoot": provenance["appearanceAssetRoot"]}
 	(data_dir / "spawns.json").write_text(json.dumps(spawns_report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	(data_dir / "houses.json").write_text(json.dumps(parse_houses(map_path.parent / "world-house.xml"), indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	mechanics = json.loads((spool_dir / "facts.json").read_text(encoding="utf-8"))
-	(data_dir / "mechanics-resolution.json").write_text(json.dumps(resolve_mechanics(mechanics, repository_root / "vendor/map-analysis/crystalserver/data-global/scripts"), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+	(data_dir / "mechanics-resolution.json").write_text(json.dumps(resolve_mechanics(mechanics, canonical["crystalDataRoot"] / "scripts"), indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	(data_dir / "composition.json").write_text(json.dumps(classify_maps(map_path.parent, repository_root), indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	spawns = json.loads((data_dir / "spawns.json").read_text(encoding="utf-8")); resolutions = json.loads((data_dir / "mechanics-resolution.json").read_text(encoding="utf-8")); houses = json.loads((data_dir / "houses.json").read_text(encoding="utf-8"))
 	statistics = {
@@ -261,34 +294,44 @@ def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int =
 		"uniqueIdRecords": len(mechanics["uniqueIds"]), "uniqueUniqueIds": len({entry["uniqueId"] for entry in mechanics["uniqueIds"]}),
 		"teleports": len(mechanics["teleports"]), "houseTiles": len(mechanics["houseTiles"]), "houseDoors": len(mechanics["houseDoors"]),
 		"houses": houses["statistics"]["houses"], "towns": len(mechanics["towns"]), "waypoints": len(mechanics["waypoints"]),
-		**spawns["statistics"], "npcSprites": npc_sprite_statistics, "mechanicsResolution": resolutions["statistics"], "unknownItems": unknown_report["statistics"],
+		**spawns["statistics"], "npcSprites": npc_sprite_statistics, "monsterSprites": monster_sprite_statistics, "mechanicsResolution": resolutions["statistics"], "unknownItems": unknown_report["statistics"], "provenance": provenance,
 	}
 	(data_dir / "statistics.json").write_text(json.dumps(statistics, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-	resolution_by_key={(entry["kind"],int(entry["value"])):entry for entry in resolutions["resolutions"]}
-	action_records=[{**entry,"mechanics":resolution_by_key.get(("ActionID",int(entry["actionId"])),{"status":"UNKNOWN","candidates":[]})} for entry in mechanics["actionIds"]]
-	unique_records=[{**entry,"mechanics":resolution_by_key.get(("UniqueID",int(entry["uniqueId"])),{"status":"UNKNOWN","candidates":[]})} for entry in mechanics["uniqueIds"]]
-	spatial_statistics=write_spatial_data(output,chunk_size,{
-		**{key:mechanics[key] for key in ("teleports","houseTiles","houseDoors","towns","waypoints")},"actionIds":action_records,"uniqueIds":unique_records,
-		"mechanics":action_records+unique_records,
-		"monsterSpawns":spawns["monsterSpawns"],"npcSpawns":spawns["npcSpawns"],"houses":houses["houses"],
+	resolution_by_key = {(entry["kind"], int(entry["value"])): entry for entry in resolutions["resolutions"]}
+	action_records = [{**entry, "mechanics": resolution_by_key.get(("ActionID", int(entry["actionId"])), {"status": "UNKNOWN", "candidates": []})} for entry in mechanics["actionIds"]]
+	unique_records = [{**entry, "mechanics": resolution_by_key.get(("UniqueID", int(entry["uniqueId"])), {"status": "UNKNOWN", "candidates": []})} for entry in mechanics["uniqueIds"]]
+	spatial_statistics = write_spatial_data(output, chunk_size, {
+		**{key: mechanics[key] for key in ("teleports", "houseTiles", "houseDoors", "towns", "waypoints")}, "actionIds": action_records, "uniqueIds": unique_records,
+		"mechanics": action_records + unique_records,
+		"monsterSpawns": spawns["monsterSpawns"], "npcSpawns": spawns["npcSpawns"], "houses": houses["houses"],
 	})
-	statistics["spatialData"]=spatial_statistics
-	statistics["environmentAnimations"]=enrich_environment_animations(asset_dir, output)
-	factual_report=enrich_existing_atlas(output, repository_root)
-	if factual_report.get("status")=="RESOLVED":
-		statistics["mechanicsResolution"]=factual_report["statistics"].get("mechanicsResolution", {})
-		statistics["factualLayers"]=factual_report["statistics"]
-		statistics["factualSpatial"]=factual_report["spatial"]
+	statistics["spatialData"] = spatial_statistics
+	statistics["environmentAnimations"] = enrich_environment_animations(asset_dir, output)
+	factual_report = enrich_existing_atlas(output, repository_root)
+	if factual_report.get("status") == "RESOLVED":
+		statistics["mechanicsResolution"] = factual_report["statistics"].get("mechanicsResolution", {})
+		statistics["factualLayers"] = factual_report["statistics"]
+		statistics["factualSpatial"] = factual_report["spatial"]
 	else:
-		statistics["factualLayers"]={"status":factual_report.get("status","UNKNOWN"),"reason":factual_report.get("reason")}
+		statistics["factualLayers"] = {"status": factual_report.get("status", "UNKNOWN"), "reason": factual_report.get("reason")}
 	(data_dir / "statistics.json").write_text(json.dumps(statistics, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	write_viewer(output)
 	return manifest
 
 
 def main() -> int:
-	parser = argparse.ArgumentParser(description=__doc__); parser.add_argument("map", type=Path); parser.add_argument("assets", type=Path); parser.add_argument("output", type=Path); parser.add_argument("--chunk-size", type=int, default=128); parser.add_argument("--scripts", type=Path, default=Path("data-otservbr-global")); parser.add_argument("--repository", type=Path, default=Path(".")); parser.add_argument("--workers", type=int, default=1)
-	args = parser.parse_args(); build_atlas(args.map, args.assets, args.output, args.chunk_size, args.scripts, args.repository, args.workers); return 0
+	parser = argparse.ArgumentParser(description=__doc__)
+	parser.add_argument("map", type=Path)
+	parser.add_argument("assets", type=Path)
+	parser.add_argument("output", type=Path)
+	parser.add_argument("--chunk-size", type=int, default=128)
+	parser.add_argument("--scripts", type=Path, default=None, help=argparse.SUPPRESS)
+	parser.add_argument("--repository", type=Path, default=Path("."))
+	parser.add_argument("--workers", type=int, default=1)
+	args = parser.parse_args()
+	build_atlas(args.map, args.assets, args.output, args.chunk_size, args.scripts, args.repository, args.workers)
+	return 0
 
 
-if __name__ == "__main__": raise SystemExit(main())
+if __name__ == "__main__":
+	raise SystemExit(main())
