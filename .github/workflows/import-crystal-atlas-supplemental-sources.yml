@@ -1,0 +1,116 @@
+---
+name: Import pinned Crystal atlas supplemental sources
+
+on:
+  push:
+    branches:
+      - agent/oth-20260814-atlas-supplemental-sources
+    paths:
+      - .github/workflows/import-crystal-atlas-supplemental-sources.yml
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CRYSTAL_COMMIT: 5e89bf8329ea406cb4ea8f4a18f32954f13e5418
+      SCRIPTS_TREE: 0e3b0102c7d841345dc5b9d4a3b81631930dc362
+      RAIDS_TREE: 95da7008cf26e5b41ad9f6ef6b5666707feb295c
+      NPC_SYSTEM_TREE: 8c95fc6faf1dc2c6c573cb57973838897a458a28
+    steps:
+      - name: Checkout import branch
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          ref: agent/oth-20260814-atlas-supplemental-sources
+          fetch-depth: 1
+      - name: Fetch exact CrystalServer revision
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --no-checkout https://github.com/zimbadev/crystalserver.git /tmp/crystalserver
+          git -C /tmp/crystalserver fetch --depth=1 origin "$CRYSTAL_COMMIT"
+          git -C /tmp/crystalserver checkout --detach "$CRYSTAL_COMMIT"
+          test "$(git -C /tmp/crystalserver rev-parse HEAD)" = "$CRYSTAL_COMMIT"
+          test "$(git -C /tmp/crystalserver rev-parse HEAD:data-global/scripts)" = "$SCRIPTS_TREE"
+          test "$(git -C /tmp/crystalserver rev-parse HEAD:data-global/raids)" = "$RAIDS_TREE"
+          test "$(git -C /tmp/crystalserver rev-parse HEAD:data/npclib/npc_system)" = "$NPC_SYSTEM_TREE"
+      - name: Import exact supplemental source trees
+        run: |
+          set -euo pipefail
+          root=vendor/map-analysis/crystalserver
+          rm -rf "$root/data-global/scripts" "$root/data-global/raids" "$root/data/npclib/npc_system"
+          mkdir -p "$root/data-global" "$root/data/npclib"
+          cp -a /tmp/crystalserver/data-global/scripts "$root/data-global/scripts"
+          cp -a /tmp/crystalserver/data-global/raids "$root/data-global/raids"
+          cp -a /tmp/crystalserver/data/npclib/npc_system "$root/data/npclib/npc_system"
+          diff -qr /tmp/crystalserver/data-global/scripts "$root/data-global/scripts"
+          diff -qr /tmp/crystalserver/data-global/raids "$root/data-global/raids"
+          diff -qr /tmp/crystalserver/data/npclib/npc_system "$root/data/npclib/npc_system"
+      - name: Write deterministic source manifest
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          root = Path('vendor/map-analysis/crystalserver')
+          scopes = (
+              'data-global/scripts',
+              'data-global/raids',
+              'data/npclib/npc_system',
+          )
+          rows = []
+          scope_stats = {}
+          for scope in scopes:
+              base = root / scope
+              files = sorted((path for path in base.rglob('*') if path.is_file()), key=lambda path: path.relative_to(root).as_posix())
+              scope_stats[scope] = {
+                  'fileCount': len(files),
+                  'totalBytes': sum(path.stat().st_size for path in files),
+              }
+              for path in files:
+                  rows.append({
+                      'path': path.relative_to(root).as_posix(),
+                      'size': path.stat().st_size,
+                      'sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
+                  })
+          canonical = json.dumps(rows, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode()
+          manifest = {
+              'schemaVersion': 1,
+              'repository': 'zimbadev/crystalserver',
+              'commit': '5e89bf8329ea406cb4ea8f4a18f32954f13e5418',
+              'trees': {
+                  'data-global/scripts': '0e3b0102c7d841345dc5b9d4a3b81631930dc362',
+                  'data-global/raids': '95da7008cf26e5b41ad9f6ef6b5666707feb295c',
+                  'data/npclib/npc_system': '8c95fc6faf1dc2c6c573cb57973838897a458a28',
+              },
+              'scopes': scope_stats,
+              'fileCount': len(rows),
+              'totalBytes': sum(row['size'] for row in rows),
+              'contentManifestSha256': hashlib.sha256(canonical).hexdigest(),
+              'files': rows,
+          }
+          (root / 'supplemental-sources-manifest.json').write_text(
+              json.dumps(manifest, indent=2, sort_keys=True, ensure_ascii=False) + '\n',
+              encoding='utf-8',
+              newline='\n',
+          )
+          print(json.dumps({key: manifest[key] for key in ('fileCount', 'totalBytes', 'contentManifestSha256')}, sort_keys=True))
+          print(json.dumps(scope_stats, sort_keys=True))
+          PY
+      - name: Commit exact imported sources
+        run: |
+          set -euo pipefail
+          root=vendor/map-analysis/crystalserver
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add "$root/data-global/scripts" "$root/data-global/raids" "$root/data/npclib/npc_system" "$root/supplemental-sources-manifest.json"
+          test -n "$(git status --porcelain)"
+          git commit -m "chore(maps): vendor pinned Crystal supplemental sources"
+          test "$(git rev-parse HEAD:$root/data-global/scripts)" = "$SCRIPTS_TREE"
+          test "$(git rev-parse HEAD:$root/data-global/raids)" = "$RAIDS_TREE"
+          test "$(git rev-parse HEAD:$root/data/npclib/npc_system)" = "$NPC_SYSTEM_TREE"
+          git push origin HEAD:agent/oth-20260814-atlas-supplemental-sources
