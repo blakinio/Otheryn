@@ -22,7 +22,7 @@ required_reads:
 
 ## Goal
 
-Vendor the exact pinned CrystalServer source trees needed to prove scripted map mechanics, raids/events, and shared NPC service semantics without changing `tools/otbm_atlas/**` while PR #381 owns the atlas implementation.
+Vendor the exact pinned CrystalServer source trees needed to prove scripted map mechanics, raids/events, and shared NPC service semantics without changing `tools/otbm_atlas/**`.
 
 ## Pinned provenance
 
@@ -36,10 +36,11 @@ Vendor the exact pinned CrystalServer source trees needed to prove scripted map 
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-08-14T09:33:00+02:00
+updated_at: 2026-08-14T16:50:00+02:00
 branch: agent/oth-20260814-atlas-supplemental-sources
 status: validating
-head_before_checkpoint: 79017fd68fa637edf25a16d96c638ed2c1f47f61
+reconciled_with_main: 1021d08978f078ff845e6f3f82fbbbc482cbf543
+reconcile_commit: 0b5a4f5888d303ba2159202a6af7f5b19c5277f1
 proven:
   - one-shot import workflow 31780269499 completed SUCCESS
   - data-global/scripts has exact upstream tree 0e3b0102c7d841345dc5b9d4a3b81631930dc362
@@ -48,8 +49,11 @@ proven:
   - deterministic manifest contains 2054 files totaling 3285973 bytes
   - manifest content fingerprint is c599e44454b3cd2ec0378f2b1ba296f0858db2f9c683d60ec1da19ffdc672f92
   - scope counts are scripts=1897, raids=152, npc_system=5
-  - the one-shot importer workflow has been removed from the branch after successful import
-unknown: []
+  - one-shot importer workflow was removed after successful import
+  - PR 381 is merged and this branch is reconciled with its merge commit
+  - compare main...reconcile shows branch ahead and not behind, without atlas implementation rollback
+unknown:
+  - exact-head Required conclusion for the final checkpoint head
 blockers: []
-next_action: open the data-only PR, require exact-head Required gate, then merge after it is green and reconcile with current main
+next_action: run exact-head Required on the final checkpoint head, audit PR diff/review threads, then merge PR 383 if green
 ```
