@@ -50,8 +50,7 @@ jobs:
                       continue
                   south, east = _hooks(items, renderer)
                   item = items[-1]
-                  candidate = _candidate(renderer, item, tile.position.x, tile.position.y, tile.position.z, south, east)
-                  if candidate is None:
+                  if _candidate(renderer, item, tile.position.x, tile.position.y, tile.position.z, south, east) is None:
                       continue
                   x, y = tile.position.x, tile.position.y
                   if x - x1 < radius or x2 - x < radius or y - y1 < radius or y2 - y < radius:
@@ -67,12 +66,7 @@ jobs:
           for path in spool.glob('z*/*.bin'):
               if path != chosen_path:
                   path.unlink()
-          expected = {
-              'mapSha256': _sha256(map_path),
-              'assetsSha256': _tree_sha256(asset_dir),
-              'chunkSize': 128,
-              'atlasVersion': ATLAS_VERSION,
-          }
+          expected = {'mapSha256': _sha256(map_path), 'assetsSha256': _tree_sha256(asset_dir), 'chunkSize': 128, 'atlasVersion': ATLAS_VERSION}
           (spool / 'source.json').write_text(json.dumps(expected, sort_keys=True) + '\n', encoding='utf-8')
           build_atlas(map_path, asset_dir, output, workers=1)
           statistics = json.loads((output / 'data/statistics.json').read_text(encoding='utf-8'))
@@ -119,7 +113,7 @@ jobs:
           chosen = None
           for server_id in sorted(renderer.appearances):
               item = Item(server_id)
-              tile = Tile(Position(64, 64, 7), None, 0, None, (item,), ())
+              probe = Tile(Position(64, 64, 7), None, 0, None, (item,), ())
               south, east = _hooks([item], renderer)
               candidate = _candidate(renderer, item, 64, 64, 7, south, east)
               if candidate is None:
@@ -131,7 +125,9 @@ jobs:
               phases = [_phase(renderer, frame, px, py, pz, phase) for phase in range(frame.animation_phases)]
               if len(set(phases)) < 2:
                   continue
-              chosen = (tile, server_id)
+              # SPOOL_VERSION=1 decodes the first serialized item as ground. Keep a
+              # second copy as the top stack item so the production exporter sees it.
+              chosen = (Tile(Position(64, 64, 7), None, 0, item, (Item(server_id),), ()), server_id)
               break
           assert chosen is not None, 'no deterministic multi-phase object fixture found in pinned assets'
           tile, server_id = chosen
