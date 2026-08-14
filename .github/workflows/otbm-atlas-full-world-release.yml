@@ -1,0 +1,123 @@
+---
+name: OTBM Atlas Full World Release Validation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  floor:
+    name: Full world Z${{ matrix.floor }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        floor: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+      - name: Free disk for generated atlas
+        run: |
+          sudo rm -rf /usr/local/lib/android /opt/ghc /usr/share/dotnet || true
+          df -h /
+      - name: Build canonical floor
+        env:
+          ATLAS_FLOOR: ${{ matrix.floor }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from tools.otbm_atlas.atlas import ATLAS_VERSION, _sha256, _tree_sha256, build_atlas, spool_map
+          floor = int(os.environ['ATLAS_FLOOR'])
+          map_path = Path('vendor/map-analysis/crystalserver/data-global/world/world.otbm')
+          asset_dir = Path('vendor/map-analysis/tibia-client/15.25.bd5a04/assets')
+          output = Path(f'build/full-map-atlas-v3-z{floor}')
+          spool = output / '.spool'
+          spool_map(map_path, spool, 128)
+          expected = {'mapSha256': _sha256(map_path), 'assetsSha256': _tree_sha256(asset_dir), 'chunkSize': 128, 'atlasVersion': ATLAS_VERSION}
+          (spool / 'source.json').write_text(json.dumps(expected, sort_keys=True) + '\n', encoding='utf-8')
+          for path in spool.glob('z*/*.bin'):
+              if int(path.parent.name[1:]) != floor:
+                  path.unlink()
+          build_atlas(map_path, asset_dir, output, workers=4)
+          PY
+      - name: Independently verify floor
+        env:
+          ATLAS_FLOOR: ${{ matrix.floor }}
+        run: |
+          root="build/full-map-atlas-v3-z${ATLAS_FLOOR}"
+          python3 -m tools.otbm_atlas.verify "$root" --output "$root/verification.json"
+      - name: Assert floor evidence
+        env:
+          ATLAS_FLOOR: ${{ matrix.floor }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          floor = int(os.environ['ATLAS_FLOOR'])
+          root = Path(f'build/full-map-atlas-v3-z{floor}')
+          manifest = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
+          statistics = json.loads((root / 'data/statistics.json').read_text(encoding='utf-8'))
+          verification = json.loads((root / 'verification.json').read_text(encoding='utf-8'))
+          floors = sorted({int(chunk['z']) for chunk in manifest['chunks']})
+          assert manifest['schemaVersion'] == 3
+          assert floors == [floor]
+          assert statistics['chunks'] == len(manifest['chunks'])
+          assert statistics['populatedFloors'] == [floor]
+          assert verification['ok'] is True
+          assert verification['chunks'] == len(manifest['chunks'])
+          assert sorted(map(int, verification['floors'].keys())) == [floor]
+          assert verification['missingSprites'] == {}
+          evidence = {'floor': floor, 'chunks': len(manifest['chunks']), 'sources': manifest['sources'], 'verification': verification}
+          Path(f'build/full-world-floor-{floor}.json').write_text(json.dumps(evidence, sort_keys=True) + '\n', encoding='utf-8')
+          print(json.dumps({'floor': floor, 'chunks': len(manifest['chunks']), 'verification': 'PASS'}, sort_keys=True))
+          PY
+      - name: Upload floor evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: full-world-floor-${{ matrix.floor }}
+          path: build/full-world-floor-${{ matrix.floor }}.json
+          if-no-files-found: error
+          retention-days: 2
+
+  aggregate:
+    name: Full canonical world v3 aggregate
+    needs: floor
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download floor evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: full-world-floor-*
+          path: build/full-world-evidence
+          merge-multiple: true
+      - name: Assert complete canonical world evidence
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          paths = sorted(Path('build/full-world-evidence').glob('full-world-floor-*.json'))
+          assert len(paths) == 16, paths
+          reports = [json.loads(path.read_text(encoding='utf-8')) for path in paths]
+          assert sorted(report['floor'] for report in reports) == list(range(16))
+          assert sum(int(report['chunks']) for report in reports) == 3494
+          fingerprints = {json.dumps(report['sources'], sort_keys=True) for report in reports}
+          assert len(fingerprints) == 1
+          sources = reports[0]['sources']
+          assert sources['mapSha256'] == '3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034'
+          assert sources['chunkSize'] == 128
+          assert sources['atlasVersion'] == 3
+          for report in reports:
+              assert report['verification']['ok'] is True
+              assert report['verification']['missingSprites'] == {}
+          print(json.dumps({'schemaVersion': 3, 'chunks': 3494, 'floors': list(range(16)), 'verification': 'PASS'}, sort_keys=True))
+          PY

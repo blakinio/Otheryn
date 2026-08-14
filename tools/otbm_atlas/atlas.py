@@ -23,9 +23,10 @@ from .viewer import write_viewer
 from .overview import make_overview, OVERVIEW_FACTOR, LOW_OVERVIEW_FACTOR, OVERVIEW_VERSION
 from .spatial import write_spatial_data
 from .npc_sprites import enrich_npc_spawns
+from .environment_animation import enrich_environment_animations
 
 SPOOL_VERSION = 1
-ATLAS_VERSION = 2
+ATLAS_VERSION = 3
 _WORKER_RENDERER: AssetRenderer | None = None
 
 
@@ -271,6 +272,7 @@ def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int =
 		"monsterSpawns":spawns["monsterSpawns"],"npcSpawns":spawns["npcSpawns"],"houses":houses["houses"],
 	})
 	statistics["spatialData"]=spatial_statistics
+	statistics["environmentAnimations"]=enrich_environment_animations(asset_dir, output)
 	(data_dir / "statistics.json").write_text(json.dumps(statistics, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	write_viewer(output)
 	return manifest

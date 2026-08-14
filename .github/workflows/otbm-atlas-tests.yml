@@ -1,0 +1,369 @@
+---
+name: OTBM Atlas Tests
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+    paths:
+      - "tools/otbm_atlas/**"
+      - ".github/workflows/otbm-atlas-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: Atlas unit and runtime tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          persist-credentials: false
+      - name: Run atlas tests
+        run: python3 -m unittest discover -s tools/otbm_atlas/tests -p 'test_*.py' -v
+
+  canonical-data:
+    name: Canonical Thais scan and render
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          persist-credentials: false
+      - name: Scan canonical Thais regression region
+        run: |
+          python3 -m tools.otbm_atlas.scan \
+            vendor/map-analysis/crystalserver/data-global/world/world.otbm \
+            --bounds 32280 32440 32155 32305 7 \
+            --output /tmp/thais-scan.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('/tmp/thais-scan.json').read_text(encoding='utf-8'))
+          assert data['sourceSha256'] == '3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034'
+          assert data['statistics']['tiles'] == 24311
+          assert data['statistics']['groundItems'] == 24292
+          assert data['statistics']['childItems'] == 14993
+          assert data['statistics']['diagnostics'] == 0
+          PY
+      - name: Render canonical Thais sample from pinned assets
+        run: |
+          python3 -m tools.otbm_atlas.render \
+            vendor/map-analysis/crystalserver/data-global/world/world.otbm \
+            vendor/map-analysis/tibia-client/15.25.bd5a04/assets \
+            --bounds 32340 32371 32215 32246 7 \
+            --output /tmp/thais.png \
+            --report /tmp/thais-render.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('/tmp/thais-render.json').read_text(encoding='utf-8'))
+          assert data['tiles'] > 0
+          assert data['renderOperations'] > 0
+          assert data['missingAppearances'] == {}
+          assert data['missingSprites'] == {}
+          assert 'stack-count' in data['itemPatternPolicy']
+          assert Path('/tmp/thais.png').read_bytes().startswith(b'\x89PNG\r\n\x1a\n')
+          PY
+
+  browser-e2e:
+    name: Real browser Thais E2E
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          persist-credentials: false
+      - name: Install Chromium browser harness
+        run: |
+          python3 -m pip install --disable-pip-version-check playwright==1.54.0
+          python3 -m playwright install --with-deps chromium
+      - name: Build canonical Thais browser fixture
+        run: |
+          root=/tmp/otheryn-atlas-e2e
+          mkdir -p "$root/tiles/z7" "$root/data/chunks/z7"
+          : > "$root/favicon.ico"
+          python3 -m tools.otbm_atlas.render \
+            vendor/map-analysis/crystalserver/data-global/world/world.otbm \
+            vendor/map-analysis/tibia-client/15.25.bd5a04/assets \
+            --bounds 32340 32371 32215 32246 7 \
+            --output "$root/tiles/z7/252_251.png" \
+            --report "$root/render.json"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from tools.otbm_atlas.environment_animation import ANIMATION_ZOOM
+          from tools.otbm_atlas.spawns import scan_spawns
+          from tools.otbm_atlas.viewer import write_viewer
+
+          root = Path('/tmp/otheryn-atlas-e2e')
+          report = json.loads((root / 'render.json').read_text(encoding='utf-8'))
+          x1, x2, y1, y2, z = report['bounds']
+          spawns = scan_spawns(Path('vendor/map-analysis/crystalserver/data-global/world'))
+          candidates = [
+              record for record in spawns['npcSpawns']
+              if record['position']['z'] == z
+              and x1 <= record['position']['x'] <= x2
+              and y1 <= record['position']['y'] <= y2
+              and record.get('origin') == 'base-map'
+          ]
+          assert candidates, 'canonical Thais browser fixture contains no base-map NPC'
+          npc = sorted(candidates, key=lambda record: (record['name'].casefold(), record['position']['y'], record['position']['x']))[0]
+          source = root / 'tiles/z7/252_251.png'
+          chunk = {
+              'z': 7,
+              'chunkX': 252,
+              'chunkY': 251,
+              'logicalBounds': [32340, 32371, 32215, 32246, 7],
+              'bounds': report['bounds'],
+              'path': 'tiles/z7/252_251.png',
+              'overviewPath': 'tiles/z7/252_251.png',
+              'lowOverviewPath': 'tiles/z7/252_251.png',
+              'imageWidth': report['imageWidth'],
+              'imageHeight': report['imageHeight'],
+          }
+          (root / 'manifest.json').write_text(json.dumps({'schemaVersion': 3, 'chunkSize': 128, 'chunks': [chunk]}, sort_keys=True), encoding='utf-8')
+          (root / 'data/search-index.json').write_text(json.dumps({'records': [{'kind': 'npcSpawns', 'label': npc['name'], 'position': npc['position']}]}, sort_keys=True), encoding='utf-8')
+          (root / 'data/chunks/z7/252_251.json').write_text(json.dumps({'npcSpawns': [npc]}, sort_keys=True), encoding='utf-8')
+          animation_root = root / 'data/environment-animations'
+          animation_root.mkdir(parents=True, exist_ok=True)
+          animation_statistics = {'instances': 0, 'uniqueAnimations': 0, 'chunks': 0, 'staticFallbacks': 0}
+          animation_index = {
+              'schemaVersion': 1,
+              'animationZoom': ANIMATION_ZOOM,
+              'overlapSafetyRadiusTiles': 0,
+              'statistics': animation_statistics,
+              'policy': {
+                  'cyclicAppearance': 'browser animated from pinned object appearance phases',
+                  'statefulAppearance': 'not inferred; server-driven variants remain canonical static state',
+                  'eligibility': 'fixture contains no exported cyclic environment records',
+                  'fallback': 'fixture keeps canonical static pixels',
+              },
+          }
+          (animation_root / 'index.json').write_text(json.dumps(animation_index, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          (root / 'fixture.json').write_text(json.dumps({'npc': npc['name'], 'position': npc['position']}, sort_keys=True), encoding='utf-8')
+          write_viewer(root)
+          assert source.read_bytes().startswith(b'\x89PNG\r\n\x1a\n')
+          PY
+      - name: Exercise real browser journey
+        run: |
+          python3 -m http.server 8123 --directory /tmp/otheryn-atlas-e2e >/tmp/otheryn-atlas-http.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" || true' EXIT
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from urllib.parse import parse_qs, urlparse
+          from playwright.sync_api import sync_playwright
+
+          fixture = json.loads(Path('/tmp/otheryn-atlas-e2e/fixture.json').read_text(encoding='utf-8'))
+          npc = fixture['npc']
+          position = fixture['position']
+          errors = []
+          http_errors = []
+          with sync_playwright() as playwright:
+              browser = playwright.chromium.launch(headless=True)
+              page = browser.new_page(viewport={'width': 1280, 'height': 720})
+              page.on('pageerror', lambda exc: errors.append(f'pageerror:{exc}'))
+              page.on('console', lambda msg: errors.append(f'console:{msg.text}') if msg.type == 'error' else None)
+              page.on('response', lambda response: http_errors.append(f'{response.status}:{response.url}') if response.status >= 400 else None)
+              url = f"http://127.0.0.1:8123/?x={position['x']}&y={position['y']}&z=7&zoom=1&render=detailed"
+              page.goto(url, wait_until='networkidle')
+              page.wait_for_function("document.querySelector('#status').textContent.includes('Drag to pan')")
+              assert page.locator('#map').is_visible()
+              assert page.locator('#renderMode').input_value() == 'detailed'
+              assert 'Z 7' in page.locator('#coords').inner_text()
+
+              page.locator('#search').fill(npc)
+              result = page.locator('#searchResults button').first
+              result.wait_for(state='visible')
+              assert npc.casefold() in result.inner_text().casefold()
+              result.click()
+              page.locator('#details:not([hidden])').wait_for(state='visible')
+              assert npc.casefold() in page.locator('#details').inner_text().casefold()
+              assert page.locator('[data-overlay="npcSpawns"]').is_checked()
+              query = parse_qs(urlparse(page.url).query)
+              assert 'npcSpawns' in query.get('layers', [''])[0].split(',')
+              assert int(float(query['x'][0])) == position['x']
+              assert int(float(query['y'][0])) == position['y']
+              assert int(float(query['z'][0])) == 7
+
+              page.locator('#renderMode').select_option('performance')
+              assert parse_qs(urlparse(page.url).query)['render'] == ['performance']
+              page.reload(wait_until='networkidle')
+              assert page.locator('#renderMode').input_value() == 'performance'
+
+              page.locator('[data-overlay="npcSpawns"]').uncheck()
+              layers = parse_qs(urlparse(page.url).query).get('layers', [''])[0].split(',')
+              assert 'npcSpawns' not in layers
+
+              page.locator('#search').fill(f"{position['x']},{position['y']},7")
+              coordinate_result = page.locator('#searchResults button').first
+              coordinate_result.wait_for(state='visible')
+              assert 'Go to' in coordinate_result.inner_text()
+              coordinate_result.click()
+              query = parse_qs(urlparse(page.url).query)
+              assert int(float(query['z'][0])) == 7
+
+              page.locator('#showDiagnostics').check()
+              assert page.locator('#diagnostics').is_visible()
+              assert 'Visible chunks' in page.locator('#diagnostics').inner_text()
+              page.screenshot(path='/tmp/otheryn-atlas-e2e.png', full_page=True)
+              browser.close()
+          assert not errors, {'console': errors, 'http': http_errors}
+          assert not http_errors, http_errors
+          assert Path('/tmp/otheryn-atlas-e2e.png').stat().st_size > 0
+          print(json.dumps({'browser': 'chromium', 'canonicalNpc': npc, 'journey': 'PASS'}, sort_keys=True))
+          PY
+
+  full-world-shards:
+    name: Full canonical world v3 shard ${{ matrix.shard }}
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'ci:final-gate')
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: 0
+            floors: "0,1,2,3"
+          - shard: 1
+            floors: "4,5,6,7"
+          - shard: 2
+            floors: "8,9,10,11"
+          - shard: 3
+            floors: "12,13,14,15"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          persist-credentials: false
+      - name: Free disk for generated atlas
+        run: |
+          sudo rm -rf /usr/local/lib/android /opt/ghc /usr/share/dotnet || true
+          df -h /
+      - name: Build canonical atlas shard
+        env:
+          ATLAS_SHARD: ${{ matrix.shard }}
+          ATLAS_FLOORS: ${{ matrix.floors }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from tools.otbm_atlas.atlas import ATLAS_VERSION, _sha256, _tree_sha256, build_atlas, spool_map
+
+          map_path = Path('vendor/map-analysis/crystalserver/data-global/world/world.otbm')
+          asset_dir = Path('vendor/map-analysis/tibia-client/15.25.bd5a04/assets')
+          output = Path(f"build/full-map-atlas-v3-shard-{os.environ['ATLAS_SHARD']}")
+          spool = output / '.spool'
+          floors = {int(value) for value in os.environ['ATLAS_FLOORS'].split(',')}
+          spool_map(map_path, spool, 128)
+          expected = {
+              'mapSha256': _sha256(map_path),
+              'assetsSha256': _tree_sha256(asset_dir),
+              'chunkSize': 128,
+              'atlasVersion': ATLAS_VERSION,
+          }
+          (spool / 'source.json').write_text(json.dumps(expected, sort_keys=True) + '\n', encoding='utf-8')
+          for path in spool.glob('z*/*.bin'):
+              if int(path.parent.name[1:]) not in floors:
+                  path.unlink()
+          build_atlas(map_path, asset_dir, output, workers=4)
+          PY
+      - name: Independently verify canonical atlas shard
+        env:
+          ATLAS_SHARD: ${{ matrix.shard }}
+        run: |
+          root="build/full-map-atlas-v3-shard-${ATLAS_SHARD}"
+          python3 -m tools.otbm_atlas.verify "$root" --output "$root/verification.json"
+      - name: Assert shard and emit compact evidence
+        env:
+          ATLAS_SHARD: ${{ matrix.shard }}
+          ATLAS_FLOORS: ${{ matrix.floors }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          root = Path(f"build/full-map-atlas-v3-shard-{os.environ['ATLAS_SHARD']}")
+          manifest = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
+          statistics = json.loads((root / 'data/statistics.json').read_text(encoding='utf-8'))
+          verification = json.loads((root / 'verification.json').read_text(encoding='utf-8'))
+          expected_floors = sorted(int(value) for value in os.environ['ATLAS_FLOORS'].split(','))
+          floors = sorted({int(chunk['z']) for chunk in manifest['chunks']})
+          assert manifest['schemaVersion'] == 3
+          assert floors == expected_floors
+          assert statistics['chunks'] == len(manifest['chunks'])
+          assert statistics['populatedFloors'] == expected_floors
+          assert verification['ok'] is True
+          assert verification['chunks'] == len(manifest['chunks'])
+          assert sorted(map(int, verification['floors'].keys())) == expected_floors
+          assert verification['missingSprites'] == {}
+          evidence = {
+              'shard': int(os.environ['ATLAS_SHARD']),
+              'chunks': len(manifest['chunks']),
+              'floors': expected_floors,
+              'sources': manifest['sources'],
+              'verification': verification,
+          }
+          evidence_path = Path(f"build/full-world-shard-{os.environ['ATLAS_SHARD']}.json")
+          evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          print(json.dumps(evidence, sort_keys=True))
+          PY
+      - name: Upload shard evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: full-world-shard-${{ matrix.shard }}
+          path: build/full-world-shard-${{ matrix.shard }}.json
+          if-no-files-found: error
+          retention-days: 1
+
+  full-world:
+    name: Full canonical world v3
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'ci:final-gate')
+    needs: full-world-shards
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download shard evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          pattern: full-world-shard-*
+          path: build/full-world-evidence
+          merge-multiple: true
+      - name: Assert complete canonical world evidence
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          paths = sorted(Path('build/full-world-evidence').glob('full-world-shard-*.json'))
+          assert len(paths) == 4, paths
+          reports = [json.loads(path.read_text(encoding='utf-8')) for path in paths]
+          assert sorted(report['shard'] for report in reports) == [0, 1, 2, 3]
+          assert sum(int(report['chunks']) for report in reports) == 3494
+          floors = sorted({int(floor) for report in reports for floor in report['floors']})
+          assert floors == list(range(16))
+          source_fingerprints = {json.dumps(report['sources'], sort_keys=True) for report in reports}
+          assert len(source_fingerprints) == 1
+          sources = reports[0]['sources']
+          assert sources['mapSha256'] == '3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034'
+          assert sources['chunkSize'] == 128
+          assert sources['atlasVersion'] == 3
+          for report in reports:
+              verification = report['verification']
+              assert verification['ok'] is True
+              assert verification['missingSprites'] == {}
+          evidence = {
+              'schemaVersion': 3,
+              'chunks': 3494,
+              'floors': floors,
+              'shards': [{'shard': report['shard'], 'chunks': report['chunks'], 'floors': report['floors']} for report in reports],
+              'sources': sources,
+              'verification': 'PASS',
+          }
+          print(json.dumps(evidence, sort_keys=True))
+          PY
