@@ -19,6 +19,20 @@ class MonsterSpriteTests(unittest.TestCase):
 		self.assertEqual(outfit.key, "35-1-2-3-4-2")
 		self.assertEqual(outfit.source, "monster/demon.lua")
 
+	def test_double_quoted_monster_name_preserves_apostrophe(self) -> None:
+		with tempfile.TemporaryDirectory() as directory:
+			root = Path(directory); monsters = root / "monster"; monsters.mkdir()
+			(monsters / "mooh_tah.lua").write_text(
+				'local mType = Game.createMonsterType("Mooh\'Tah Warrior")\nmonster.outfit = { lookType = 123, lookHead = 1 }',
+				encoding="utf-8",
+			)
+			index = parse_monster_definition_index(monsters, root)
+			outfit, status = index.resolve("MOOH'TAH WARRIOR")
+		self.assertEqual(status, "resolved")
+		self.assertIsNotNone(outfit)
+		self.assertEqual(outfit.name, "Mooh'Tah Warrior")
+		self.assertEqual(outfit.look_type, 123)
+
 	def test_missing_look_type_is_explicitly_unresolved(self) -> None:
 		with tempfile.TemporaryDirectory() as directory:
 			root = Path(directory); monsters = root / "monster"; monsters.mkdir()

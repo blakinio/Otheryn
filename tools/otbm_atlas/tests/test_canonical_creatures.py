@@ -71,6 +71,13 @@ class CanonicalCreatureIntegrationTests(unittest.TestCase):
 		self.assertTrue(str(record["outfitSource"]).startswith("vendor/map-analysis/crystalserver/data-global/monster/"))
 		self.assertEqual(record["lookType"], outfit.look_type)
 
+	def test_real_vendored_apostrophe_monster_definition_resolves(self) -> None:
+		outfit, status = self.monster_index.resolve("Mooh'Tah Warrior")
+		self.assertEqual(status, "resolved")
+		self.assertIsNotNone(outfit)
+		self.assertGreater(outfit.look_type, 0)
+		self.assertTrue(str(outfit.source).startswith("vendor/map-analysis/crystalserver/data-global/monster/"))
+
 	def test_real_canonical_item_fragment_renders_from_vendored_world_and_assets(self) -> None:
 		record, _outfit = self._real_spawn("npc", "Benjamin")
 		position = record["position"]

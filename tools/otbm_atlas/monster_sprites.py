@@ -6,7 +6,7 @@ import re
 
 from .creature_sprites import CreatureDefinitionIndex, CreatureOutfit, build_definition_index, enrich_creature_spawns
 
-_NAME = re.compile(r'Game\.createMonsterType\(\s*["\']([^"\']+)["\']\s*\)')
+_NAME = re.compile(r'''Game\.createMonsterType\(\s*(?:"([^"]+)"|'([^']+)')\s*\)''')
 _OUTFIT = re.compile(r'\bmonster\.outfit\s*=\s*\{(.*?)\}', re.DOTALL)
 _VALUE = re.compile(r'\b(lookType|lookHead|lookBody|lookLegs|lookFeet|lookAddons)\s*=\s*(\d+)')
 
@@ -36,7 +36,7 @@ def parse_monster_definition_index(
 		name_match = _NAME.search(text)
 		if name_match is None:
 			continue
-		name = name_match.group(1)
+		name = name_match.group(1) or name_match.group(2)
 		block = _OUTFIT.search(text)
 		if block is None:
 			invalid.append((name, "missing-outfit"))

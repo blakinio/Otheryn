@@ -6,6 +6,12 @@ on:
     paths:
       - "tools/otbm_atlas/**"
       - ".github/workflows/otbm-creature-showcase.yml"
+      - "vendor/map-analysis/crystalserver/creature-sources-manifest.json"
+      - "vendor/map-analysis/crystalserver/data-global/world/**"
+      - "vendor/map-analysis/crystalserver/data-global/npc/**"
+      - "vendor/map-analysis/crystalserver/data-global/monster/**"
+      - "vendor/map-analysis/crystalserver/data-global/scripts/**"
+      - "vendor/map-analysis/tibia-client/15.25.bd5a04/assets/**"
   workflow_dispatch:
 
 permissions:
