@@ -1,0 +1,100 @@
+---
+name: OTBM Atlas Animation Export Repair
+
+on:
+  push:
+    branches:
+      - agent/oth-20260814-atlas-animation-export-fix
+    paths:
+      - .github/workflows/otbm-atlas-animation-export-repair.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          ref: agent/oth-20260814-atlas-animation-export-fix
+          fetch-depth: 1
+      - name: Integrate production environment animation export
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          atlas = Path('tools/otbm_atlas/atlas.py')
+          text = atlas.read_text(encoding='utf-8')
+          old = 'from .npc_sprites import enrich_npc_spawns\n'
+          new = old + 'from .environment_animation import enrich_environment_animations\n'
+          if text.count(old) != 1 or 'from .environment_animation import enrich_environment_animations' in text:
+              raise SystemExit('atlas import drifted')
+          text = text.replace(old, new, 1)
+          old = '''\tstatistics["spatialData"]=spatial_statistics\n\t(data_dir / "statistics.json").write_text(json.dumps(statistics, indent=2, sort_keys=True) + "\\n", encoding="utf-8")\n\twrite_viewer(output)\n\treturn manifest\n'''
+          new = '''\tstatistics["spatialData"]=spatial_statistics\n\tstatistics["environmentAnimations"]=enrich_environment_animations(asset_dir, output)\n\t(data_dir / "statistics.json").write_text(json.dumps(statistics, indent=2, sort_keys=True) + "\\n", encoding="utf-8")\n\twrite_viewer(output)\n\treturn manifest\n'''
+          if text.count(old) != 1:
+              raise SystemExit('atlas finalization block drifted')
+          atlas.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          workflow = Path('.github/workflows/otbm-atlas-tests.yml')
+          text = workflow.read_text(encoding='utf-8')
+          old = '''          verification = json.loads((root / 'verification.json').read_text(encoding='utf-8'))\n          expected_floors = sorted(int(value) for value in os.environ['ATLAS_FLOORS'].split(','))\n'''
+          new = '''          verification = json.loads((root / 'verification.json').read_text(encoding='utf-8'))\n          animation_index = json.loads((root / 'data/environment-animations/index.json').read_text(encoding='utf-8'))\n          expected_floors = sorted(int(value) for value in os.environ['ATLAS_FLOORS'].split(','))\n'''
+          if text.count(old) != 1:
+              raise SystemExit('shard evidence read block drifted')
+          text = text.replace(old, new, 1)
+          old = '''          assert verification['missingSprites'] == {}\n          evidence = {\n              'shard': int(os.environ['ATLAS_SHARD']),\n'''
+          new = '''          assert verification['missingSprites'] == {}\n          assert animation_index['schemaVersion'] == 1\n          assert statistics['environmentAnimations'] == animation_index['statistics']\n          evidence = {\n              'shard': int(os.environ['ATLAS_SHARD']),\n'''
+          if text.count(old) != 1:
+              raise SystemExit('shard assertion block drifted')
+          text = text.replace(old, new, 1)
+          old = '''              'sources': manifest['sources'],\n              'verification': verification,\n          }\n'''
+          new = '''              'sources': manifest['sources'],\n              'verification': verification,\n              'environmentAnimations': animation_index['statistics'],\n          }\n'''
+          if text.count(old) != 1:
+              raise SystemExit('shard evidence object drifted')
+          text = text.replace(old, new, 1)
+          old = '''          for report in reports:\n              verification = report['verification']\n              assert verification['ok'] is True\n              assert verification['missingSprites'] == {}\n          evidence = {\n'''
+          new = '''          for report in reports:\n              verification = report['verification']\n              assert verification['ok'] is True\n              assert verification['missingSprites'] == {}\n              assert set(report['environmentAnimations']) == {'instances', 'uniqueAnimations', 'chunks', 'staticFallbacks'}\n          animation_instances = sum(int(report['environmentAnimations']['instances']) for report in reports)\n          assert animation_instances > 0\n          evidence = {\n'''
+          if text.count(old) != 1:
+              raise SystemExit('aggregate verification block drifted')
+          text = text.replace(old, new, 1)
+          old = '''              'sources': sources,\n              'verification': 'PASS',\n          }\n'''
+          new = '''              'sources': sources,\n              'verification': 'PASS',\n              'environmentAnimationInstances': animation_instances,\n          }\n'''
+          if text.count(old) != 1:
+              raise SystemExit('aggregate evidence object drifted')
+          workflow.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          e2e = Path('.github/workflows/otbm-environment-animation-tests.yml')
+          text = e2e.read_text(encoding='utf-8')
+          start = text.index('      - name: Build deterministic animation fixture\n')
+          end = text.index('      - name: Prove default floor and phase changes in Chromium\n', start)
+          replacement = '''      - name: Build fixture through production animation exporter\n        run: |\n          python3 - <<'PY'\n          import json\n          from pathlib import Path\n          from tools.otbm_atlas.assets import encode_png\n          from tools.otbm_atlas.atlas import encode_tile\n          from tools.otbm_atlas.environment_animation import _candidate, _durations, _hooks, _phase, enrich_environment_animations\n          from tools.otbm_atlas.render import AssetRenderer\n          from tools.otbm_atlas.semantic import Item, Position, Tile\n          from tools.otbm_atlas.viewer import write_viewer\n\n          root = Path('/tmp/environment-e2e')\n          (root / '.spool/z7').mkdir(parents=True)\n          (root / 'tiles/z7').mkdir(parents=True)\n          (root / 'data').mkdir(parents=True)\n          asset_dir = Path('vendor/map-analysis/tibia-client/15.25.bd5a04/assets')\n          renderer = AssetRenderer(asset_dir)\n          chosen = None\n          for server_id in sorted(renderer.appearances):\n              item = Item(server_id)\n              tile = Tile(Position(64, 64, 7), None, 0, None, (item,), ())\n              south, east = _hooks([item], renderer)\n              candidate = _candidate(renderer, item, 64, 64, 7, south, east)\n              if candidate is None:\n                  continue\n              _appearance, frame, px, py, pz = candidate\n              durations = [max(1, (lo + hi) // 2) for lo, hi in _durations(frame)]\n              if max(durations) > 500:\n                  continue\n              phases = [_phase(renderer, frame, px, py, pz, phase) for phase in range(frame.animation_phases)]\n              if len(set(phases)) < 2:\n                  continue\n              chosen = (tile, server_id)\n              break\n          assert chosen is not None, 'no deterministic multi-phase object fixture found in pinned assets'\n          tile, server_id = chosen\n          (root / '.spool/z7/0_0.bin').write_bytes(encode_tile(tile))\n          (root / '.spool/spool.json').write_text(json.dumps({'version': 1, 'chunkSize': 128, 'tiles': 1}), encoding='utf-8')\n          base = encode_png(32, 32, bytes((20, 20, 20, 255)) * 32 * 32)\n          (root / 'tiles/z7/0_0.png').write_bytes(base)\n          chunk = {'z': 7, 'chunkX': 0, 'chunkY': 0, 'logicalBounds': [0, 127, 0, 127, 7], 'bounds': [64, 64, 64, 64, 7], 'path': 'tiles/z7/0_0.png', 'overviewPath': 'tiles/z7/0_0.png', 'lowOverviewPath': 'tiles/z7/0_0.png', 'imageWidth': 32, 'imageHeight': 32}\n          (root / 'manifest.json').write_text(json.dumps({'schemaVersion': 3, 'chunkSize': 128, 'chunks': [chunk]}), encoding='utf-8')\n          (root / 'data/search-index.json').write_text('{"schemaVersion":1,"records":[]}', encoding='utf-8')\n          statistics = enrich_environment_animations(asset_dir, root)\n          assert statistics['instances'] == 1, statistics\n          assert statistics['uniqueAnimations'] == 1, statistics\n          assert statistics['chunks'] == 1, statistics\n          index = json.loads((root / 'data/environment-animations/index.json').read_text(encoding='utf-8'))\n          shard = json.loads((root / 'data/environment-animations/chunks/z7/0_0.json').read_text(encoding='utf-8'))\n          assert index['statistics'] == statistics\n          assert len(shard['records']) == 1\n          record = shard['records'][0]\n          assert record['serverId'] == server_id\n          assert len(record['frames']) >= 2\n          for frame in record['frames']:\n              assert (root / frame).is_file()\n          assert (root / record['underlay']).is_file()\n          (root / 'fixture.json').write_text(json.dumps({'position': record['position'], 'phaseDurationsMs': record['phaseDurationsMs']}), encoding='utf-8')\n          write_viewer(root)\n          PY\n'''
+          text = text[:start] + replacement + text[end:]
+          old = '''          fixture = json.loads(Path('/tmp/otheryn-atlas-e2e/fixture.json').read_text(encoding='utf-8'))''' if False else None
+          old_block_start = text.index('          with sync_playwright() as p:\n', text.index('      - name: Prove default floor and phase changes in Chromium\n'))
+          old_block_end = text.index('          PY\n', old_block_start)
+          new_block = '''          fixture=json.loads(Path('/tmp/environment-e2e/fixture.json').read_text(encoding='utf-8'))\n          position=fixture['position']; interval=max(80,min(450,min(fixture['phaseDurationsMs'])+40))\n          with sync_playwright() as p:\n              browser=p.chromium.launch(headless=True);page=browser.new_page(viewport={'width':800,'height':600});page.goto(f"http://127.0.0.1:8124/?x={position['x']}&y={position['y']}&zoom=2&render=detailed",wait_until='networkidle');page.locator('#environmentAnimations').wait_for(state='attached');page.wait_for_timeout(400)\n              assert page.locator('#floor').input_value() == '7'\n              frames=[]\n              for _ in range(12):\n                  frames.append(page.evaluate("""() => document.querySelector('#environmentAnimations').toDataURL()"""));page.wait_for_timeout(interval)\n              browser.close()\n          assert len(set(frames))>1, 'production-exported animation did not advance in Chromium'\n          print({'journey':'PASS','defaultFloor':7,'distinctFrames':len(set(frames))})\n'''
+          # Replace the existing Python body after its imports, leaving the heredoc markers intact.\n          body_start = text.rfind('          with sync_playwright() as p:\n', 0, old_block_end)\n          if body_start < 0:\n              raise SystemExit('Chromium body drifted')\n          text = text[:body_start] + new_block + text[old_block_end:]\n          e2e.write_text(text, encoding='utf-8')\n\n          readme = Path('tools/otbm_atlas/README.md')\n          text = readme.read_text(encoding='utf-8')\n          marker = '''python -m http.server 8000 --directory build/full-map-atlas\n```\n'''
+          addition = '''python -m http.server 8000 --directory build/full-map-atlas\n```\n\nThe atlas build also runs the conservative cyclic-environment exporter against the same pinned object appearances and chunk spool. Eligible topmost 32×32 non-displaced objects are emitted under `data/environment-animations/`; unsupported, edge-risk, occluded, or server-driven state variants remain canonical static pixels. The browser only activates these exported phases at close zoom and keeps its animation image/shard caches bounded.\n'''
+          if text.count(marker) != 1:\n              raise SystemExit('README build block drifted')\n          text = text.replace(marker, addition, 1)\n          old = '''Viewer floor labels are relative to the Tibia surface: raw OTBM Z=7 is floor 0,\nZ=0 is +7, and Z=15 is -8. Manifests and factual coordinates retain raw Z.\n'''
+          new = '''Viewer floor selection and shared URLs use raw OTBM Z values 0 through 15, matching manifests and factual coordinates without a display-only remapping.\n'''
+          if text.count(old) == 1:\n              text = text.replace(old, new, 1)\n          readme.write_text(text, encoding='utf-8')\n          PY
+      - name: Validate focused repair
+        run: |
+          set -euo pipefail
+          git diff --check
+          node --check tools/otbm_atlas/viewer_app.js
+          node --check tools/otbm_atlas/viewer_runtime.js
+          python3 -m unittest discover -s tools/otbm_atlas/tests -p 'test_*.py' -v
+      - name: Commit repair and remove one-shot workflow
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git rm .github/workflows/otbm-atlas-animation-export-repair.yml
+          git add tools/otbm_atlas/atlas.py tools/otbm_atlas/README.md .github/workflows/otbm-atlas-tests.yml .github/workflows/otbm-environment-animation-tests.yml
+          git commit -m "fix(atlas): export environment animations in production build"
+          git push origin HEAD:agent/oth-20260814-atlas-animation-export-fix
