@@ -4,7 +4,7 @@ from collections import defaultdict
 import json
 from pathlib import Path
 import re
-from .lua_static import assigned_table, iter_calls, literal_int, literal_position, literal_string, strip_comments, top_level_table_rows
+from .lua_static import assigned_table, function_regions, iter_calls, literal_int, literal_position, literal_string, strip_comments, top_level_table_rows
 
 NPC_NAME = re.compile(r'local\s+internalNpcName\s*=\s*["\']([^"\']+)["\']')
 SIMPLE_FIELD = re.compile(r"\b([A-Za-z_]\w*)\s*=\s*(\"(?:\\.|[^\"])*\"|'(?:\\.|[^'])*'|-?\d+|true|false)")
@@ -43,10 +43,20 @@ def _travel_helpers(text: str) -> dict[str, list[str]]:
     result: dict[str, list[str]] = {}
     if "StdModule.travel" not in text:
         return result
+    regions = {region.start: region for region in function_regions(text)}
     for match in HELPER_DECL.finditer(text):
         name = match.group(1)
         parameters = [value.strip() for value in match.group(2).split(",")]
-        if "destination" in parameters and re.search(r"\bdestination\s*=\s*destination\b", text):
+        function_offset = text.find("function", match.start(), match.end())
+        region = regions.get(function_offset)
+        if region is None:
+            continue
+        body = text[region.body_start:region.body_end]
+        if (
+            "destination" in parameters
+            and "StdModule.travel" in body
+            and re.search(r"\bdestination\s*=\s*destination\b", body)
+        ):
             result[name] = parameters
     return result
 
