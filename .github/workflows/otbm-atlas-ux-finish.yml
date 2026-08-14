@@ -1,0 +1,61 @@
+---
+name: OTBM Atlas Viewer UX Repair
+on:
+  push:
+    branches: [agent/oth-20260813-full-otbm-atlas-current-main]
+    paths: [.github/workflows/otbm-atlas-ux-finish.yml]
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          fetch-depth: 0
+      - name: Apply raw-Z and search-focus contracts
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new):
+              p=Path(path); text=p.read_text(encoding='utf-8'); count=text.count(old)
+              if count != 1: raise SystemExit(f'{path}: expected one match, got {count}: {old[:80]!r}')
+              p.write_text(text.replace(old,new,1),encoding='utf-8')
+
+          replace('tools/otbm_atlas/viewer.py', '<label>Floor <select id="floor"></select></label>', '<label>Z <select id="floor"></select></label>')
+          replace('tools/otbm_atlas/viewer.py', '<input id="z" type="number" min="-8" max="7" placeholder="Floor">', '<input id="z" type="number" min="0" max="15" placeholder="Z">')
+
+          replace('tools/otbm_atlas/viewer_app.js',
+              'const displayFloor=z=>7-z,rawZ=f=>7-f,worldToScreen=',
+              'const displayFloor=z=>z,rawZ=z=>z,worldToScreen=')
+          replace('tools/otbm_atlas/viewer_app.js',
+              "$('#coords').textContent=`X ${Math.floor(state.x)}  Y ${Math.floor(state.y)}  Floor ${displayFloor(state.z)}`;",
+              "$('#coords').textContent=`X ${Math.floor(state.x)}  Y ${Math.floor(state.y)}  Z ${state.z}`;")
+          replace('tools/otbm_atlas/viewer_app.js',
+              'status.textContent=`X ${Math.floor(x)} Y ${Math.floor(y)} Floor ${displayFloor(state.z)}`;',
+              'status.textContent=`X ${Math.floor(x)} Y ${Math.floor(y)} Z ${state.z}`;')
+          replace('tools/otbm_atlas/viewer_app.js',
+              "const requestedFloor=+$('#z').value;if($('#z').value!==''&&Number.isInteger(requestedFloor)){state.z=rawZ(Math.max(-8,Math.min(7,requestedFloor)));floorSelect.value=state.z}",
+              "const requestedZ=+$('#z').value;if($('#z').value!==''&&Number.isInteger(requestedZ)){state.z=rawZ(Math.max(0,Math.min(15,requestedZ)));floorSelect.value=state.z}")
+          old="b.onclick=()=>{Object.assign(state,item.position);state.zoom=Math.max(state.zoom,.75);floorSelect.value=state.z;syncUrl();draw();results.innerHTML=''};"
+          new="b.onclick=async()=>{Object.assign(state,item.position);state.zoom=Math.max(state.zoom,.75);if(!state.overlays.includes(item.kind)){state.overlays=[...state.overlays,item.kind];localStorage.setItem('otheryn.atlas.layers',JSON.stringify(state.overlays));const box=document.querySelector(`[data-overlay=\"${item.kind}\"]`);if(box)box.checked=true}floorSelect.value=state.z;syncUrl();draw();results.innerHTML='';const chunk=chunks.find(c=>c.z===state.z&&c.logicalBounds[0]<=state.x&&c.logicalBounds[1]>=state.x&&c.logicalBounds[2]<=state.y&&c.logicalBounds[3]>=state.y);if(!chunk)return;const data=await loadOverlay(chunk),records=data[item.kind]||[],target=records.find(record=>{const p=record.position||record.entry||record.temple,label=record.name||record.actionId||record.uniqueId||record.houseId||record.serverId;return p&&p.x===item.position.x&&p.y===item.position.y&&p.z===item.position.z&&String(label)===item.label});if(target)showDetails(item.kind,target)};"
+          replace('tools/otbm_atlas/viewer_app.js', old, new)
+
+          p=Path('tools/otbm_atlas/tests/test_viewer.py'); text=p.read_text(encoding='utf-8')
+          text=text.replace("self.assertIn('min=\"-8\" max=\"7\"',text)", "self.assertIn('min=\"0\" max=\"15\"',text)")
+          text=text.replace('self.assertIn("Number.isInteger(requestedFloor)",app)', 'self.assertIn("Number.isInteger(requestedZ)",app);self.assertIn("displayFloor=z=>z",app);self.assertIn("state.overlays=[...state.overlays,item.kind]",app);self.assertIn("if(target)showDetails(item.kind,target)",app)')
+          p.write_text(text,encoding='utf-8')
+          PY
+          git diff --check
+          node --check tools/otbm_atlas/viewer_runtime.js
+          node --check tools/otbm_atlas/viewer_app.js
+          python3 -m unittest discover -s tools/otbm_atlas/tests -p 'test_*.py' -v
+      - name: Commit validated repair only
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/otbm-atlas-ux-finish.yml
+          git add tools/otbm_atlas/viewer.py tools/otbm_atlas/viewer_app.js tools/otbm_atlas/tests/test_viewer.py
+          git commit -m "fix(atlas): finish raw-Z and search UX"
+          git push origin HEAD:agent/oth-20260813-full-otbm-atlas-current-main
