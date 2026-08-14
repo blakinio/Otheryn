@@ -20,10 +20,10 @@ jobs:
         with:
           ref: agent/oth-20260814-atlas-animation-export-fix
           fetch-depth: 1
-      - name: Patch production atlas integration
+      - name: Patch production animation export
         run: |
           set -euo pipefail
-          python3 - <<'PATCH_ATLAS'
+          python3 - <<'PY'
           from pathlib import Path
 
           atlas = Path('tools/otbm_atlas/atlas.py')
@@ -51,160 +51,6 @@ jobs:
           if text.count(old) != 1:
               raise SystemExit('viewer test drifted')
           test.write_text(text.replace(old, new, 1), encoding='utf-8')
-          PATCH_ATLAS
-      - name: Replace animation E2E with production exporter fixture
-        run: |
-          set -euo pipefail
-          cat > .github/workflows/otbm-environment-animation-tests.yml <<'ANIMATION_WORKFLOW'
-          ---
-          name: OTBM Environment Animation E2E
-
-          on:
-            pull_request:
-              paths:
-                - "tools/otbm_atlas/**"
-                - ".github/workflows/otbm-environment-animation-tests.yml"
-
-          permissions:
-            contents: read
-
-          jobs:
-            browser:
-              name: Environment animation browser E2E
-              runs-on: ubuntu-latest
-              timeout-minutes: 15
-              steps:
-                - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
-                  with:
-                    persist-credentials: false
-                - name: Install Chromium harness
-                  run: |
-                    python3 -m pip install --disable-pip-version-check playwright==1.54.0
-                    python3 -m playwright install --with-deps chromium
-                - name: Build fixture through production animation exporter
-                  run: |
-                    python3 - <<'PY'
-                    import json
-                    from pathlib import Path
-                    from tools.otbm_atlas.assets import encode_png
-                    from tools.otbm_atlas.atlas import encode_tile
-                    from tools.otbm_atlas.environment_animation import _candidate, _durations, _hooks, _phase, enrich_environment_animations
-                    from tools.otbm_atlas.render import AssetRenderer
-                    from tools.otbm_atlas.semantic import Item, Position, Tile
-                    from tools.otbm_atlas.viewer import write_viewer
-
-                    root = Path('/tmp/environment-e2e')
-                    (root / '.spool/z7').mkdir(parents=True)
-                    (root / 'tiles/z7').mkdir(parents=True)
-                    (root / 'data').mkdir(parents=True)
-                    asset_dir = Path('vendor/map-analysis/tibia-client/15.25.bd5a04/assets')
-                    renderer = AssetRenderer(asset_dir)
-                    chosen = None
-                    for server_id in sorted(renderer.appearances):
-                        item = Item(server_id)
-                        tile = Tile(Position(64, 64, 7), None, 0, None, (item,), ())
-                        south, east = _hooks([item], renderer)
-                        candidate = _candidate(renderer, item, 64, 64, 7, south, east)
-                        if candidate is None:
-                            continue
-                        _appearance, frame, px, py, pz = candidate
-                        durations = [max(1, (lo + hi) // 2) for lo, hi in _durations(frame)]
-                        if max(durations) > 500:
-                            continue
-                        phases = [_phase(renderer, frame, px, py, pz, phase) for phase in range(frame.animation_phases)]
-                        if len(set(phases)) < 2:
-                            continue
-                        chosen = (tile, server_id)
-                        break
-                    assert chosen is not None, 'no deterministic multi-phase object fixture found in pinned assets'
-                    tile, server_id = chosen
-                    (root / '.spool/z7/0_0.bin').write_bytes(encode_tile(tile))
-                    (root / '.spool/spool.json').write_text(json.dumps({'version': 1, 'chunkSize': 128, 'tiles': 1}), encoding='utf-8')
-                    (root / 'tiles/z7/0_0.png').write_bytes(encode_png(32, 32, bytes((20, 20, 20, 255)) * 32 * 32))
-                    chunk = {'z': 7, 'chunkX': 0, 'chunkY': 0, 'logicalBounds': [0, 127, 0, 127, 7], 'bounds': [64, 64, 64, 64, 7], 'path': 'tiles/z7/0_0.png', 'overviewPath': 'tiles/z7/0_0.png', 'lowOverviewPath': 'tiles/z7/0_0.png', 'imageWidth': 32, 'imageHeight': 32}
-                    (root / 'manifest.json').write_text(json.dumps({'schemaVersion': 3, 'chunkSize': 128, 'chunks': [chunk]}), encoding='utf-8')
-                    (root / 'data/search-index.json').write_text('{"schemaVersion":1,"records":[]}', encoding='utf-8')
-                    statistics = enrich_environment_animations(asset_dir, root)
-                    assert statistics['instances'] == 1, statistics
-                    assert statistics['uniqueAnimations'] == 1, statistics
-                    assert statistics['chunks'] == 1, statistics
-                    index = json.loads((root / 'data/environment-animations/index.json').read_text(encoding='utf-8'))
-                    shard = json.loads((root / 'data/environment-animations/chunks/z7/0_0.json').read_text(encoding='utf-8'))
-                    assert index['statistics'] == statistics
-                    assert len(shard['records']) == 1
-                    record = shard['records'][0]
-                    assert record['serverId'] == server_id
-                    assert len(record['frames']) >= 2
-                    for frame_path in record['frames']:
-                        assert (root / frame_path).is_file()
-                    assert (root / record['underlay']).is_file()
-                    (root / 'fixture.json').write_text(json.dumps({'position': record['position'], 'phaseDurationsMs': record['phaseDurationsMs']}), encoding='utf-8')
-                    write_viewer(root)
-                    PY
-                - name: Prove production-exported phases in Chromium
-                  run: |
-                    python3 -m http.server 8124 --directory /tmp/environment-e2e >/tmp/environment-http.log 2>&1 &
-                    pid=$!
-                    trap 'kill "$pid" || true' EXIT
-                    python3 - <<'PY'
-                    import json
-                    from pathlib import Path
-                    from playwright.sync_api import sync_playwright
-
-                    fixture = json.loads(Path('/tmp/environment-e2e/fixture.json').read_text(encoding='utf-8'))
-                    position = fixture['position']
-                    interval = max(80, min(450, min(fixture['phaseDurationsMs']) + 40))
-                    with sync_playwright() as p:
-                        browser = p.chromium.launch(headless=True)
-                        page = browser.new_page(viewport={'width': 800, 'height': 600})
-                        page.goto(f"http://127.0.0.1:8124/?x={position['x']}&y={position['y']}&zoom=2&render=detailed", wait_until='networkidle')
-                        page.locator('#environmentAnimations').wait_for(state='attached')
-                        page.wait_for_timeout(400)
-                        assert page.locator('#floor').input_value() == '7'
-                        frames = []
-                        for _ in range(12):
-                            frames.append(page.evaluate("""() => document.querySelector('#environmentAnimations').toDataURL()"""))
-                            page.wait_for_timeout(interval)
-                        browser.close()
-                    assert len(set(frames)) > 1, 'production-exported animation did not advance in Chromium'
-                    print({'journey': 'PASS', 'defaultFloor': 7, 'distinctFrames': len(set(frames))})
-                    PY
-          ANIMATION_WORKFLOW
-      - name: Patch sharded full-world evidence and documentation
-        run: |
-          set -euo pipefail
-          python3 - <<'PATCH_FINAL'
-          from pathlib import Path
-
-          workflow = Path('.github/workflows/otbm-atlas-tests.yml')
-          text = workflow.read_text(encoding='utf-8')
-          replacements = [
-              (
-                  "          verification = json.loads((root / 'verification.json').read_text(encoding='utf-8'))\n          expected_floors = sorted(int(value) for value in os.environ['ATLAS_FLOORS'].split(','))\n",
-                  "          verification = json.loads((root / 'verification.json').read_text(encoding='utf-8'))\n          animation_index = json.loads((root / 'data/environment-animations/index.json').read_text(encoding='utf-8'))\n          expected_floors = sorted(int(value) for value in os.environ['ATLAS_FLOORS'].split(','))\n",
-              ),
-              (
-                  "          assert verification['missingSprites'] == {}\n          evidence = {\n              'shard': int(os.environ['ATLAS_SHARD']),\n",
-                  "          assert verification['missingSprites'] == {}\n          assert animation_index['schemaVersion'] == 1\n          assert statistics['environmentAnimations'] == animation_index['statistics']\n          evidence = {\n              'shard': int(os.environ['ATLAS_SHARD']),\n",
-              ),
-              (
-                  "              'sources': manifest['sources'],\n              'verification': verification,\n          }\n",
-                  "              'sources': manifest['sources'],\n              'verification': verification,\n              'environmentAnimations': animation_index['statistics'],\n          }\n",
-              ),
-              (
-                  "          for report in reports:\n              verification = report['verification']\n              assert verification['ok'] is True\n              assert verification['missingSprites'] == {}\n          evidence = {\n",
-                  "          for report in reports:\n              verification = report['verification']\n              assert verification['ok'] is True\n              assert verification['missingSprites'] == {}\n              assert set(report['environmentAnimations']) == {'instances', 'uniqueAnimations', 'chunks', 'staticFallbacks'}\n          animation_instances = sum(int(report['environmentAnimations']['instances']) for report in reports)\n          assert animation_instances > 0\n          evidence = {\n",
-              ),
-              (
-                  "              'sources': sources,\n              'verification': 'PASS',\n          }\n",
-                  "              'sources': sources,\n              'verification': 'PASS',\n              'environmentAnimationInstances': animation_instances,\n          }\n",
-              ),
-          ]
-          for old, new in replacements:
-              if text.count(old) != 1:
-                  raise SystemExit(f'full-world workflow marker drifted: {old[:60]!r}')
-              text = text.replace(old, new, 1)
-          workflow.write_text(text, encoding='utf-8')
 
           readme = Path('tools/otbm_atlas/README.md')
           text = readme.read_text(encoding='utf-8')
@@ -217,20 +63,19 @@ jobs:
           if old in text:
               text = text.replace(old, "Viewer floor selection and shared URLs use raw OTBM Z values 0 through 15, matching manifests and factual coordinates without a display-only remapping.\n", 1)
           readme.write_text(text, encoding='utf-8')
-          PATCH_FINAL
-      - name: Validate focused repair
+          PY
+      - name: Validate focused product repair
         run: |
           set -euo pipefail
           git diff --check
           node --check tools/otbm_atlas/viewer_app.js
           node --check tools/otbm_atlas/viewer_runtime.js
           python3 -m unittest discover -s tools/otbm_atlas/tests -p 'test_*.py' -v
-      - name: Commit repair and remove one-shot workflow
+      - name: Commit product repair only
         run: |
           set -euo pipefail
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git rm .github/workflows/otbm-atlas-animation-export-repair.yml
-          git add tools/otbm_atlas/atlas.py tools/otbm_atlas/viewer.py tools/otbm_atlas/tests/test_viewer.py tools/otbm_atlas/README.md .github/workflows/otbm-atlas-tests.yml .github/workflows/otbm-environment-animation-tests.yml
+          git add tools/otbm_atlas/atlas.py tools/otbm_atlas/viewer.py tools/otbm_atlas/tests/test_viewer.py tools/otbm_atlas/README.md
           git commit -m "fix(atlas): export environment animations in production build"
           git push origin HEAD:agent/oth-20260814-atlas-animation-export-fix
