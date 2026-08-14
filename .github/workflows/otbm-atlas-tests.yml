@@ -86,6 +86,7 @@ jobs:
         run: |
           root=/tmp/otheryn-atlas-e2e
           mkdir -p "$root/tiles/z7" "$root/data/chunks/z7"
+          : > "$root/favicon.ico"
           python3 -m tools.otbm_atlas.render \
             vendor/map-analysis/crystalserver/data-global/world/world.otbm \
             vendor/map-analysis/tibia-client/15.25.bd5a04/assets \
