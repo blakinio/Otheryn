@@ -36,11 +36,12 @@ Vendor the exact pinned CrystalServer source trees needed to prove scripted map 
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-08-14T16:52:00+02:00
+updated_at: 2026-08-14T17:09:00+02:00
 branch: agent/oth-20260814-atlas-supplemental-sources
 status: validating
 reconciled_with_main: 1021d08978f078ff845e6f3f82fbbbc482cbf543
 reconcile_commit: 0b5a4f5888d303ba2159202a6af7f5b19c5277f1
+validated_source_manifest_blob: 89f4cf958c6f4d27c8664997d65ad5b2adb7c1e4
 proven:
   - one-shot import workflow 31780269499 completed SUCCESS
   - data-global/scripts has exact upstream tree 0e3b0102c7d841345dc5b9d4a3b81631930dc362
@@ -51,9 +52,9 @@ proven:
   - scope counts are scripts=1897, raids=152, npc_system=5
   - one-shot importer workflow was removed after successful import
   - PR 381 is merged and this branch is reconciled with its merge commit
-  - supplemental-source documentation explicitly states that viewer consumers are follow-up implementation rather than implied by vendoring
+  - full per-file manifest was reverified after reconcile and remains exact blob 89f4cf958c6f4d27c8664997d65ad5b2adb7c1e4
 unknown:
-  - exact-head Required conclusion for the final validation head
+  - exact-head Required conclusion for this checkpoint commit
 blockers: []
-next_action: validate the final branch head with Required, audit PR diff/review threads, then merge PR 383 if green
+next_action: require exact-head Required, audit PR diff/review threads, then merge PR 383 if green
 ```
