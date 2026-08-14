@@ -1,13 +1,14 @@
 ---
 task_id: OTH-20260814-atlas-factual-layers
-status: in_progress
+status: implementing
 owner: openai
 branch: agent/oth-20260814-atlas-factual-layers
 base_branch: main
 created: 2026-08-14
-updated: 2026-08-14T19:25:00+02:00
+updated: 2026-08-14T21:34:00+02:00
 project_lane: otheryn-content
 execution_budget_minutes: 120
+execution_budget_reason: full-stack atlas consumer integration requires pinned source compilation, real Chromium E2E, audit and exact-head CI
 modules_touched:
   - otbm-atlas
 owned_paths:
@@ -54,19 +55,57 @@ Consume the merged `tools/otbm_atlas_facts` producer inside the canonical chunke
 - preserve `UNKNOWN`, `UNRESOLVED` and `AMBIGUOUS` evidence in reports/details without rendering it as a falsely certain map link;
 - keep all new spatial data chunked and bounded; do not load full-world factual records into the browser at startup;
 - add viewer controls, search/details and exact raid-area visualization;
-- real Chromium E2E must prove scripted teleport details, raid area rendering, NPC service details and URL/navigation behavior;
-- no changes to `tools/otbm_atlas/viewer_runtime.js`, `environment_animation.py`, `test_environment_animation.py` or `test_viewer_runtime.py` while PR #387 owns runtime-animation paths.
+- real Chromium E2E must prove scripted teleport details, raid area rendering, NPC service details and URL/navigation behavior.
 
-## Checkpoint
+## Context checkpoint
 
 ```yaml
 checkpoint_version: 1
-base_main: 2cf8035401a05873c307af7388872141a76309ef
+policy_version: 2
+updated_at: 2026-08-14T21:34:00+02:00
+status: implementing
+phase: consumer-integration
+branch: agent/oth-20260814-atlas-factual-layers
+base_main: da553b1f2f157526e69e26d051ca3297db7abcf6
 producer_pr: 385
 producer_status: merged
 producer_merge: 2cf8035401a05873c307af7388872141a76309ef
-conflicting_active_pr: 387
-conflict_strategy: use disjoint atlas.py/factual_layers.py/viewer.py/viewer_app.js paths; reconcile current main before final validation
+runtime_animation_prs: "386 superseded; 387 merged"
+context_pressure: medium
+context_growth: stable
+decomposition_decision: phased
+proven:
+  - factual producer is merged and exact pinned CrystalServer sources are on main
+  - consumer branch is reconciled with current main after runtime animation merge
+  - conservative transformation promotes only proven scripted transitions and explicit rewardBoss=true bosses
+  - raid rectangles are now sharded into every intersecting viewport chunk
+  - viewer has separate OTBM/scripted teleport, raid, NPC-service and verified-boss controls
+  - dedicated real Chromium factual-layer E2E workflow is committed on the task branch
 blockers: []
-next_action: inspect current atlas build/spatial/viewer contracts, implement factual-layer transformation and chunked export, then add real browser acceptance
+next_action: finish atlas.py wiring from the queued branch-only patch run, remove the temporary patch workflow, open the integration PR and execute focused/E2E/audit/exact-head closeout
+```
+
+## Recovery checkpoint
+
+```yaml
+recovery:
+  policy_version: 1
+  generation: 1
+  session_id: chat-github-20260814-factual-layers
+  session_started_at: 2026-08-14T21:24:00+02:00
+  checkpointed_at: 2026-08-14T21:34:00+02:00
+  last_progress_at: 2026-08-14T21:34:00+02:00
+  phase: consumer-integration
+  exact_head: bf5c73935eccf49f86b009324d351a29396bc3e8
+  pull_request: none
+  active_operation: branch-only atlas.py patch workflow
+  external_run_ids: [31833498321]
+  operation_started_at: 2026-08-14T21:29:45+02:00
+  wait_deadline_at: 2026-08-14T21:44:45+02:00
+  check_generation: atlas-build-wiring-1
+  checks_used: 1
+  status: active
+  safe_to_resume: true
+  resume_condition: patch run reaches a terminal state and no conflicting writer has moved the task branch unexpectedly
+  next_action: inspect patch run 31833498321 once, verify atlas.py diff, then delete the temporary patch workflow before opening the PR
 ```
