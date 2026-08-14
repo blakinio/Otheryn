@@ -147,11 +147,13 @@ jobs:
           npc = fixture['npc']
           position = fixture['position']
           errors = []
+          http_errors = []
           with sync_playwright() as playwright:
               browser = playwright.chromium.launch(headless=True)
               page = browser.new_page(viewport={'width': 1280, 'height': 720})
               page.on('pageerror', lambda exc: errors.append(f'pageerror:{exc}'))
               page.on('console', lambda msg: errors.append(f'console:{msg.text}') if msg.type == 'error' else None)
+              page.on('response', lambda response: http_errors.append(f'{response.status}:{response.url}') if response.status >= 400 else None)
               url = f"http://127.0.0.1:8123/?x={position['x']}&y={position['y']}&z=7&zoom=1&render=detailed"
               page.goto(url, wait_until='networkidle')
               page.wait_for_function("document.querySelector('#status').textContent.includes('Drag to pan')")
@@ -195,7 +197,8 @@ jobs:
               assert 'Visible chunks' in page.locator('#diagnostics').inner_text()
               page.screenshot(path='/tmp/otheryn-atlas-e2e.png', full_page=True)
               browser.close()
-          assert not errors, errors
+          assert not errors, {'console': errors, 'http': http_errors}
+          assert not http_errors, http_errors
           assert Path('/tmp/otheryn-atlas-e2e.png').stat().st_size > 0
           print(json.dumps({'browser': 'chromium', 'canonicalNpc': npc, 'journey': 'PASS'}, sort_keys=True))
           PY
