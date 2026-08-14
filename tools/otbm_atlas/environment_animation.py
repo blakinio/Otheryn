@@ -3,8 +3,8 @@
 The detailed chunk PNG remains the canonical static fallback. Eligible cyclic
 appearances are reconstructed at runtime from the same pinned Tibia object
 appearance phases without generating GIFs. Per-instance underlay/overlay patches
-erase the baked default phase and preserve canonical draw ordering while the
-phase images themselves stay deduplicated across identical appearances.
+erase the baked default phase and preserve canonical draw ordering while phase
+images stay deduplicated across identical appearances.
 """
 from __future__ import annotations
 
@@ -73,9 +73,14 @@ def _candidate_geometry(renderer, item, x: int, y: int, z: int, hook_south: bool
 
 
 def _candidate(renderer, item, x: int, y: int, z: int, hook_south: bool, hook_east: bool):
-	"""Compatibility probe used by the repository E2E harness."""
+	"""Compatibility probe preserving the original 32x32/non-displaced contract."""
 	candidate = _candidate_geometry(renderer, item, x, y, z, hook_south, hook_east)
-	return None if candidate is None else candidate[:5]
+	if candidate is None:
+		return None
+	appearance, _frame, _px, _py, _pz, width, height, _ox, _oy = candidate
+	if (width, height) != (32, 32) or appearance.shift not in (None, (0, 0)) or appearance.height not in (None, 0):
+		return None
+	return candidate[:5]
 
 
 def _dangerous(renderer, item) -> bool:
@@ -111,11 +116,12 @@ def _phase(renderer, frame, pattern_x: int, pattern_y: int, pattern_z: int, phas
 	if not sheet:
 		raise ValueError("missing eligible animation sprite sheet")
 	width, height = sheet.sprite_size
-	return encode_png(width, height, _phase_pixels(renderer, frame, pattern_x, pattern_y, pattern_z, phase, width, height))
+	pixels = _phase_pixels(renderer, frame, pattern_x, pattern_y, pattern_z, phase, width, height)
+	return encode_png(width, height, pixels)
 
 
 def _partition_pixels(tiles, renderer, candidate_tile, candidate_item, width: int, height: int, offset_x: int, offset_y: int, *, after: bool) -> bytes:
-	"""Render all canonical operations before or after one candidate into its patch."""
+	"""Render canonical operations before or after one candidate into its patch."""
 	out = bytearray(width * height * 4)
 	seen_candidate = False
 	candidate_x = candidate_tile.position.x
@@ -149,7 +155,7 @@ def _composite(width: int, height: int, *layers: bytes) -> bytes:
 
 
 def _runtime_replacement_safe(width: int, height: int, underlay: bytes, phases: list[bytes], overlay: bytes, default_phase: int) -> bool:
-	"""Prove that drawing the runtime patch over the baked static patch cannot leak it."""
+	"""Prove that the runtime patch cannot leak the baked default phase."""
 	if not phases:
 		return False
 	default_phase %= len(phases)
@@ -216,6 +222,7 @@ def enrich_environment_animations(asset_dir: Path, output: Path) -> dict[str, in
 			continue
 		tiles = list(decode_spool_tiles(spool_path))
 		by_position = {(tile.position.x, tile.position.y): tile for tile in tiles}
+		order = {position: index for index, position in enumerate(by_position)}
 		danger = {position for position, tile in by_position.items() if any(_dangerous(renderer, item) for item in _items(tile))}
 		records = []
 		x1, x2, y1, y2, _ = map(int, chunk["logicalBounds"])
@@ -225,40 +232,42 @@ def enrich_environment_animations(asset_dir: Path, output: Path) -> dict[str, in
 			if not items:
 				continue
 			hook_south, hook_east = _hooks(items, renderer)
-			animated = []
-			for item in items:
-				appearance = renderer.appearances.get(item.server_id)
-				if appearance and appearance.frames and appearance.frames[0].animation_phases > 1:
-					animated.append(item)
+			animated = [
+				item for item in items
+				if (appearance := renderer.appearances.get(item.server_id))
+				and appearance.frames and appearance.frames[0].animation_phases > 1
+			]
 			if not animated:
 				continue
-			# One replacement patch per tile. The highest animated member allows
-			# static items above it to be reconstructed in the overlay.
+			# One replacement patch per tile. The highest animated member lets static
+			# members above it be reconstructed in the overlay.
 			item = animated[-1]
 			candidate = _candidate_geometry(renderer, item, tile.position.x, tile.position.y, tile.position.z, hook_south, hook_east)
 			if not candidate:
 				fallbacks += 1
 				continue
 			x, y = tile.position.x, tile.position.y
+			nearby_positions = [
+				(nx, ny)
+				for nx in range(x - radius, x + radius + 1)
+				for ny in range(y - radius, y + radius + 1)
+				if (nx, ny) in by_position
+			]
 			if (
 				x - x1 < radius or x2 - x < radius or y - y1 < radius or y2 - y < radius
-				or any(
-					(nx, ny) in danger
-					for nx in range(x - radius, x + radius + 1)
-					for ny in range(y - radius, y + radius + 1)
-					if (nx, ny) != (x, y)
-				)
+				or any(position in danger for position in nearby_positions if position != (x, y))
 			):
 				fallbacks += 1
 				continue
+			nearby_tiles = [by_position[position] for position in sorted(nearby_positions, key=order.__getitem__)]
 
 			appearance, frame, pattern_x, pattern_y, pattern_z, width, height, offset_x, offset_y = candidate
 			phase_pixels = [
 				_phase_pixels(renderer, frame, pattern_x, pattern_y, pattern_z, phase, width, height)
 				for phase in range(frame.animation_phases)
 			]
-			underlay_pixels = _partition_pixels(tiles, renderer, tile, item, width, height, offset_x, offset_y, after=False)
-			overlay_pixels = _partition_pixels(tiles, renderer, tile, item, width, height, offset_x, offset_y, after=True)
+			underlay_pixels = _partition_pixels(nearby_tiles, renderer, tile, item, width, height, offset_x, offset_y, after=False)
+			overlay_pixels = _partition_pixels(nearby_tiles, renderer, tile, item, width, height, offset_x, offset_y, after=True)
 			if not _runtime_replacement_safe(width, height, underlay_pixels, phase_pixels, overlay_pixels, frame.default_start_phase):
 				fallbacks += 1
 				continue
@@ -284,8 +293,8 @@ def enrich_environment_animations(asset_dir: Path, output: Path) -> dict[str, in
 			ranges = _durations(frame)
 			loop = -1 if frame.loop_type > 1 else frame.loop_type
 			record = {
-				"position": {"x": x, "y": y, "z": tile.position.z}, "serverId": item.server_id,
-				"animationKey": key, "frames": frames, "underlay": underlay,
+				"position": {"x": x, "y": y, "z": tile.position.z},
+				"serverId": item.server_id, "animationKey": key, "frames": frames, "underlay": underlay,
 				"frameSizePx": [width, height], "drawOffsetPx": [offset_x, offset_y],
 				"phaseDurationsMs": [max(1, (low + high) // 2) for low, high in ranges],
 				"durationRangesMs": [[low, high] for low, high in ranges],
@@ -308,7 +317,10 @@ def enrich_environment_animations(asset_dir: Path, output: Path) -> dict[str, in
 
 	stats = {"instances": instances, "uniqueAnimations": len(made), "chunks": chunks, "staticFallbacks": fallbacks}
 	index = {
-		"schemaVersion": 1, "animationZoom": ANIMATION_ZOOM, "overlapSafetyRadiusTiles": radius, "statistics": stats,
+		"schemaVersion": 1,
+		"animationZoom": ANIMATION_ZOOM,
+		"overlapSafetyRadiusTiles": radius,
+		"statistics": stats,
 		"policy": {
 			"cyclicAppearance": "browser animated from pinned object appearance phases; no GIF generation",
 			"statefulAppearance": "not inferred; server-driven variants remain canonical static state",
