@@ -44,6 +44,12 @@ class CreatureSpriteTests(unittest.TestCase):
 		self.assertEqual(resolved.look_type, 35)
 		self.assertEqual(index.resolve("Demon Boss"), (None, "missing-definition"))
 
+	def test_alias_to_missing_definition_is_ignored_without_crashing(self) -> None:
+		index = build_definition_index([outfit(name="Alias")], aliases=(("Alias", "Missing"),))
+		resolved, status = index.resolve("Alias")
+		self.assertEqual(status, "resolved")
+		self.assertEqual(resolved.name, "Alias")
+
 	def test_missing_definition_and_missing_look_type_remain_unresolved(self) -> None:
 		index = build_definition_index([], invalid=(("Broken", "missing-look-type"),))
 		self.assertEqual(index.resolve("Broken"), (None, "missing-look-type"))
@@ -62,9 +68,9 @@ class CreatureSpriteTests(unittest.TestCase):
 		renderer.sprite = lambda _sprite_id: None
 		self.assertEqual(renderer.render_with_status(outfit()), (None, "missing-sprite"))
 
-	def test_spawn_enrichment_deduplicates_png_per_outfit(self) -> None:
+	def test_hundreds_of_identical_spawns_share_one_png(self) -> None:
 		definitions = build_definition_index([outfit()])
-		records = [{"name": "Demon"}, {"name": "demon"}, {"name": "Missing"}]
+		records = [{"name": "Demon"} for _ in range(250)] + [{"name": "Missing"}]
 		fake = FakeRenderer()
 		with tempfile.TemporaryDirectory() as directory:
 			root = Path(directory)
@@ -72,9 +78,9 @@ class CreatureSpriteTests(unittest.TestCase):
 			files = list((root / "data/monster-sprites").glob("*.png"))
 		self.assertEqual(fake.calls, 1)
 		self.assertEqual(len(files), 1)
-		self.assertEqual(stats, {"uniqueSprites": 1, "resolvedSpawns": 2, "unresolvedSpawns": 1, "ambiguousDefinitions": 0})
-		self.assertEqual(records[0]["sprite"], records[1]["sprite"])
-		self.assertEqual(records[2]["spriteStatus"], "missing-definition")
+		self.assertEqual(stats, {"uniqueSprites": 1, "resolvedSpawns": 250, "unresolvedSpawns": 1, "ambiguousDefinitions": 0})
+		self.assertEqual({record["sprite"] for record in records[:250]}, {"data/monster-sprites/35-0-0-0-0-0.png"})
+		self.assertEqual(records[-1]["spriteStatus"], "missing-definition")
 
 
 if __name__ == "__main__":
