@@ -64,6 +64,8 @@ Animations activate only at close zoom (`ANIMATION_ZOOM = 1.5`). Phase images an
 
 The exporter operates per 128x128 OTBM spool chunk and does not load the complete world into browser memory.
 
+Dense overlap detection must remain spatially bounded. PR #387 replaced the initial all-pairs candidate comparison with 32-pixel spatial buckets; the regression test covers a dense 128x128 grid (16,384 candidate rectangles) and requires zero `_intersects` calls for aligned non-overlapping tiles while still detecting genuine overlap.
+
 ## Validation
 
 Focused unit/runtime checks:
@@ -78,6 +80,26 @@ The dedicated workflow `.github/workflows/otbm-environment-animation-tests.yml` 
 - schema-v2 geometry/stack metadata is present;
 - a real extended (`64x*`, `*x64`, shifted or height-displaced) cyclic object from the pinned Tibia assets can be exported through the production compositor;
 - a real Chromium viewer advances the exported extended phases at runtime.
+
+PR #387 (`feat(atlas): generalize runtime item animations`) is merged on `main` as `da553b1f2f157526e69e26d051ca3297db7abcf6`. Its exact pre-merge head passed Required, CI, autofix, OTBM Atlas Tests, canonical Thais scan/render, real-browser Thais E2E, canonical animation export, and the extended-item Chromium E2E. The pinned-asset extended E2E selected `serverId 114`, `spriteSize [32,64]`, `drawOffsetPixels [-8,-40]` and observed six distinct runtime frames.
+
+A post-merge repository-wide yamllint report is not evidence of an animation regression: its reported errors are in pre-existing workflow/template files outside PR #387. In particular, `.github/workflows/otbm-atlas-tests.yml` and `.github/workflows/prs-003e-b-recovery-evidence.yml` retained identical blob SHAs across the merge. Treat cleanup of that repository-wide lint debt as a separate task.
+
+## Visual showcase handoff
+
+The runtime implementation is complete, but a human-viewable showcase artifact has **not** yet been produced. The final animation E2E run did not upload screenshots, frame sequences, video, GIF, or another GitHub Actions artifact. Do not claim that such a showcase already exists.
+
+The next visual-proof task should extend the existing production/E2E path rather than invent a parallel renderer:
+
+1. build from current `main` using the pinned canonical OTBM and Tibia assets;
+2. automatically select factual exported animation records, preferably covering at least one fire/light-like cyclic object, one water/fountain-like cyclic object when available, and one extended/shifted object;
+3. record each selected object's `serverId`, coordinates, `animationKey`, `spriteSize`, `drawOffsetPixels`, and phase timings;
+4. open the generated atlas in real Chromium at `zoom >= ANIMATION_ZOOM`;
+5. capture a human-viewable screenshot plus a bounded sequence/video showing actual phase advancement in map context;
+6. upload those outputs as a GitHub Actions artifact so the owner can inspect the real renderer result;
+7. never substitute an AI-generated mock-up or hand-built GIF as evidence of atlas rendering.
+
+The showcase is evidence/UX tooling only. It must not change canonical map geometry, appearance interpretation, timing rules, static fallbacks, or the no-prebuilt-GIF runtime architecture.
 
 ## Extension rule
 
