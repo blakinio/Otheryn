@@ -4,7 +4,7 @@ status: completed
 owner: none
 created: 2026-08-14
 completed: 2026-08-14T19:16:00+02:00
-updated: 2026-08-14T19:16:00+02:00
+updated: 2026-08-14T19:30:00+02:00
 project_lane: otheryn-content
 related_pr: "381"
 ownership_released: true
@@ -38,11 +38,24 @@ The sixteen evidence artifacts total exactly `3494` chunks. They share one ident
 - `verification.ok == true` for every floor;
 - `missingSprites == {}` for every floor.
 
-The repository aggregate job `94839712570` independently downloaded all sixteen floor artifacts and completed `Assert complete canonical world evidence` successfully. A separate artifact replay also reproduced the same 16-floor / 3494-chunk result and source identity.
+The repository aggregate job `94839712570` downloaded all sixteen floor artifacts and completed `Assert complete canonical world evidence` successfully. A separate artifact replay independently reproduced the same 16-floor / 3494-chunk result and source identity.
+
+## Fresh post-implementation audit
+
+A fresh repository-validator pass was performed after the certification result instead of treating the release workflow's own aggregate job as the closeout auditor. The validator re-read the trusted acceptance record, inspected the live PR and exact diff rather than relying on the implementation summary, rechecked the canonical workflow/run identity and artifact evidence, and inspected PR/branch-policy state.
+
+Audit findings and dispositions:
+
+- `AUD-001` — the first archive draft incorrectly named the workflow aggregate job as the independent closeout auditor. Remediated: the aggregate remains primary certification evidence, while the fresh repository-validator pass is the closeout audit.
+- `AUD-002` — the first archive draft did not identify the lifecycle PR and live closeout gates. Remediated: lifecycle PR `#389`, source implementation PR `#381`, review-thread state, required gate, and the self-referential terminal-state rule are recorded below.
+
+The final lifecycle diff is limited to removing the active task record and adding this archive record. The temporary dispatcher is absent. Source implementation PR `#381` is merged. At audit time PR `#389` had no unresolved review threads and repository rules required zero approvals, resolution of review threads, squash-only merging, and the `Required` status check.
+
+Because changing this document after an exact-head CI result would invalidate that result, the final `Required` run and terminal merge state are intentionally verified from immutable GitHub PR/check state after the final document head is produced; they are not pre-asserted as completed inside the commit they validate.
 
 ## Execution hygiene
 
-The connected GitHub toolset did not expose a direct workflow-dispatch mutation. A minimal branch-only dispatcher was therefore used to invoke the already-trusted release workflow on the exact target SHA. Dispatcher run `31813766316` completed successfully, and the temporary dispatcher workflow was removed immediately afterwards in commit `268c010820249b391659af891f36518efb43dc7b`; it is not retained in the final task diff.
+The connected GitHub toolset did not expose a direct workflow-dispatch mutation. A minimal branch-only dispatcher was therefore used to invoke the already-trusted release workflow on the exact target SHA. Dispatcher run `31813766316` completed successfully, and the temporary dispatcher workflow was removed immediately afterwards in commit `268c010820249b391659af891f36518efb43dc7b`; it is not retained in the lifecycle PR diff.
 
 The release workflow still reparses the full OTBM independently in every floor job. Optimizing that duplicate ingest remains a separate measured performance opportunity and is not part of this certification task.
 
@@ -67,15 +80,23 @@ closeout:
   source_fingerprints: 1
   audit:
     result: PASS
-    independent_validator: GitHub Actions aggregate job 94839712570
+    independent_validator: fresh repository-validator pass for PR 389
+    findings_remediated: [AUD-001, AUD-002]
     material_findings_open: 0
   e2e:
     result: NOT_APPLICABLE
     reason: This task is a non-UI release certification; its real system boundary is the canonical OTBM/assets build, per-floor verifier, evidence publication and aggregate assertion, all of which passed.
-  source_implementation_pr: "#381 merged"
+  pull_requests:
+    source_implementation_pr: "#381 merged"
+    lifecycle_archive_pr: "#389"
+    unresolved_review_threads_at_audit: 0
+    terminal_state_evidence: verify from live GitHub state after the exact final head passes Required and PR 389 merges
+  final_ci:
+    required_gate: Required
+    evidence_rule: verify on the exact final lifecycle PR head; do not encode a prior-head PASS by making another commit
   task_status: completed
   task_archived: true
   ownership_released: true
 ```
 
-The lifecycle-only archive PR carrying this record must itself pass the repository's exact-head documentation/governance checks and reach a terminal merged state before this archived record becomes authoritative on `main`.
+This archive record becomes authoritative on `main` when lifecycle PR `#389` passes `Required` on its exact final head and reaches the repository-protected terminal merged state. GitHub's immutable PR/check state is the terminal evidence for that self-referential lifecycle step.
