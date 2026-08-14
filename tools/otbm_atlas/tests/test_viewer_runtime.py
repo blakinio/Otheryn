@@ -18,3 +18,15 @@ console.log(JSON.stringify({{parsed:['auto','detailed','performance'].map(v=>r.u
 		self.assertEqual(data['cache'],[2,8,None,1,3]);self.assertEqual((data['persist'],data['stored']),('detailed','detailed'));self.assertIn('render=detailed',data['url'])
 		self.assertEqual(data['restored'],state);self.assertEqual(data['visible'],1)
 		self.assertEqual(data['coordinates'],[{'x':32369,'y':32241,'z':7},None,None])
+
+	def test_environment_geometry_uses_native_size_and_draw_offset(self):
+		module=Path(__file__).parents[1]/"viewer_runtime.js"
+		script=f'''import * as r from {json.dumps(module.as_uri())};
+const state={{x:100,y:200,z:7,zoom:2}};
+const large={{position:{{x:100,y:200,z:7}},frameSizePx:[64,32],drawOffsetPx:[-37,-6]}};
+const legacy={{position:{{x:100,y:200,z:7}}}};
+console.log(JSON.stringify({{large:r.environmentDrawRect(large,state,640,480),legacy:r.environmentDrawRect(legacy,state,640,480),phases:[r.environmentPhase({{phaseDurationsMs:[100,200],synchronized:true}},0),r.environmentPhase({{phaseDurationsMs:[100,200],synchronized:true}},99),r.environmentPhase({{phaseDurationsMs:[100,200],synchronized:true}},100)]}}));'''
+		data=json.loads(subprocess.run(['node','--input-type=module','-e',script],check=True,text=True,capture_output=True).stdout)
+		self.assertEqual(data['large'],{'x':246,'y':228,'width':128,'height':64})
+		self.assertEqual(data['legacy'],{'x':320,'y':240,'width':64,'height':64})
+		self.assertEqual(data['phases'],[0,0,1])
