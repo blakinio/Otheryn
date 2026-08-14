@@ -35,7 +35,7 @@ def _monster_fact(name: str, amount: int | None, monster_report: dict[str, objec
 
 
 def _raid_xml(path: Path, event: str, raids_root: Path, monster_report: dict[str, object] | None):
-    relative = path.relative_to(raids_root.parent).as_posix()
+    relative = path.relative_to(raids_root.parent.resolve()).as_posix()
     points: list[dict[str, object]] = []
     areas: list[dict[str, object]] = []
     announcements: list[dict[str, object]] = []
