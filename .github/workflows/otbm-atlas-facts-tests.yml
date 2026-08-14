@@ -10,6 +10,8 @@ on:
       - "vendor/map-analysis/crystalserver/data-global/monster/**"
       - "vendor/map-analysis/crystalserver/data-global/npc/**"
       - "vendor/map-analysis/crystalserver/data/npclib/npc_system/**"
+      - "docs/agents/tasks/active/OTH-20260814-atlas-factual-source-index.md"
+      - "docs/agents/tasks/archive/OTH-20260814-atlas-factual-source-index.md"
       - ".github/workflows/otbm-atlas-facts-tests.yml"
 
 permissions:
