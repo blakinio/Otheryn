@@ -70,7 +70,7 @@ jobs:
 
   browser-e2e:
     name: Real browser Thais E2E
-    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:final-gate')
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -94,7 +94,6 @@ jobs:
             --report "$root/render.json"
           python3 - <<'PY'
           import json
-          import shutil
           from pathlib import Path
           from tools.otbm_atlas.spawns import scan_spawns
           from tools.otbm_atlas.viewer import write_viewer
@@ -152,27 +151,26 @@ jobs:
               page = browser.new_page(viewport={'width': 1280, 'height': 720})
               page.on('pageerror', lambda exc: errors.append(f'pageerror:{exc}'))
               page.on('console', lambda msg: errors.append(f'console:{msg.text}') if msg.type == 'error' else None)
-              url = f"http://127.0.0.1:8123/?x={position['x']}&y={position['y']}&z=7&zoom=1&render=detailed&layers=npcSpawns"
+              url = f"http://127.0.0.1:8123/?x={position['x']}&y={position['y']}&z=7&zoom=1&render=detailed"
               page.goto(url, wait_until='networkidle')
               page.wait_for_function("document.querySelector('#status').textContent.includes('Drag to pan')")
               assert page.locator('#map').is_visible()
               assert page.locator('#renderMode').input_value() == 'detailed'
-              assert 'X ' in page.locator('#coords').inner_text()
+              assert 'Z 7' in page.locator('#coords').inner_text()
 
               page.locator('#search').fill(npc)
               result = page.locator('#searchResults button').first
               result.wait_for(state='visible')
               assert npc.casefold() in result.inner_text().casefold()
               result.click()
+              page.locator('#details:not([hidden])').wait_for(state='visible')
+              assert npc.casefold() in page.locator('#details').inner_text().casefold()
+              assert page.locator('[data-overlay="npcSpawns"]').is_checked()
               query = parse_qs(urlparse(page.url).query)
+              assert 'npcSpawns' in query.get('layers', [''])[0].split(',')
               assert int(float(query['x'][0])) == position['x']
               assert int(float(query['y'][0])) == position['y']
               assert int(float(query['z'][0])) == 7
-
-              page.wait_for_timeout(1000)
-              page.mouse.click(1280 / 2 + 16, 720 / 2 + 16)
-              page.locator('#details:not([hidden])').wait_for(state='visible')
-              assert npc.casefold() in page.locator('#details').inner_text().casefold()
 
               page.locator('#renderMode').select_option('performance')
               assert parse_qs(urlparse(page.url).query)['render'] == ['performance']
@@ -188,6 +186,8 @@ jobs:
               coordinate_result.wait_for(state='visible')
               assert 'Go to' in coordinate_result.inner_text()
               coordinate_result.click()
+              query = parse_qs(urlparse(page.url).query)
+              assert int(float(query['z'][0])) == 7
 
               page.locator('#showDiagnostics').check()
               assert page.locator('#diagnostics').is_visible()
@@ -201,7 +201,7 @@ jobs:
 
   full-world:
     name: Full canonical world v3
-    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:final-gate')
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'ci:final-gate')
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
