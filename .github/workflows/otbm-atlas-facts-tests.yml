@@ -1,0 +1,50 @@
+---
+name: OTBM Atlas Facts Tests
+
+on:
+  pull_request:
+    paths:
+      - "tools/otbm_atlas_facts/**"
+      - "vendor/map-analysis/crystalserver/data-global/scripts/**"
+      - "vendor/map-analysis/crystalserver/data-global/raids/**"
+      - "vendor/map-analysis/crystalserver/data-global/monster/**"
+      - "vendor/map-analysis/crystalserver/data-global/npc/**"
+      - "vendor/map-analysis/crystalserver/data/npclib/npc_system/**"
+      - ".github/workflows/otbm-atlas-facts-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  pinned-sources:
+    name: Pinned CrystalServer factual source index
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          persist-credentials: false
+      - name: Validate parser syntax
+        run: python3 -m compileall -q tools/otbm_atlas_facts
+      - name: Validate exact pinned examples
+        run: python3 -m unittest discover -s tools/otbm_atlas_facts/tests -p 'test_*.py' -v
+      - name: Compile full factual source index
+        run: |
+          python3 -m tools.otbm_atlas_facts.build \
+            vendor/map-analysis/crystalserver \
+            /tmp/atlas-facts
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path('/tmp/atlas-facts')
+          summary=json.loads((root/'summary.json').read_text(encoding='utf-8'))
+          assert summary['schemaVersion']==1
+          assert summary['semantics']['travel']['status']=='RESOLVED'
+          assert summary['statistics']['monsters']['verifiedBosses']>0
+          assert summary['statistics']['npcServices']['shops']>0
+          assert summary['statistics']['npcServices']['banks']>0
+          assert summary['statistics']['npcServices']['travelRoutes']>0
+          assert summary['statistics']['raidsEvents']['raids']>0
+          assert summary['statistics']['raidsEvents']['areaSpawns']>0
+          print(json.dumps(summary['statistics'], sort_keys=True))
+          PY
