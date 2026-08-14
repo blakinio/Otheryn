@@ -1,0 +1,65 @@
+---
+name: Patch atlas factual integration
+
+on:
+  push:
+    branches:
+      - agent/oth-20260814-atlas-factual-layers
+    paths:
+      - .github/workflows/patch-atlas-factual-integration.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          ref: agent/oth-20260814-atlas-factual-layers
+          fetch-depth: 1
+      - name: Wire pinned factual producer into canonical atlas build
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('tools/otbm_atlas/atlas.py')
+          text = path.read_text(encoding='utf-8')
+          replacements = [
+              (
+                  'from .mechanics import resolve_mechanics\n',
+                  'from tools.otbm_atlas_facts.mechanics import resolve_mechanics\n',
+              ),
+              (
+                  'from .environment_animation import enrich_environment_animations\n',
+                  'from .environment_animation import enrich_environment_animations\nfrom .factual_layers import enrich_existing_atlas\n',
+              ),
+              (
+                  'json.dumps(resolve_mechanics(mechanics, scripts_dir), indent=2, sort_keys=True)',
+                  'json.dumps(resolve_mechanics(mechanics, repository_root / "vendor/map-analysis/crystalserver/data-global/scripts"), indent=2, sort_keys=True)',
+              ),
+              (
+                  '\tstatistics["spatialData"]=spatial_statistics\n\tstatistics["environmentAnimations"]=enrich_environment_animations(asset_dir, output)\n\t(data_dir / "statistics.json").write_text(json.dumps(statistics, indent=2, sort_keys=True) + "\\n", encoding="utf-8")\n\twrite_viewer(output)\n\treturn manifest\n',
+                  '\tstatistics["spatialData"]=spatial_statistics\n\tstatistics["environmentAnimations"]=enrich_environment_animations(asset_dir, output)\n\tfactual_report=enrich_existing_atlas(output, repository_root)\n\tif factual_report.get("status")=="RESOLVED":\n\t\tstatistics["mechanicsResolution"]=factual_report["statistics"].get("mechanicsResolution", {})\n\t\tstatistics["factualLayers"]=factual_report["statistics"]\n\t\tstatistics["factualSpatial"]=factual_report["spatial"]\n\telse:\n\t\tstatistics["factualLayers"]={"status":factual_report.get("status","UNKNOWN"),"reason":factual_report.get("reason")}\n\t(data_dir / "statistics.json").write_text(json.dumps(statistics, indent=2, sort_keys=True) + "\\n", encoding="utf-8")\n\twrite_viewer(output)\n\treturn manifest\n',
+              ),
+          ]
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'expected exactly one patch target, found {count}: {old[:80]!r}')
+              text = text.replace(old, new)
+          path.write_text(text, encoding='utf-8', newline='\n')
+          PY
+      - name: Validate syntax
+        run: python3 -m compileall -q tools/otbm_atlas tools/otbm_atlas_facts
+      - name: Commit integration
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add tools/otbm_atlas/atlas.py
+          git diff --cached --check
+          git commit -m "feat(atlas): consume pinned factual source layers"
+          git push origin HEAD:agent/oth-20260814-atlas-factual-layers
