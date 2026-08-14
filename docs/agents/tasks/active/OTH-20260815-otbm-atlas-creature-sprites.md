@@ -1,15 +1,15 @@
 ---
 task_id: OTH-20260815-otbm-atlas-creature-sprites
-status: validating
+status: ready
 agent: ChatGPT
 project_lane: otheryn-content
 task_kind: implementation
-phase: validate
+phase: closeout
 branch: feat/otbm-atlas-creature-sprites
 base_branch: main
 start_sha: eba09b461fdf7024704b602a5c6383ba447c4f72
 created: 2026-08-15T00:16:59+02:00
-updated: 2026-08-15T01:03:11+02:00
+updated: 2026-08-15T01:17:41+02:00
 risk: high
 related_pr: "395"
 policy_version: 2
@@ -22,7 +22,7 @@ estimate_confidence: high
 decomposition_decision: phased
 decomposition_reason: One cohesive atlas provenance/creature-sprite vertical slice spans parser, renderer, viewer, tests and E2E but shares one source contract and one PR.
 validation_level: integrated
-heavy_validation_runs: 1
+heavy_validation_runs: 2
 session_rotation_count: 0
 stale_takeover_count: 0
 human_interruptions: 0
@@ -59,11 +59,11 @@ Make the canonical OTBM Atlas use only `vendor/map-analysis/**` for map/item/cre
 - [x] Both spawn kinds are enriched before `spawns.json` and spatial sharding.
 - [x] `data/spawns.json` and spatial shards retain monster sprite fields.
 - [x] Viewer renders NPC and monster sprites at close zoom, keeps low-zoom monster suppression and dot fallbacks.
-- [x] Real pinned-data NPC, monster and item integration tests pass on validated implementation head `2b495896d96944d77d7085cae663d79f690c9f96`.
-- [x] Real Chromium creature showcase passes on validated implementation head and uploads PNG + JSON evidence.
-- [x] Required, CI, OTBM Atlas Tests, factual-layer workflows and environment-animation E2E pass on validated implementation head.
-- [ ] New checkpoint-contract regression and all affected checks pass on the exact final head that contains this checkpoint update.
-- [ ] Final review-thread/mergeability audit passes and PR #395 is marked ready for review.
+- [x] Real pinned-data NPC, monster and item integration tests pass on validated head `a50f8450cc3c1f0a7cb487b289df488c2f13506c`.
+- [x] Real Chromium creature showcase passes on validated head and uploads PNG + JSON evidence.
+- [x] Required, CI, OTBM Atlas Tests, factual-layer workflows and environment-animation E2E pass on validated head.
+- [x] Checkpoint-contract regression passes on the validated head containing the validator and checkpoint.
+- [x] Final review-thread/mergeability audit passes and PR #395 is marked ready for review.
 
 ## Preflight evidence
 
@@ -79,18 +79,20 @@ Make the canonical OTBM Atlas use only `vendor/map-analysis/**` for map/item/cre
 
 ## Validated implementation evidence
 
-Exact implementation head `2b495896d96944d77d7085cae663d79f690c9f96` passed:
+Exact validated head `a50f8450cc3c1f0a7cb487b289df488c2f13506c` passed:
 
-- `node --check tools/otbm_atlas/viewer_app.js` plus `OTBM_ATLAS_CANONICAL_INTEGRATION=1 python3 -m unittest discover -s tools/otbm_atlas/tests -p 'test_*.py' -v`: 74 tests, PASS.
+- `node --check tools/otbm_atlas/viewer_app.js` plus `OTBM_ATLAS_CANONICAL_INTEGRATION=1 python3 -m unittest discover -s tools/otbm_atlas/tests -p 'test_*.py' -v`: 75 tests in 301.605 seconds, PASS.
 - Real pinned NPC, monster and item integration tests: PASS.
+- Checkpoint contract regression: PASS.
 - Real Chromium resource/decode check and screenshot at zoom `0.8`: PASS; both selected creature sprites decoded as `64x64`.
-- Showcase run `31848054084`, artifact `otbm-creature-showcase` ID `9236796551`, ZIP digest `sha256:594d4ace32c74797c3a341e234d65a253ea50d571f273e59e75507e6c58740e5`.
-- Artifact inspection confirms PNG + JSON evidence and visibly rendered creature sprites over the canonical map fragment.
-- Required run `31848054092`: PASS.
-- CI run `31848054254`: PASS.
-- OTBM Atlas Tests run `31848054142`: PASS.
-- OTBM Environment Animation E2E run `31848054100`: PASS.
-- Factual-layer tests/audit runs `31848054089` / `31848054098`: PASS.
+- Showcase run `31849055061`, artifact `otbm-creature-showcase` ID `9237110993`, ZIP digest `sha256:7a529e4ef55d9fe9483a3f79154746645ff225da8ac3f96cc85391e5d5c346a7`.
+- Downloaded artifact inspection confirms `evidence.json` plus `otbm-creature-showcase.png`; the screenshot is a real Chromium atlas frame over the canonical map region.
+- Required run `31849055032`: PASS.
+- CI run `31849055170`: PASS.
+- OTBM Atlas Tests run `31849055019`: PASS.
+- OTBM Environment Animation E2E run `31849055049`: PASS.
+- Factual-layer audit/tests runs `31849054993` / `31849055037`: PASS.
+- PR #395 has zero review threads, zero submitted reviews, is mergeable, is 0 commits behind `main`, and was moved out of draft after the green audit.
 
 Pinned full-corpus creature statistics on that head:
 
@@ -98,16 +100,18 @@ Pinned full-corpus creature statistics on that head:
 - Monster sprites: 718 unique; 87097 resolved spawns; 468 unresolved spawns; 0 ambiguous definitions.
 - Showcase NPC: `A Ghostly Knight`, lookType 134, source `vendor/map-analysis/crystalserver/data-global/npc/a_ghostly_knight.lua`, position `(32854,32327,11)`.
 - Showcase monster: `Blightwalker`, lookType 246, source `vendor/map-analysis/crystalserver/data-global/monster/undeads/blightwalker.lua`, position `(32853,32328,11)`.
+- Showcase bounds: `(32847..32860, 32321..32334, z=11)`; selected creatures are one tile apart and share one spatial shard.
+- Source fingerprints: map `3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034`, appearances `aa44a154f30c7ed59acc25f246286396e4043851ef0b54ef3cf3951e46d1ce50`, catalog `93ea5888174ef44b352d7c2b1f8061573a4a260bfaba4b7ec32ea836b9e411ab`, creature source manifest `210b45eacf43ccee174c6bc4d025938889b8c92acb2d4d385c7235608bcc6268`.
 
 ## Context checkpoint
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-08-15T01:03:11+02:00
-head: 2b495896d96944d77d7085cae663d79f690c9f96
+updated_at: 2026-08-15T01:17:41+02:00
+head: a50f8450cc3c1f0a7cb487b289df488c2f13506c
 branch: feat/otbm-atlas-creature-sprites
 pr: 395
-status: validating
+status: ready
 context_routes:
   - tools/otbm_atlas
   - vendor/map-analysis/crystalserver/data-global/npc
@@ -123,20 +127,19 @@ proven:
   - Canonical NPC definition root is vendor/map-analysis/crystalserver/data-global/npc.
   - Canonical monster definition root is vendor/map-analysis/crystalserver/data-global/monster.
   - Canonical object/creature appearance and sprite root is vendor/map-analysis/tibia-client/15.25.bd5a04/assets.
-  - Shared CreatureSpriteRenderer owns static NPC and monster sprite extraction, mask recoloring, addon selection, cache bounds and deduplication.
-  - Exact implementation head 2b495896d96944d77d7085cae663d79f690c9f96 passed 74 atlas/unit/pinned-data tests.
-  - Real Chromium run 31848054084 passed and decoded both NPC and monster sprite assets as 64x64 before screenshot capture.
-  - Artifact 9236796551 contains evidence.json and otbm-creature-showcase.png and was directly inspected after download.
+  - Shared CreatureSpriteRenderer owns static NPC and monster sprite extraction, mask recoloring, addon selection, bounded caches and outfit deduplication.
+  - Exact validated head a50f8450cc3c1f0a7cb487b289df488c2f13506c passed 75 atlas/unit/pinned-data tests including the checkpoint contract regression.
+  - Real Chromium run 31849055061 passed and decoded both NPC and monster sprite assets as 64x64 before screenshot capture.
+  - Artifact 9237110993 contains evidence.json and otbm-creature-showcase.png and was directly inspected after download.
   - NPC corpus result is 752 unique sprites, 974 resolved spawns, 94 unresolved spawns, 8 ambiguous definitions.
   - Monster corpus result is 718 unique sprites, 87097 resolved spawns, 468 unresolved spawns, 0 ambiguous definitions.
-  - Required, CI, Atlas Tests, environment-animation E2E and factual-layer checks all passed on implementation head 2b495896d96944d77d7085cae663d79f690c9f96.
+  - Required, CI, Atlas Tests, environment-animation E2E and factual-layer checks all passed on head a50f8450cc3c1f0a7cb487b289df488c2f13506c.
+  - PR 395 has zero review threads and reviews, is mergeable, is zero commits behind main and is ready for review.
 derived:
-  - One shared creature renderer plus thin NPC/monster parsers is the smallest implementation preserving the accepted NPC compatibility API without duplicate renderers.
+  - One shared creature renderer plus thin NPC/monster parsers preserves the accepted NPC compatibility API without duplicate renderers.
   - Keeping unresolved records factual and sprite-free preserves the viewer dot fallback without inventing cross-datapack appearance data.
   - A same-shard pair one tile apart gives real browser evidence for both creature classes without loading the full world into Chromium.
-unknown:
-  - Exact final-head validation result after adding the checkpoint-contract regression and this checkpoint update.
-  - Final PR ready/mergeability state after exact-head checks and review-thread audit.
+unknown: []
 conflicts: []
 first_failure:
   marker: resolved-canonical-source-leak
@@ -144,7 +147,7 @@ first_failure:
 rejected_hypotheses:
   - Duplicate npc_sprites.py into a monster-only renderer; rejected because it duplicates mask/cache semantics and violates the shared-renderer contract.
   - Resolve missing creature data from data-otservbr-global or the network; rejected because unresolved must remain factual and source-isolated.
-  - Treat a resource-timing entry alone as browser sprite proof; rejected because failed image requests can still create timing entries, so the showcase now requires successful image decode and non-zero natural dimensions.
+  - Treat a resource-timing entry alone as browser sprite proof; rejected because failed image requests can still create timing entries, so the showcase requires successful image decode and non-zero natural dimensions.
 changed_paths:
   - .github/workflows/otbm-creature-showcase.yml
   - docs/agents/tasks/active/OTH-20260815-otbm-atlas-creature-sprites.md
@@ -166,32 +169,38 @@ changed_paths:
 validation:
   - command: node --check viewer_app.js plus full unittest discovery with OTBM_ATLAS_CANONICAL_INTEGRATION=1
     result: PASS
-    evidence: Run 31848054084 on head 2b495896d96944d77d7085cae663d79f690c9f96 ran 74 tests in 298.920s and completed OK.
+    evidence: Run 31849055061 on a50f8450cc3c1f0a7cb487b289df488c2f13506c ran 75 tests in 301.605s and completed OK.
   - command: real Chromium canonical creature showcase
     result: PASS
-    evidence: Run 31848054084 loaded and decoded both selected 64x64 creature sprites, captured PNG, and uploaded artifact 9236796551.
+    evidence: Run 31849055061 decoded both selected 64x64 creature sprites, captured PNG, and uploaded artifact 9237110993.
   - command: Required
     result: PASS
-    evidence: Run 31848054092 on implementation head.
+    evidence: Run 31849055032 on a50f8450cc3c1f0a7cb487b289df488c2f13506c.
   - command: CI
     result: PASS
-    evidence: Run 31848054254 on implementation head.
+    evidence: Run 31849055170 on a50f8450cc3c1f0a7cb487b289df488c2f13506c.
   - command: OTBM Atlas Tests
     result: PASS
-    evidence: Run 31848054142 on implementation head.
-  - command: checkpoint contract regression on the new exact head
-    result: NOT_RUN
-    evidence: Validator is introduced by the next durable commit and must be exercised by that commit's workflow run.
+    evidence: Run 31849055019 on a50f8450cc3c1f0a7cb487b289df488c2f13506c.
+  - command: OTBM Environment Animation E2E
+    result: PASS
+    evidence: Run 31849055049 built through production build_atlas with the canonical world/assets and passed both environment-animation jobs.
+  - command: checkpoint contract regression
+    result: PASS
+    evidence: test_active_creature_task_checkpoint_matches_governance_contract passed in runs 31849055019 and 31849055061.
+  - command: final PR review and mergeability audit
+    result: PASS
+    evidence: PR 395 has no review threads or submitted reviews, mergeable=true, behind main=0 and draft=false.
 blockers: []
-next_action: Run all affected workflows on the exact checkpoint-validator head, remediate any failure, perform a fresh final diff/review/mergeability audit, then mark PR 395 ready for review.
+next_action: Merge PR 395 when branch-level checks on the closeout-metadata commit remain green; no implementation work remains.
 ```
 
 ## Recovery checkpoint
 
 ```yaml
-last_durable_head: 2b495896d96944d77d7085cae663d79f690c9f96
+last_durable_head: a50f8450cc3c1f0a7cb487b289df488c2f13506c
 branch: feat/otbm-atlas-creature-sprites
-phase: validate
-first_unmet_invariant: exact final-head checkpoint-validator and PR-ready gates have not yet been exercised
-next_action: validate the checkpoint/validator commit, repair any failure, audit final PR state and mark PR 395 ready
+phase: closeout
+first_unmet_invariant: none in implementation; only the closeout metadata commit must retain green branch checks
+next_action: verify final branch checks after this metadata update, then leave PR 395 merge-ready
 ```
