@@ -5,7 +5,7 @@ from collections import defaultdict
 from copy import deepcopy
 import json
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Iterator
 
 from tools.otbm_atlas_facts.build import compile_facts
 from tools.otbm_atlas_facts.monster_metadata import classification_for
@@ -153,14 +153,30 @@ def _chunk_key(position: dict[str, object], chunk_size: int) -> tuple[int, int, 
     return int(position["z"]), int(position["x"]) // chunk_size, int(position["y"]) // chunk_size
 
 
+def _chunk_keys(kind: str, record: dict[str, object], chunk_size: int) -> Iterator[tuple[int, int, int]]:
+    if kind == "raidAreas":
+        bounds = record.get("bounds")
+        if isinstance(bounds, dict) and {"x1", "x2", "y1", "y2", "z"} <= set(bounds):
+            x1, x2 = sorted((int(bounds["x1"]), int(bounds["x2"])))
+            y1, y2 = sorted((int(bounds["y1"]), int(bounds["y2"])))
+            z = int(bounds["z"])
+            for chunk_x in range(x1 // chunk_size, x2 // chunk_size + 1):
+                for chunk_y in range(y1 // chunk_size, y2 // chunk_size + 1):
+                    yield z, chunk_x, chunk_y
+            return
+    position = _position(record)
+    if position is not None:
+        yield _chunk_key(position, chunk_size)
+
+
 def _merge_spatial(output: Path, chunk_size: int, factual: dict[str, object]) -> dict[str, int]:
     by_chunk: dict[tuple[int, int, int], dict[str, list[dict[str, object]]]] = defaultdict(lambda: defaultdict(list))
     for kind, records in factual["groups"].items():
         for record in records:
-            position = _position(record)
-            if position is not None:
-                by_chunk[_chunk_key(position, chunk_size)][kind].append({**record, "kind": kind})
-    for kind, records in (("actionIds", factual["actionIds"]), ("uniqueIds", factual["uniqueIds"])):
+            for key in _chunk_keys(kind, record, chunk_size):
+                by_chunk[key][kind].append({**record, "kind": kind})
+    mechanics_records = list(factual["actionIds"]) + list(factual["uniqueIds"])
+    for kind, records in (("actionIds", factual["actionIds"]), ("uniqueIds", factual["uniqueIds"]), ("mechanics", mechanics_records)):
         for record in records:
             position = _position(record)
             if position is not None:
