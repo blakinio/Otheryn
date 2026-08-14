@@ -204,6 +204,7 @@ jobs:
               npc = page.locator('#searchResults button').filter(has_text='npcServices').first
               npc.wait_for(state='visible')
               npc.click()
+              page.wait_for_function("document.querySelector('#details').textContent.toLowerCase().includes('services: travel')")
               details = page.locator('#details').inner_text().casefold()
               assert 'services: travel' in details
               assert 'carlin' in details
@@ -214,6 +215,7 @@ jobs:
               boss = page.locator('#searchResults button').filter(has_text='verifiedBossSpawns').first
               boss.wait_for(state='visible')
               boss.click()
+              page.wait_for_function("document.querySelector('#details').textContent.includes('Verified boss evidence')")
               details = page.locator('#details').inner_text()
               assert 'Verified boss evidence' in details
               assert 'explicit-rewardBoss=true' in details
@@ -223,6 +225,7 @@ jobs:
               raid = page.locator('#searchResults button').filter(has_text='raidAreas').first
               raid.wait_for(state='visible')
               raid.click()
+              page.wait_for_function("document.querySelector('#details').textContent.includes('Exact raid/event bounds')")
               details = page.locator('#details').inner_text()
               bounds = fixture['raidArea']['bounds']
               assert 'Exact raid/event bounds' in details
