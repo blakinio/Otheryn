@@ -11,8 +11,6 @@ from typing import Iterable
 
 REGISTRATION = re.compile(r":(?P<kind>aid|uid)\s*\((?P<arguments>[^)]*)\)")
 INTEGER = re.compile(r"(?<![\w.])\d+(?![\w.])")
-TABLE_KEY = re.compile(r"\[\s*(\d+)\s*\]\s*=")
-UID_DISPATCH = re.compile(r"\[[^\]\n]*(?:\.uid|getUniqueId\s*\()[^\]\n]*\]")
 
 
 def _without_line_comments(text: str) -> str:
@@ -31,10 +29,6 @@ def index_scripts(scripts_root: Path) -> dict[str, object]:
 					registrations[match.group("kind")][value].append({"script": relative, "basis": "literal-registration"})
 			else:
 				dynamic.append({"script": relative, "kind": match.group("kind"), "expression": arguments.strip(), "status": "UNKNOWN"})
-		# Some legacy Action scripts register a shared AID, then dispatch on item.uid.
-		if UID_DISPATCH.search(text):
-			for value in map(int, TABLE_KEY.findall(text)):
-				registrations["uid"][value].append({"script": relative, "basis": "literal-uid-dispatch-key"})
 	for kind in registrations:
 		for value in registrations[kind]:
 			registrations[kind][value] = sorted(registrations[kind][value], key=lambda item: (str(item["script"]), str(item["basis"])))
