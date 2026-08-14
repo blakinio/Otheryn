@@ -5,6 +5,20 @@ canonical CrystalServer world documented in `docs/maps/crystalserver-canonical-s
 
 ## Architecture and provenance
 
+The canonical OTBM Atlas source contract is closed and machine-readable:
+
+| Data | Canonical root |
+|---|---|
+| Map geometry and spawn XML | `vendor/map-analysis/crystalserver/data-global/world` |
+| NPC definitions | `vendor/map-analysis/crystalserver/data-global/npc` |
+| Monster definitions | `vendor/map-analysis/crystalserver/data-global/monster` |
+| Object/creature appearances and sprite sheets | `vendor/map-analysis/tibia-client/15.25.bd5a04/assets` |
+
+`data-otservbr-global` is not a canonical OTBM Atlas input. The canonical builder
+rejects map, appearance-asset, or CrystalServer creature-definition roots outside
+the pinned `vendor/map-analysis/**` corpus. Missing information remains unresolved;
+there is no cross-datapack or network fallback.
+
 The pipeline incrementally parses the pinned gzip-wrapped OTBM, spools bounded
 128×128 world chunks, renders canonical detailed PNGs from the pinned 6031-file
 Tibia 15.25 asset subset, and derives lightweight overview PNGs by deterministic
@@ -16,6 +30,13 @@ Run its focused tests from the repository root:
 
 ```powershell
 python -m unittest discover -s tools/otbm_atlas/tests -v
+```
+
+Run the real pinned creature integration suite with:
+
+```powershell
+$env:OTBM_ATLAS_CANONICAL_INTEGRATION = "1"
+python -m unittest tools.otbm_atlas.tests.test_canonical_creatures -v
 ```
 
 Scan the mandatory Thais regression region into deterministic JSON:
@@ -61,13 +82,21 @@ The atlas build also runs the bounded cyclic-environment exporter against the sa
 The first pass spools each tile once into bounded per-chunk binary files. Chunk
 reports retain source/spool fingerprints and PNG checksums; matching chunks are
 reused on subsequent runs. The viewer supports pan, zoom, floor selection,
-coordinate display/jump, and factual mechanics/spawn overlay toggles. NPC markers
-use the configured canonical creature outfit from `data-otservbr-global/npc` and
-the pinned Tibia 15.25 creature appearances. At zoom below 0.45 they deliberately
-remain lightweight dots; an NPC without a decodable explicit `lookType` also stays
-a dot rather than receiving an invented image. Outfit PNGs are deduplicated by
-look type/colours/addons under `data/npc-sprites/` and loaded lazily through the
-existing bounded image LRU cache.
+coordinate display/jump, and factual mechanics/spawn overlay toggles.
+
+NPC and monster spawn records are enriched before `data/spawns.json`, spatial
+shards and search indexes are written. Both use one shared creature renderer and
+only the vendored CrystalServer definitions plus pinned Tibia 15.25 creature
+appearances/sprite sheets. At close zoom, resolved NPC and monster records load
+pixel-perfect outfit sprites lazily through the existing bounded image LRU. At
+lower zoom they remain lightweight markers; monster markers are still suppressed
+below zoom 0.25 to avoid drawing tens of thousands of records. Missing, invalid or
+ambiguous definitions/appearances/sprites remain factual dots with an explicit
+`spriteStatus`. Outfit PNGs are deduplicated by look type/colours/addons under
+`data/npc-sprites/` and `data/monster-sprites/`; hundreds of identical spawns share
+one PNG. See `tools/otbm_atlas/CREATURES.md` for parser, deduplication and fallback
+semantics.
+
 Viewer floor selection and shared URLs use raw OTBM Z values 0 through 15, matching manifests and factual coordinates without a display-only remapping.
 Chunks are cropped to their populated bounds plus a conservative two-tile sprite
 gutter. This preserves 64×64 sprites and canonical displacement across chunk
@@ -101,10 +130,9 @@ Large factual overlay collections are additionally partitioned under
 chunks plus one 128-tile prefetch margin. `data/search-index.json` contains one
 compact factual navigation entry per unique category/label, while details come
 from the spatial records.
-Monster markers are suppressed below zoom 0.25 to avoid drawing tens of
-thousands of individual points; their factual shards remain available and no
-records are reclassified. Bosses remain explicitly UNKNOWN because the canonical
-sources provide no authoritative boss classification.
+The base monster layer never guesses boss status by name, folder, appearance or
+external knowledge. `verifiedBossSpawns` remains a separate factual layer and is
+promoted only from explicit resolved canonical `rewardBoss=true` evidence.
 
 ## Prototype evolution
 
@@ -142,11 +170,13 @@ python -m tools.otbm_atlas.spawns `
   build/full-map-atlas/data/spawns.json
 ```
 
-Standalone factual resolution/composition reports can be rebuilt with:
+Standalone factual resolution/composition reports can be rebuilt with the same
+vendored CrystalServer corpus:
 
 ```powershell
 python -m tools.otbm_atlas.mechanics build/full-map-atlas/data/mechanics.json `
-  data-otservbr-global build/full-map-atlas/data/mechanics-resolution.json
+  vendor/map-analysis/crystalserver/data-global/scripts `
+  build/full-map-atlas/data/mechanics-resolution.json
 python -m tools.otbm_atlas.composition `
   vendor/map-analysis/crystalserver/data-global/world . `
   build/full-map-atlas/data/composition.json
