@@ -1,0 +1,256 @@
+---
+name: OTBM Atlas Factual Layers
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "tools/otbm_atlas/atlas.py"
+      - "tools/otbm_atlas/factual_layers.py"
+      - "tools/otbm_atlas/viewer.py"
+      - "tools/otbm_atlas/viewer_app.js"
+      - "tools/otbm_atlas/tests/test_factual_layers.py"
+      - "tools/otbm_atlas/tests/test_viewer_factual_layers.py"
+      - "tools/otbm_atlas_facts/**"
+      - ".github/workflows/otbm-atlas-factual-layers-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: Factual layer contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          persist-credentials: false
+      - name: Compile factual consumers
+        run: python3 -m compileall -q tools/otbm_atlas tools/otbm_atlas_facts
+      - name: Run factual consumer tests
+        run: |
+          python3 -m unittest \
+            tools.otbm_atlas.tests.test_factual_layers \
+            tools.otbm_atlas.tests.test_viewer_factual_layers -v
+
+  browser-e2e:
+    name: Real browser factual layers E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          persist-credentials: false
+      - name: Install Chromium browser harness
+        run: |
+          python3 -m pip install --disable-pip-version-check playwright==1.54.0
+          python3 -m playwright install --with-deps chromium
+      - name: Build pinned factual browser fixture
+        run: |
+          python3 - <<'PY'
+          import base64
+          import json
+          from pathlib import Path
+
+          from tools.otbm_atlas.factual_layers import CANONICAL_WORLD_SHA256, enrich_existing_atlas
+          from tools.otbm_atlas.viewer import write_viewer
+          from tools.otbm_atlas_facts.build import compile_facts
+
+          root = Path('/tmp/otheryn-factual-e2e')
+          root.mkdir(parents=True, exist_ok=True)
+          (root / 'data').mkdir(exist_ok=True)
+          (root / 'tiles').mkdir(exist_ok=True)
+          (root / 'favicon.ico').write_bytes(b'')
+          (root / 'tiles/blank.png').write_bytes(base64.b64decode(
+              'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+          ))
+
+          mechanics = {
+              'schemaVersion': 1,
+              'actionIds': [{
+                  'actionId': 50011,
+                  'position': {'x': 32360, 'y': 32230, 'z': 7},
+                  'serverId': 1949,
+                  'source': 'fixture/world.otbm',
+                  'origin': 'base-map',
+              }],
+              'uniqueIds': [],
+              'teleports': [{
+                  'position': {'x': 32359, 'y': 32230, 'z': 7},
+                  'destination': {'x': 32360, 'y': 32230, 'z': 7},
+                  'serverId': 1387,
+                  'source': 'fixture/world.otbm',
+                  'origin': 'base-map',
+              }],
+              'houseTiles': [], 'houseDoors': [], 'towns': [], 'waypoints': [],
+          }
+          spawns = {
+              'npcSpawns': [{
+                  'name': 'Captain Bluebear',
+                  'position': {'x': 32361, 'y': 32230, 'z': 7},
+                  'radius': 2,
+                  'source': 'fixture/world-npc.xml',
+                  'origin': 'base-map',
+              }],
+              'monsterSpawns': [{
+                  'name': 'Pythius The Rotten',
+                  'position': {'x': 32362, 'y': 32230, 'z': 7},
+                  'radius': 2,
+                  'source': 'fixture/world-monster.xml',
+                  'origin': 'base-map',
+              }],
+              'statistics': {},
+          }
+
+          pre = Path('/tmp/otheryn-factual-pre')
+          compile_facts(Path('vendor/map-analysis/crystalserver'), pre, mechanics)
+          raids = json.loads((pre / 'raids-events.json').read_text(encoding='utf-8'))
+          raid_area = raids['areaSpawns'][0]
+          assert raid_area['positionRole'] == 'derived-navigation-center'
+
+          positions = [
+              mechanics['actionIds'][0]['position'],
+              spawns['npcSpawns'][0]['position'],
+              spawns['monsterSpawns'][0]['position'],
+              raid_area['position'],
+          ]
+          chunks = []
+          seen = set()
+          for position in positions:
+              z, cx, cy = position['z'], position['x'] // 128, position['y'] // 128
+              key = (z, cx, cy)
+              if key in seen:
+                  continue
+              seen.add(key)
+              x1, y1 = cx * 128, cy * 128
+              chunks.append({
+                  'z': z, 'chunkX': cx, 'chunkY': cy,
+                  'logicalBounds': [x1, x1 + 127, y1, y1 + 127, z],
+                  'bounds': [x1, x1 + 127, y1, y1 + 127, z],
+                  'path': 'tiles/blank.png',
+                  'overviewPath': 'tiles/blank.png',
+                  'lowOverviewPath': 'tiles/blank.png',
+                  'imageWidth': 4096, 'imageHeight': 4096,
+              })
+          manifest = {
+              'schemaVersion': 3,
+              'chunkSize': 128,
+              'tilePixels': 32,
+              'sources': {'mapSha256': CANONICAL_WORLD_SHA256},
+              'chunks': chunks,
+          }
+          (root / 'manifest.json').write_text(json.dumps(manifest, sort_keys=True), encoding='utf-8')
+          (root / 'data/mechanics.json').write_text(json.dumps(mechanics), encoding='utf-8')
+          (root / 'data/spawns.json').write_text(json.dumps(spawns), encoding='utf-8')
+          (root / 'data/statistics.json').write_text(json.dumps({'schemaVersion': 1}), encoding='utf-8')
+          (root / 'data/search-index.json').write_text(json.dumps({'schemaVersion': 1, 'records': []}), encoding='utf-8')
+          animation_root = root / 'data/environment-animations'
+          animation_root.mkdir(parents=True, exist_ok=True)
+          (animation_root / 'index.json').write_text(json.dumps({
+              'schemaVersion': 1,
+              'animationZoom': 0.0,
+              'overlapSafetyRadiusTiles': 0,
+              'statistics': {'instances': 0, 'uniqueAnimations': 0, 'chunks': 0, 'staticFallbacks': 0},
+              'policy': {
+                  'cyclicAppearance': 'fixture contains no exported cyclic environment records',
+                  'statefulAppearance': 'not inferred',
+                  'eligibility': 'none',
+                  'fallback': 'canonical static pixels',
+              },
+          }, sort_keys=True), encoding='utf-8')
+
+          report = enrich_existing_atlas(root, Path('.'))
+          assert report['status'] == 'RESOLVED'
+          assert report['source']['commit'] == '5e89bf8329ea406cb4ea8f4a18f32954f13e5418'
+          assert report['statistics']['scriptedTeleports'] == 1
+          assert report['statistics']['npcServiceSpawns'] == 1
+          assert report['statistics']['verifiedBossSpawns'] >= 1
+          resolution = json.loads((root / 'data/mechanics-resolution.json').read_text(encoding='utf-8'))
+          aid = next(entry for entry in resolution['resolutions'] if entry['kind'] == 'ActionID' and entry['value'] == 50011)
+          assert aid['status'] == 'RESOLVED'
+          assert aid['candidates'][0]['transitions'][0]['destination'] == {'x': 32636, 'y': 31881, 'z': 2}
+          write_viewer(root)
+          (root / 'fixture.json').write_text(json.dumps({
+              'aid': 'AID 50011',
+              'npc': 'Captain Bluebear',
+              'boss': 'Pythius The Rotten',
+              'raidArea': {'name': raid_area['name'], 'position': raid_area['position'], 'bounds': raid_area['bounds']},
+          }, sort_keys=True), encoding='utf-8')
+          PY
+      - name: Exercise factual layers in real Chromium
+        run: |
+          python3 -m http.server 8124 --directory /tmp/otheryn-factual-e2e >/tmp/otheryn-factual-http.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" || true' EXIT
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from urllib.parse import parse_qs, urlparse
+          from playwright.sync_api import sync_playwright
+
+          fixture = json.loads(Path('/tmp/otheryn-factual-e2e/fixture.json').read_text(encoding='utf-8'))
+          errors = []
+          http_errors = []
+          with sync_playwright() as playwright:
+              browser = playwright.chromium.launch(headless=True)
+              page = browser.new_page(viewport={'width': 1280, 'height': 720})
+              page.on('pageerror', lambda exc: errors.append(f'pageerror:{exc}'))
+              page.on('console', lambda msg: errors.append(f'console:{msg.text}') if msg.type == 'error' else None)
+              page.on('response', lambda response: http_errors.append(f'{response.status}:{response.url}') if response.status >= 400 else None)
+              page.goto('http://127.0.0.1:8124/?x=32360&y=32230&z=7&zoom=1&render=detailed', wait_until='networkidle')
+              page.wait_for_function("document.querySelector('#status').textContent.includes('Drag to pan')")
+
+              page.locator('#search').fill(fixture['aid'])
+              scripted = page.locator('#searchResults button').filter(has_text='scriptedTeleports').first
+              scripted.wait_for(state='visible')
+              scripted.click()
+              page.locator('#details:not([hidden])').wait_for(state='visible')
+              details = page.locator('#details').inner_text()
+              assert 'Proven static scripted transition' in details
+              assert '32636' in details and '31881' in details
+              assert 'conditional' in details.casefold()
+              assert page.locator('[data-overlay="scriptedTeleports"]').is_checked()
+              assert 'scriptedTeleports' in parse_qs(urlparse(page.url).query).get('layers', [''])[0].split(',')
+
+              page.locator('#search').fill(fixture['npc'])
+              npc = page.locator('#searchResults button').filter(has_text='npcServices').first
+              npc.wait_for(state='visible')
+              npc.click()
+              page.wait_for_function("document.querySelector('#details').textContent.toLowerCase().includes('services: travel')")
+              details = page.locator('#details').inner_text().casefold()
+              assert 'services: travel' in details
+              assert 'carlin' in details
+              assert '110' in details
+              assert page.locator('[data-overlay="npcServices"]').is_checked()
+
+              page.locator('#search').fill(fixture['boss'])
+              boss = page.locator('#searchResults button').filter(has_text='verifiedBossSpawns').first
+              boss.wait_for(state='visible')
+              boss.click()
+              page.wait_for_function("document.querySelector('#details').textContent.includes('Verified boss evidence')")
+              details = page.locator('#details').inner_text()
+              assert 'Verified boss evidence' in details
+              assert 'explicit-rewardBoss=true' in details
+              assert page.locator('[data-overlay="verifiedBossSpawns"]').is_checked()
+
+              page.locator('#search').fill(fixture['raidArea']['name'])
+              raid = page.locator('#searchResults button').filter(has_text='raidAreas').first
+              raid.wait_for(state='visible')
+              raid.click()
+              page.wait_for_function("document.querySelector('#details').textContent.includes('Exact raid/event bounds')")
+              details = page.locator('#details').inner_text()
+              bounds = fixture['raidArea']['bounds']
+              assert 'Exact raid/event bounds' in details
+              assert str(bounds['x1']) in details and str(bounds['x2']) in details
+              assert 'navigation-only' in details
+              assert page.locator('[data-overlay="raidAreas"]').is_checked()
+
+              page.screenshot(path='/tmp/otheryn-factual-e2e.png', full_page=True)
+              browser.close()
+          assert not errors, {'console': errors, 'http': http_errors}
+          assert not http_errors, http_errors
+          assert Path('/tmp/otheryn-factual-e2e.png').stat().st_size > 0
+          print(json.dumps({'browser': 'chromium', 'journey': 'factual-layers', 'result': 'PASS'}, sort_keys=True))
+          PY

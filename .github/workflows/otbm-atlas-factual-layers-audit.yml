@@ -1,0 +1,112 @@
+---
+name: OTBM Atlas Factual Layer Audit
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "tools/otbm_atlas/atlas.py"
+      - "tools/otbm_atlas/factual_layers.py"
+      - "tools/otbm_atlas/viewer.py"
+      - "tools/otbm_atlas/viewer_app.js"
+      - "tools/otbm_atlas/tests/test_factual_layers.py"
+      - "tools/otbm_atlas/tests/test_viewer_factual_layers.py"
+      - "tools/otbm_atlas_facts/**"
+      - ".github/workflows/otbm-atlas-factual-layers-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Independent factual layer contract audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          persist-credentials: false
+      - name: Falsify factual promotion against primary pinned sources
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from tempfile import TemporaryDirectory
+
+          from tools.otbm_atlas.factual_layers import CANONICAL_WORLD_SHA256, build_factual_layers, enrich_existing_atlas
+          from tools.otbm_atlas_facts.build import compile_facts
+
+          repo = Path('.')
+          crystal = repo / 'vendor/map-analysis/crystalserver'
+          source_manifest = json.loads((crystal / 'supplemental-sources-manifest.json').read_text(encoding='utf-8'))
+          assert source_manifest['commit'] == '5e89bf8329ea406cb4ea8f4a18f32954f13e5418'
+          assert source_manifest['contentManifestSha256'] == 'c599e44454b3cd2ec0378f2b1ba296f0858db2f9c683d60ec1da19ffdc672f92'
+
+          elevator = (crystal / 'data-global/scripts/actions/kazordoon/elevator_lever.lua').read_text(encoding='utf-8')
+          assert '50011' in elevator and '32636' in elevator and '31881' in elevator
+          pythius = (crystal / 'data-global/monster/bosses/pythius_the_rotten.lua').read_text(encoding='utf-8')
+          assert 'rewardBoss = true' in pythius
+          rat = (crystal / 'data-global/monster/mammals/rat.lua').read_text(encoding='utf-8')
+          assert 'rewardBoss = false' in rat
+          bluebear = (crystal / 'data-global/npc/captain_bluebear.lua').read_text(encoding='utf-8')
+          assert 'carlin' in bluebear.casefold() and '32387' in bluebear and '31820' in bluebear
+
+          mechanics = {
+              'schemaVersion': 1,
+              'actionIds': [
+                  {'actionId': 50011, 'position': {'x': 32360, 'y': 32230, 'z': 7}, 'origin': 'base-map'},
+                  {'actionId': 987654, 'position': {'x': 32361, 'y': 32230, 'z': 7}, 'origin': 'base-map'},
+              ],
+              'uniqueIds': [], 'teleports': [], 'houseTiles': [], 'houseDoors': [], 'towns': [], 'waypoints': [],
+          }
+          with TemporaryDirectory() as directory:
+              facts = Path(directory) / 'facts'
+              compile_facts(crystal, facts, mechanics)
+              resolutions = json.loads((facts / 'mechanics-resolution.json').read_text(encoding='utf-8'))
+              npc = json.loads((facts / 'npc-services.json').read_text(encoding='utf-8'))
+              raids = json.loads((facts / 'raids-events.json').read_text(encoding='utf-8'))
+              monsters = json.loads((facts / 'monster-metadata.json').read_text(encoding='utf-8'))
+              resolved = next(v for v in resolutions['resolutions'] if v['value'] == 50011)
+              unresolved = next(v for v in resolutions['resolutions'] if v['value'] == 987654)
+              assert resolved['status'] == 'RESOLVED'
+              assert unresolved['status'] == 'UNRESOLVED'
+              assert resolved['candidates'][0]['transitions'][0]['destination'] == {'x': 32636, 'y': 31881, 'z': 2}
+              assert npc['npcs']['captain bluebear']['status'] == 'RESOLVED'
+              assert any(route['keyword'] == 'carlin' and route['cost'] == 110 for route in npc['npcs']['captain bluebear']['travel']['routes'])
+              assert monsters['definitions']['pythius the rotten']['verifiedBoss'] is True
+              assert monsters['definitions']['rat']['verifiedBoss'] is False
+              assert all(event['spatialStatus'] == 'UNKNOWN' for event in raids['dynamicEvents'])
+
+              transformed = build_factual_layers(
+                  mechanics, resolutions,
+                  {'npcSpawns': [], 'monsterSpawns': [
+                      {'name': 'Pythius The Rotten', 'position': {'x': 10, 'y': 10, 'z': 7}, 'origin': 'base-map'},
+                      {'name': 'Rat', 'position': {'x': 11, 'y': 10, 'z': 7}, 'origin': 'base-map'},
+                  ]},
+                  npc, raids, monsters,
+              )
+              assert [v['actionId'] for v in transformed['groups']['scriptedTeleports']] == [50011]
+              assert [v['name'] for v in transformed['groups']['verifiedBossSpawns'] if v.get('event') is None] == ['Pythius The Rotten']
+              assert not any(v.get('name') == 'Rat' for v in transformed['groups']['verifiedBossSpawns'])
+
+              atlas = Path(directory) / 'atlas'
+              (atlas / 'data').mkdir(parents=True)
+              (atlas / 'manifest.json').write_text(json.dumps({
+                  'schemaVersion': 3, 'chunkSize': 128,
+                  'sources': {'mapSha256': CANONICAL_WORLD_SHA256}, 'chunks': [],
+              }), encoding='utf-8')
+              (atlas / 'data/mechanics.json').write_text(json.dumps(mechanics), encoding='utf-8')
+              (atlas / 'data/spawns.json').write_text(json.dumps({'npcSpawns': [], 'monsterSpawns': []}), encoding='utf-8')
+              (atlas / 'data/statistics.json').write_text('{}', encoding='utf-8')
+              (atlas / 'data/search-index.json').write_text(json.dumps({'schemaVersion': 1, 'records': []}), encoding='utf-8')
+              report = enrich_existing_atlas(atlas, repo)
+              assert report['status'] == 'RESOLVED'
+              assert report['source']['commit'] == source_manifest['commit']
+              assert report['statistics']['scriptedTeleports'] == 1
+              shard = json.loads((atlas / 'data/chunks/z7/252_251.json').read_text(encoding='utf-8'))
+              assert shard['scriptedTeleports'][0]['actionId'] == 50011
+              assert not any(v.get('actionId') == 987654 for v in shard.get('scriptedTeleports', []))
+
+          print(json.dumps({'audit': 'PASS', 'materialFindings': 0, 'sourceCommit': source_manifest['commit']}, sort_keys=True))
+          PY

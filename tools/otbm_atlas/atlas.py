@@ -14,7 +14,7 @@ import struct
 from typing import BinaryIO, Iterator
 
 from .render import AssetRenderer, render_tiles
-from .mechanics import resolve_mechanics
+from tools.otbm_atlas_facts.mechanics import resolve_mechanics
 from .composition import classify_maps
 from .houses import parse_houses
 from .semantic import Item, Position, Tile, Town, Waypoint, iter_map_records, walk_items
@@ -24,6 +24,7 @@ from .overview import make_overview, OVERVIEW_FACTOR, LOW_OVERVIEW_FACTOR, OVERV
 from .spatial import write_spatial_data
 from .npc_sprites import enrich_npc_spawns
 from .environment_animation import enrich_environment_animations
+from .factual_layers import enrich_existing_atlas
 
 SPOOL_VERSION = 1
 ATLAS_VERSION = 3
@@ -249,7 +250,7 @@ def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int =
 	(data_dir / "spawns.json").write_text(json.dumps(spawns_report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	(data_dir / "houses.json").write_text(json.dumps(parse_houses(map_path.parent / "world-house.xml"), indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	mechanics = json.loads((spool_dir / "facts.json").read_text(encoding="utf-8"))
-	(data_dir / "mechanics-resolution.json").write_text(json.dumps(resolve_mechanics(mechanics, scripts_dir), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+	(data_dir / "mechanics-resolution.json").write_text(json.dumps(resolve_mechanics(mechanics, repository_root / "vendor/map-analysis/crystalserver/data-global/scripts"), indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	(data_dir / "composition.json").write_text(json.dumps(classify_maps(map_path.parent, repository_root), indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	spawns = json.loads((data_dir / "spawns.json").read_text(encoding="utf-8")); resolutions = json.loads((data_dir / "mechanics-resolution.json").read_text(encoding="utf-8")); houses = json.loads((data_dir / "houses.json").read_text(encoding="utf-8"))
 	statistics = {
@@ -273,6 +274,13 @@ def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int =
 	})
 	statistics["spatialData"]=spatial_statistics
 	statistics["environmentAnimations"]=enrich_environment_animations(asset_dir, output)
+	factual_report=enrich_existing_atlas(output, repository_root)
+	if factual_report.get("status")=="RESOLVED":
+		statistics["mechanicsResolution"]=factual_report["statistics"].get("mechanicsResolution", {})
+		statistics["factualLayers"]=factual_report["statistics"]
+		statistics["factualSpatial"]=factual_report["spatial"]
+	else:
+		statistics["factualLayers"]={"status":factual_report.get("status","UNKNOWN"),"reason":factual_report.get("reason")}
 	(data_dir / "statistics.json").write_text(json.dumps(statistics, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	write_viewer(output)
 	return manifest
