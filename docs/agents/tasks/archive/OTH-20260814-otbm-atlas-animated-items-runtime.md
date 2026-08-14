@@ -35,7 +35,7 @@ The automated review's dense-chunk P1 was fixed by replacing all-pairs overlap d
 
 The durable no-GIF extension contract is documented in `tools/otbm_atlas/ANIMATION.md`; the main `tools/otbm_atlas/README.md` now describes the generalized runtime rather than the obsolete topmost-32x32-only policy.
 
-Full 3494-chunk world release certification remains owned by the separate active task `OTH-20260814-otbm-atlas-full-world-release-validation` and is not weakened or redefined here.
+Full 3494-chunk world release certification is governed by the separate `OTH-20260814-otbm-atlas-full-world-release-validation` task/history and is not weakened or redefined here.
 
 ## Context checkpoint
 
