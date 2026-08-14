@@ -38,19 +38,20 @@ jobs:
           record={'position':{'x':100,'y':100,'z':7},'serverId':1,'animationKey':'demo','frames':['data/environment-animations/frames/demo/0.png','data/environment-animations/frames/demo/1.png'],'underlay':'data/environment-animations/underlays/z7/0_0/100_100_1.png','phaseDurationsMs':[150,150],'defaultStartPhase':0,'synchronized':True,'loopType':0,'loopCount':0}
           (root/'data/environment-animations/chunks/z7/0_0.json').write_text(json.dumps({'schemaVersion':1,'records':[record]}),encoding='utf-8');write_viewer(root)
           PY
-      - name: Prove phase changes in Chromium
+      - name: Prove default floor and phase changes in Chromium
         run: |
           python3 -m http.server 8124 --directory /tmp/environment-e2e >/tmp/environment-http.log 2>&1 &
           pid=$!; trap 'kill "$pid" || true' EXIT
           python3 - <<'PY'
           from playwright.sync_api import sync_playwright
           with sync_playwright() as p:
-              browser=p.chromium.launch(headless=True);page=browser.new_page(viewport={'width':800,'height':600});page.goto('http://127.0.0.1:8124/?x=100&y=100&z=7&zoom=2&render=detailed',wait_until='networkidle');page.locator('#environmentAnimations').wait_for(state='attached');page.wait_for_timeout(400)
+              browser=p.chromium.launch(headless=True);page=browser.new_page(viewport={'width':800,'height':600});page.goto('http://127.0.0.1:8124/?x=100&y=100&zoom=2&render=detailed',wait_until='networkidle');page.locator('#environmentAnimations').wait_for(state='attached');page.wait_for_timeout(400)
+              assert page.locator('#floor').input_value() == '7'
               colors=[]
               for _ in range(8):
                   colors.append(tuple(page.evaluate("""() => {const c=document.querySelector('#environmentAnimations'),x=Math.floor(c.width/2+32),y=Math.floor(c.height/2+32);return [...c.getContext('2d').getImageData(x,y,1,1).data.slice(0,3)]}""")));page.wait_for_timeout(170)
               browser.close()
           assert (255,0,0) in colors,colors
           assert (0,255,0) in colors,colors
-          print({'journey':'PASS','colors':colors})
+          print({'journey':'PASS','defaultFloor':7,'colors':colors})
           PY
