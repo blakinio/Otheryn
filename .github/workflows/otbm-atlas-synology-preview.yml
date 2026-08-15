@@ -1,0 +1,125 @@
+---
+name: OTBM Atlas Synology Preview
+
+on:
+  pull_request:
+    paths:
+      - "docker/otbm-atlas-synology/**"
+      - "tools/otbm_atlas/preview_corpus_check.py"
+      - "tools/otbm_atlas/tests/test_preview_corpus_check.py"
+      - ".github/workflows/otbm-atlas-synology-preview.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static-container:
+    name: Static container contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+
+      - name: Build static fixture
+        run: |
+          set -euo pipefail
+          root="$PWD/build/atlas-preview-fixture"
+          mkdir -p "$root"
+          printf '<!doctype html><title>atlas fixture</title>\n' > "$root/index.html"
+          printf 'console.log("atlas fixture");\n' > "$root/app.js"
+          printf 'body{}\n' > "$root/style.css"
+          printf '{"fixture":true}\n' > "$root/data.json"
+          printf 'png-fixture\n' > "$root/tile.png"
+          printf 'webp-fixture\n' > "$root/tile.webp"
+
+      - name: Validate Compose rendering
+        env:
+          ATLAS_DATA_DIR: ${{ github.workspace }}/build/atlas-preview-fixture
+          ATLAS_HTTP_PORT: "18088"
+        run: docker compose -f docker/otbm-atlas-synology/docker-compose.yml config
+
+      - name: Start and validate hardened static server
+        env:
+          ATLAS_DATA_DIR: ${{ github.workspace }}/build/atlas-preview-fixture
+          ATLAS_HTTP_PORT: "18088"
+        run: |
+          set -euo pipefail
+          compose=(docker compose -f docker/otbm-atlas-synology/docker-compose.yml)
+          cleanup() {
+            "${compose[@]}" logs --no-color || true
+            "${compose[@]}" down --remove-orphans || true
+          }
+          trap cleanup EXIT
+
+          "${compose[@]}" pull
+          "${compose[@]}" up -d
+
+          for attempt in $(seq 1 30); do
+            if [ "$(curl -fsS http://127.0.0.1:18088/__health 2>/dev/null || true)" = "ok" ]; then
+              break
+            fi
+            sleep 1
+          done
+          test "$(curl -fsS http://127.0.0.1:18088/__health)" = "ok"
+
+          check_type() {
+            path="$1"
+            expected="$2"
+            curl -fsSI "http://127.0.0.1:18088/$path" | tr -d '\r' | grep -Eiq "^Content-Type: ${expected}([;]|$)"
+          }
+          check_type index.html 'text/html'
+          check_type app.js 'application/javascript'
+          check_type style.css 'text/css'
+          check_type data.json 'application/json'
+          check_type tile.png 'image/png'
+          check_type tile.webp 'image/webp'
+          test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18088/not-found)" = "404"
+          test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18088/.spool/source.json)" = "404"
+
+          container_id="$("${compose[@]}" ps -q atlas)"
+          test -n "$container_id"
+          CONTAINER_ID="$container_id" python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+
+          container_id = os.environ["CONTAINER_ID"]
+          info = json.loads(subprocess.check_output(["docker", "inspect", container_id], text=True))[0]
+          host = info["HostConfig"]
+          assert host["ReadonlyRootfs"] is True, host["ReadonlyRootfs"]
+          assert host["Privileged"] is False, host["Privileged"]
+          assert "ALL" in {str(value).upper() for value in (host.get("CapDrop") or [])}, host.get("CapDrop")
+          security = {str(value) for value in (host.get("SecurityOpt") or [])}
+          assert any("no-new-privileges" in value for value in security), security
+          bindings = host["PortBindings"]["8080/tcp"]
+          assert any(value.get("HostIp") == "127.0.0.1" and value.get("HostPort") == "18088" for value in bindings), bindings
+          mounts = {value["Destination"]: value for value in info["Mounts"]}
+          assert mounts["/usr/share/nginx/html"]["RW"] is False, mounts["/usr/share/nginx/html"]
+          assert mounts["/etc/nginx/conf.d/default.conf"]["RW"] is False, mounts["/etc/nginx/conf.d/default.conf"]
+          assert info["Config"].get("User") not in ("", "0", "root"), info["Config"].get("User")
+          PY
+
+          docker restart "$container_id"
+          for attempt in $(seq 1 30); do
+            if [ "$(curl -fsS http://127.0.0.1:18088/__health 2>/dev/null || true)" = "ok" ]; then
+              break
+            fi
+            sleep 1
+          done
+          test "$(curl -fsS http://127.0.0.1:18088/__health)" = "ok"
+
+  corpus-preflight-tests:
+    name: Corpus preflight tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+      - name: Run focused tests
+        run: python3 -m unittest tools.otbm_atlas.tests.test_preview_corpus_check -v
