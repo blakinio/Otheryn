@@ -12,7 +12,7 @@ export function creatureAnimationSelection(descriptor,record,elapsedMs){
   const frames=group.frames[direction];
   if(!Array.isArray(frames)||!frames.length)return null;
   const runtime={...group,animationKey:group.animationKey||`${descriptor.outfitKey||'creature'}-${descriptor.presentationGroup}`,position:record.position};
-  const phase=environmentPhase(runtime,elapsedMs)%frames.length;
+  const phase=environmentPhase(runtime,elapsedMs,Boolean(group.randomStartPhase))%frames.length;
   return{group:descriptor.presentationGroup,direction,phase,path:frames[phase]};
 }
 
