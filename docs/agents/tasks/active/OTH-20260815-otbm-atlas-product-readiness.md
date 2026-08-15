@@ -5,7 +5,7 @@ owner: codex-atlas-provenance-20260815
 branch: blakinio/atlas-provenance-stability
 base_branch: main
 created: "2026-08-15T14:09:00+02:00"
-updated: "2026-08-15T22:05:00+02:00"
+updated: "2026-08-15T21:52:00+02:00"
 project_lane: otheryn-content
 execution_mode: chat-github
 related_pr: "412"
@@ -66,8 +66,9 @@ The verified current-v3 benchmark tested a deterministic 240-chunk sample spanni
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-08-15T22:05:00+02:00
-head: cd5c8febbc41840782c478a17230c0f75f118fc0
+updated_at: 2026-08-15T21:52:00+02:00
+head: 94949a61aba66386c77dc2a6bb2d4d44ba7c1e84
+head_scope: latest committed checkpoint evidence before this documentation-only update
 branch: blakinio/atlas-provenance-stability
 pr: 412
 status: validating
@@ -76,7 +77,10 @@ execution_mode: chat-github
 base_main_at_verification: a4878325b892b2044f514d27a1a3104e5ce843f7
 context_routes:
   - docs/maps/otbm-atlas-product-readiness-backlog-20260815.md
-owned_paths: []
+owned_paths:
+  - .gitattributes
+  - tools/otbm_atlas/tests/test_atlas.py
+  - docs/agents/tasks/active/OTH-20260815-otbm-atlas-product-readiness.md
 proven:
   - technical Atlas implementation and full-world certification are already DONE/VERIFIED
   - canonical Git and clean-corpus bytes contain 6031 assets and fingerprint as 4c78aa441bc6eed6a614092423a58dc6275cf2c36ea5d4bde13746c9b4ee7ee7
@@ -143,11 +147,11 @@ recovery:
   policy_version: 1
   generation: 1
   session_id: atlas-provenance-20260815-2205
-  session_started_at: 2026-08-15T21:55:00+02:00
-  checkpointed_at: 2026-08-15T22:05:00+02:00
-  last_progress_at: 2026-08-15T22:05:00+02:00
+  session_started_at: 2026-08-15T21:30:00+02:00
+  checkpointed_at: 2026-08-15T21:52:00+02:00
+  last_progress_at: 2026-08-15T21:52:00+02:00
   phase: validate
-  exact_head: cd5c8febbc41840782c478a17230c0f75f118fc0
+  exact_head: 94949a61aba66386c77dc2a6bb2d4d44ba7c1e84
   pull_request: 412
   active_operation: independent audit and exact-head CI preparation
   external_run_ids: []
