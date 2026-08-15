@@ -1,0 +1,126 @@
+---
+name: OTBM Creature Animation Audit
+
+on:
+  pull_request:
+    paths:
+      - "tools/otbm_atlas/**"
+      - ".github/workflows/otbm-creature-animation-audit.yml"
+      - "vendor/map-analysis/crystalserver/creature-sources-manifest.json"
+      - "vendor/map-analysis/crystalserver/data-global/npc/**"
+      - "vendor/map-analysis/crystalserver/data-global/monster/**"
+      - "vendor/map-analysis/tibia-client/15.25.bd5a04/assets/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  independent-audit:
+    name: Clean-runner canonical contract audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          persist-credentials: false
+      - name: Audit pinned creature animation contract
+        run: |
+          node --check tools/otbm_atlas/creature_animation_runtime.js
+          node tools/otbm_atlas/tests/test_creature_animation_runtime.mjs
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          from tools.otbm_atlas.assets import FRAME_GROUP_OUTFIT_IDLE, FRAME_GROUP_OUTFIT_MOVING
+          from tools.otbm_atlas.creature_sprites import CreatureSpriteRenderer
+          from tools.otbm_atlas.monster_sprites import parse_monster_definition_index
+          from tools.otbm_atlas.npc_sprites import parse_npc_definition_index
+
+          repo = Path('.')
+          assets = repo / 'vendor/map-analysis/tibia-client/15.25.bd5a04/assets'
+          npc_root = repo / 'vendor/map-analysis/crystalserver/data-global/npc'
+          monster_root = repo / 'vendor/map-analysis/crystalserver/data-global/monster'
+          renderer = CreatureSpriteRenderer(assets)
+          npc_index = parse_npc_definition_index(npc_root, repo)
+          monster_index = parse_monster_definition_index(monster_root, repo)
+
+          expected = (
+              ('npc', 'Tanyt', 1199, npc_index, 'vendor/map-analysis/crystalserver/data-global/npc/'),
+              ('monster', 'Silver Rabbit', 262, monster_index, 'vendor/map-analysis/crystalserver/data-global/monster/'),
+          )
+          evidence = {}
+          for kind, name, look_type, index, source_prefix in expected:
+              outfit, status = index.resolve(name)
+              assert status == 'resolved' and outfit is not None, (kind, name, status)
+              assert outfit.look_type == look_type, (kind, name, outfit.look_type)
+              assert outfit.source.startswith(source_prefix), outfit.source
+              appearance = renderer.appearances.get(outfit.look_type)
+              assert appearance is not None, (kind, look_type)
+              canonical_groups = [
+                  frame for frame in appearance.frames
+                  if frame.frame_group_type in (FRAME_GROUP_OUTFIT_IDLE, FRAME_GROUP_OUTFIT_MOVING)
+              ]
+              assert canonical_groups, (kind, name)
+              animation, animation_status = renderer.render_animation_with_status(outfit)
+              assert animation_status == 'resolved' and animation is not None, (kind, name, animation_status)
+              group = animation['groups'][animation['presentationGroup']]
+              assert group['animationPhases'] == 8, (kind, name, group['animationPhases'])
+              assert group['phaseDurationsMs'] == [300] * 8, (kind, name, group['phaseDurationsMs'])
+              assert group['durationRangesMs'] == [[300, 300]] * 8, (kind, name, group['durationRangesMs'])
+              assert group['directions'] == ['north', 'east', 'south', 'west'], (kind, name, group['directions'])
+              frames = group['directionFrames']['south']
+              assert len(frames) == 8, (kind, name, len(frames))
+              hashes = {hashlib.sha256(payload).hexdigest() for payload in frames}
+              assert len(hashes) >= 2, (kind, name, hashes)
+              evidence[kind] = {
+                  'name': name,
+                  'lookType': look_type,
+                  'source': outfit.source,
+                  'presentationGroup': animation['presentationGroup'],
+                  'phaseCount': len(frames),
+                  'distinctSouthPhaseImages': len(hashes),
+                  'directions': group['directions'],
+                  'phaseDurationsMs': group['phaseDurationsMs'],
+              }
+
+          runtime = (repo / 'tools/otbm_atlas/creature_animation_runtime.js').read_text(encoding='utf-8')
+          viewer = (repo / 'tools/otbm_atlas/viewer_app.js').read_text(encoding='utf-8')
+          exporter = (repo / 'tools/otbm_atlas/creature_sprites.py').read_text(encoding='utf-8')
+          npc_source = (repo / 'tools/otbm_atlas/npc_sprites.py').read_text(encoding='utf-8')
+          monster_source = (repo / 'tools/otbm_atlas/monster_sprites.py').read_text(encoding='utf-8')
+
+          # Browser boundedness and conservative timing/fallback policy.
+          assert 'new BoundedLRU(256,64*1024*1024)' in runtime
+          assert 'new BoundedLRU(64,8*1024*1024)' in runtime
+          assert 'new BoundedLRU(128,4*1024*1024)' in runtime
+          assert 'new BoundedLRU(2048,64*1024)' in runtime
+          assert 'visibleChunks(manifest.chunks,state.z,bounds,0)' in runtime
+          assert 'Boolean(group.randomStartPhase)' in runtime
+          assert 'Math.max(0,now-started)' in runtime
+          assert 'drawFallback(record,left,top,size)' in runtime
+          assert 'if(record.spriteAnimation)return true' in viewer
+
+          # Canonical-source and no-path-simulation contract.
+          combined = '\n'.join((exporter, npc_source, monster_source))
+          assert 'data-otservbr-global' not in combined
+          assert 'canonical-frame-groups-no-spatial-movement' in exporter
+          assert 'record["position"] =' not in exporter
+          assert 'record.position=' not in runtime
+
+          report = {
+              'audit': 'PASS',
+              'materialFindings': 0,
+              'canonicalCreatures': evidence,
+              'runtime': {
+                  'viewportBounded': True,
+                  'boundedCaches': True,
+                  'firstSeenAsyncClock': True,
+                  'randomStartMetadataHonored': True,
+                  'spatialMovementSimulated': False,
+              },
+          }
+          print(json.dumps(report, sort_keys=True))
+          PY
