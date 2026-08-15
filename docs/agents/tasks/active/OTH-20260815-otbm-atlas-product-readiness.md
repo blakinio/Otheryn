@@ -5,10 +5,10 @@ owner: none
 branch: none
 base_branch: main
 created: "2026-08-15T14:09:00+02:00"
-updated: "2026-08-15T22:24:00+02:00"
+updated: "2026-08-15T22:50:00+02:00"
 project_lane: otheryn-content
 execution_mode: chat-github
-related_pr: "413"
+related_pr: "414"
 ownership_released: true
 owned_paths: []
 ---
@@ -41,11 +41,11 @@ The durable continuation handover is:
 - The complete current-v3 detail PNG corpus totals `10995096999` bytes. Applying the measured sample ratio estimates `5587411323` WebP bytes and `5407685676` bytes saved (`49.1827009483575%`); this full-corpus WebP value remains `ESTIMATED`, not measured.
 - `ATLAS-PR-010` is VERIFIED on current-v3 detail evidence.
 - `ATLAS-PR-011` remains an owner product decision. PNG-to-WebP migration is not authorized yet because owner visual acceptance and browser/runtime impact remain unresolved.
-- The 24 PNG/WebP A/B pairs and `comparison.html` passed local artifact-consistency validation; owner visual review remains pending.
+- PR #414 publishes the report, JSON, CSV, comparison page and 24 PNG/WebP A/B pairs as durable repository artifacts; owner visual review remains pending.
 
 ## Waiting reason
 
-`ATLAS-PR-010` is complete and VERIFIED. The task remains `waiting` because `ATLAS-PR-011` requires the owner's product-format decision after reviewing the local A/B comparison, and browser/runtime impact of a future WebP migration remains UNKNOWN. No PNG-to-WebP migration is authorized before that decision.
+`ATLAS-PR-010` is complete and VERIFIED. The task remains `waiting` because `ATLAS-PR-011` requires the owner's product-format decision after reviewing the repository-hosted A/B comparison, and browser/runtime impact of a future WebP migration remains UNKNOWN. No PNG-to-WebP migration is authorized before that decision.
 
 PR #412 is merged and the provenance correction is terminal. No worker/branch ownership is held while the owner-facing codec decision waits.
 
@@ -59,21 +59,21 @@ The vendored corpus now has a narrow `-text` rule so new checkouts retain raw Gi
 
 The desktop canonical-v3 build produced all 3,494 detail chunks, both overview levels and a schema/Atlas-v3 manifest before spending more than the bounded execution budget in environment-animation enrichment. That phase created hundreds of thousands of small files, remained CPU-active, and did not resume efficiently after interruption. The performance/resume defect is preserved separately in `OTH-20260815-atlas-environment-animation-export-performance`; it does not block benchmarking the already-complete detail PNG corpus because environment-animation assets are excluded from `ATLAS-PR-010`.
 
-The verified current-v3 benchmark tested a deterministic 240-chunk sample spanning Z0..Z15. Original generated PNG files totalled `629930622` bytes and genuine lossless WebP totalled `320113728` bytes, saving `309816894` bytes (`49.18270094829586%`) with decoded RGBA equality for all `240/240` chunks. The complete 3,494-detail-PNG corpus totals `10995096999` bytes; applying the measured aggregate sample ratio estimates `5587411323` WebP bytes and `5407685676` bytes saved (`49.1827009483575%`). This full-corpus WebP value remains `ESTIMATED`, not measured. Browser performance remains `UNKNOWN`; local median decode time was `18.05625 ms` for PNG and `46.60915 ms` for WebP. The required report, JSON, CSV, local comparison page and 24 A/B pairs were generated under `build/otbm-codec-benchmark/`, validated for totals, hashes, RGBA equality and HTML references, and remain intentionally uncommitted local artifacts.
+The verified current-v3 benchmark tested a deterministic 240-chunk sample spanning Z0..Z15. Original generated PNG files totalled `629930622` bytes and genuine lossless WebP totalled `320113728` bytes, saving `309816894` bytes (`49.18270094829586%`) with decoded RGBA equality for all `240/240` chunks. The complete 3,494-detail-PNG corpus totals `10995096999` bytes; applying the measured aggregate sample ratio estimates `5587411323` WebP bytes and `5407685676` bytes saved (`49.1827009483575%`). This full-corpus WebP value remains `ESTIMATED`, not measured. Browser performance remains `UNKNOWN`; local median decode time was `18.05625 ms` for PNG and `46.60915 ms` for WebP. PR #414 retains the report, JSON, CSV, comparison page and 24 A/B pairs under `build/otbm-codec-benchmark/`; source-to-PR hashes, totals, RGBA equality, metadata and HTML references all validate.
 
 ## Context checkpoint
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-08-15T22:24:00+02:00
-head: d231cac122ff40a5c1c7f0e2d176327df7e05105
-head_scope: latest committed checkpoint evidence before the PR-link update on the documentation-only follow-up
+updated_at: 2026-08-15T22:50:00+02:00
+head: d1272324f9f3df4b11971e9a3a29edf6230dec9a
+head_scope: committed artifact-publication evidence before this checkpoint update
 branch: none
-pr: 413
+pr: 414
 status: waiting
 project_lane: otheryn-content
 execution_mode: chat-github
-base_main_at_verification: 28a33496f33b252556ac0efdcde97ba9e22da215
+base_main_at_verification: 7fbd1475cc0e3fd199a8b2b1449fe6395cce0a43
 context_routes:
   - docs/maps/otbm-atlas-product-readiness-backlog-20260815.md
 owned_paths: []
@@ -111,6 +111,11 @@ rejected_hypotheses:
   - the historical v2 codec result can close the current-v3 evidence gap
   - current Git/canonical asset bytes fingerprint as 4d11c5be; that value came from Windows worktree line-ending conversion
 changed_paths:
+  - build/otbm-codec-benchmark/report.md
+  - build/otbm-codec-benchmark/summary.json
+  - build/otbm-codec-benchmark/results.csv
+  - build/otbm-codec-benchmark/comparison.html
+  - build/otbm-codec-benchmark/samples/
   - docs/agents/tasks/active/OTH-20260815-otbm-atlas-product-readiness.md
 validation:
   - command: python tools/otbm_atlas/codec_benchmark.py
@@ -125,9 +130,12 @@ validation:
   - command: focused task-record consistency review
     result: PASS
     evidence: Current state, Waiting reason and Context checkpoint now agree that ATLAS-PR-010 is VERIFIED and ATLAS-PR-011 is the remaining owner decision
+  - command: published-artifact integrity check
+    result: PASS
+    evidence: 76/76 files exactly match the validated local source; 240 CSV rows span Z0-Z15, 24/24 retained pairs decode RGBA-identically, metadata hashes pass and the comparison page references all 48 sample assets
 blockers:
   - owner review of the local visual A/B artifacts and product format decision remains pending
-next_action: present the verified current-v3 benchmark and local comparison.html to the owner for visual review without implementing WebP migration
+next_action: present the verified current-v3 benchmark and repository-hosted comparison.html to the owner for visual review without implementing WebP migration
 ```
 
 ## Closeout rule
