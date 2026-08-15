@@ -55,6 +55,8 @@ The canonical 6,031-file Git/corpus bytes fingerprint as `4c78aa441bc6eed6a61409
 
 That file is `NON_RENDER_INPUT`: `AssetRenderer`, appearance decoding and sprite-sheet lookup do not consume it. Every renderer input therefore matched canonical bytes. The schema/Atlas-v3 manifest truthfully retains the worktree fingerprint observed during generation (`4d11c5be...`); it must not be rewritten to imply that the run observed `4c78aa44...`. Proven renderer-input equivalence plus 3,494/3,494 manifest-path and PNG-checksum validation preserves the generated detail corpus as valid v3 codec-benchmark evidence without rerendering.
 
+The vendored corpus now has a narrow `-text` rule so new checkouts retain raw Git bytes. Existing Windows checkouts are not silently rewritten by an attribute-only update, so `python -m tools.otbm_atlas.repair_asset_checkout` provides an idempotent upgrade path: it replaces the known file atomically only when its complete delta from the Git blob is CRLF-to-LF and refuses every other content difference.
+
 The desktop canonical-v3 build produced all 3,494 detail chunks, both overview levels and a schema/Atlas-v3 manifest before spending more than the bounded execution budget in environment-animation enrichment. That phase created hundreds of thousands of small files, remained CPU-active, and did not resume efficiently after interruption. The performance/resume defect is preserved separately in `OTH-20260815-atlas-environment-animation-export-performance`; it does not block benchmarking the already-complete detail PNG corpus because environment-animation assets are excluded from `ATLAS-PR-010`.
 
 The verified current-v3 benchmark tested a deterministic 240-chunk sample spanning Z0..Z15. Original generated PNG files totalled `629930622` bytes and genuine lossless WebP totalled `320113728` bytes, saving `309816894` bytes (`49.18270094829586%`) with decoded RGBA equality for all `240/240` chunks. The complete 3,494-detail-PNG corpus totals `10995096999` bytes; applying the measured aggregate sample ratio estimates `5587411323` WebP bytes and `5407685676` bytes saved (`49.1827009483575%`). This full-corpus WebP value remains `ESTIMATED`, not measured. Browser performance remains `UNKNOWN`; local median decode time was `18.05625 ms` for PNG and `46.60915 ms` for WebP. The required report, JSON, CSV, local comparison page and 24 A/B pairs were generated under `build/otbm-codec-benchmark/`, validated for totals, hashes, RGBA equality and HTML references, and remain intentionally uncommitted local artifacts.
@@ -109,6 +111,8 @@ rejected_hypotheses:
 changed_paths:
   - .gitattributes
   - docs/agents/tasks/active/OTH-20260815-otbm-atlas-product-readiness.md
+  - tools/otbm_atlas/README.md
+  - tools/otbm_atlas/repair_asset_checkout.py
   - tools/otbm_atlas/tests/test_atlas.py
 validation:
   - command: python tools/otbm_atlas/codec_benchmark.py
@@ -119,10 +123,10 @@ validation:
     evidence: 3494/3494 manifest paths and PNG checksums; 240 CSV rows across Z0-Z15 all record RGBA equality; JSON, CSV and Markdown totals agree; 24 retained A/B pairs decode RGBA-identically and their metadata, hashes and 48 HTML references agree
   - command: python -m unittest tools.otbm_atlas.tests.test_atlas -v
     result: PASS
-    evidence: 5/5 tests pass including canonical asset raw-byte SHA and Git attribute contract
+    evidence: 6/6 tests pass including canonical asset raw-byte SHA, Git attribute contract and safe legacy-CRLF repair/refusal cases
   - command: python -m unittest discover -s tools/otbm_atlas/tests -v
     result: PASS
-    evidence: 83 tests pass; 5 canonical integration tests skip behind their explicit opt-in environment gate
+    evidence: 84 tests pass; 5 canonical integration tests skip behind their explicit opt-in environment gate
   - command: repository _tree_sha256 on corrected Windows checkout
     result: PASS
     evidence: 6031 files fingerprint as 4c78aa441bc6eed6a614092423a58dc6275cf2c36ea5d4bde13746c9b4ee7ee7
@@ -131,7 +135,7 @@ validation:
     evidence: no whitespace errors on the focused provenance diff
   - command: independent exact-diff audit
     result: PASS
-    evidence: fresh validator found no material findings on the focused three-path change
+    evidence: fresh validator found no material findings before the existing-checkout remediation follow-up; final remediation requires a new exact-head audit
 blockers:
   - owner review of the local visual A/B artifacts and product format decision remains pending
 next_action: present the verified current-v3 benchmark and local comparison.html to the owner for visual review without implementing WebP migration

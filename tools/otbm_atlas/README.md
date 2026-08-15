@@ -84,6 +84,18 @@ reports retain source/spool fingerprints and PNG checksums; matching chunks are
 reused on subsequent runs. The viewer supports pan, zoom, floor selection,
 coordinate display/jump, and factual mechanics/spawn overlay toggles.
 
+The canonical Tibia asset corpus is marked `-text` in `.gitattributes` because
+its fingerprint hashes raw worktree bytes. A Windows checkout created before
+that rule may still contain the legacy CRLF representation. Repair that one
+known safe line-ending-only delta after pulling with:
+
+```powershell
+python -m tools.otbm_atlas.repair_asset_checkout
+```
+
+The command is idempotent and refuses to replace any difference that is not
+exactly CRLF-to-LF relative to the tracked Git blob.
+
 NPC and monster spawn records are enriched before `data/spawns.json`, spatial
 shards and search indexes are written. Both use one shared creature renderer and
 only the vendored CrystalServer definitions plus pinned Tibia 15.25 creature
