@@ -137,7 +137,7 @@ validation:
     evidence: no whitespace errors on the focused provenance diff
 blockers:
   - owner review of the local visual A/B artifacts and product format decision remains pending
-next_action: validate the provenance fix and preserved benchmark artifacts, then open the focused provenance PR
+next_action: complete independent audit and exact-head CI for PR #412, then merge the focused provenance correction
 ```
 
 ## Recovery checkpoint
