@@ -28,5 +28,15 @@ assert.equal(first.path,'phase-0.png');
 assert.equal(second.phase,1);
 assert.equal(second.path,'phase-1.png');
 assert.notEqual(first.path,second.path);
+
+const asyncCanonical=structuredClone(descriptor);
+asyncCanonical.groups.moving.synchronized=false;
+asyncCanonical.groups.moving.defaultStartPhase=1;
+asyncCanonical.groups.moving.randomStartPhase=false;
+const anotherRecord={position:{x:30000,y:30000,z:7}};
+assert.equal(creatureAnimationSelection(asyncCanonical,record,0).phase,1);
+assert.equal(creatureAnimationSelection(asyncCanonical,anotherRecord,0).phase,1);
+assert.equal(creatureAnimationSelection(asyncCanonical,record,100).phase,0);
+
 assert.equal(creatureAnimationSelection({schemaVersion:2},record,0),null);
 console.log('creature animation runtime selection: PASS');
