@@ -1,19 +1,26 @@
 ---
 task_id: OTH-20260815-otbm-atlas-creature-animation
-status: in_progress
-owner: openai
+status: waiting
+owner: none
 branch: feat/otbm-atlas-creature-animation
 base_branch: main
 created: 2026-08-15T10:47:00+02:00
-updated: 2026-08-15T10:47:00+02:00
+updated: 2026-08-15T11:49:00+02:00
 project_lane: otheryn-content
+execution_mode: chat-github
+execution_reason: GitHub connector plus isolated GitHub Actions provide all repository writes, pinned-data validation and Chromium E2E without owner-funded Codex quota.
 owned_paths:
   - tools/otbm_atlas/**
   - .github/workflows/otbm-creature-animation-tests.yml
+  - .github/workflows/otbm-creature-animation-audit.yml
   - docs/maps/otbm-atlas-completion-audit-20260814.md
   - docs/agents/tasks/active/OTH-20260815-otbm-atlas-creature-animation.md
 required_reads:
   - AGENTS.md
+  - docs/agents/AGENTS.md
+  - docs/agents/EXECUTION_PROTOCOL.md
+  - docs/agents/ANTI_STALL_AND_EXECUTION_BUDGET.md
+  - docs/agents/GITHUB_ONLY_EXECUTION.md
   - docs/agents/DELIVERY_COMPLETENESS_AND_CLOSEOUT.md
 ---
 
@@ -23,7 +30,7 @@ required_reads:
 
 Close the remaining verified runtime gap in the OTBM Atlas by extending the existing canonical NPC/monster sprite pipeline with bounded, time-based creature animation derived only from the pinned Tibia appearance data already vendored under `vendor/map-analysis/**`.
 
-This task does not simulate world movement or invent server state. Static spawn positions remain factual. Creature animation is a presentation of canonical appearance frame groups and directions at those factual positions.
+The atlas does not simulate world movement or invent server state. Static spawn positions remain factual; animation presents canonical appearance frame groups and direction semantics at those positions.
 
 ## Delivery classification
 
@@ -39,49 +46,92 @@ feature_scope:
 
 ## Acceptance criteria
 
-- Preserve creature frame-group semantics from pinned appearance protobuf metadata instead of flattening all groups into one static frame.
-- Export canonical renderable phases for NPCs and monsters, retaining outfit recolouring and addons for every rendered phase.
-- Support the canonical cardinal direction patterns without inventing diagonal source frames.
-- Use canonical animation timing metadata (`default_start_phase`, phase durations, synchronization, loop semantics) with deterministic conservative fallback where metadata is unsafe or incomplete.
-- Keep spawn position/provenance unchanged and do not simulate creature pathing.
-- Keep browser work viewport/zoom bounded; no world-wide animation payload at startup.
-- Reuse bounded image/runtime timing concepts instead of generating GIF/WebP/video assets for production.
-- Preserve the current static sprite/dot fallback for unresolved or unsupported records.
-- Unit tests must cover frame-group decoding, direction selection, phase rendering, recolouring/addons, timing and fallbacks.
-- Real pinned-data integration must cover at least one NPC and one monster with more than one canonical animation phase.
-- Real Chromium E2E must prove that the same NPC and same monster change canonical rendered phase over time in the production viewer.
-- The E2E workflow must upload human-viewable production evidence plus machine-readable source/timing evidence.
-- Existing OTBM Atlas, factual-layer, environment-animation and creature static-sprite behavior must remain green.
-- Final exact-head CI and independent post-implementation audit must pass before completion.
-
-## Forbidden shortcuts
-
-- no AI/generated/mock creature frames;
-- no network or `data-otservbr-global` fallback for canonical creature visuals;
-- no fabricated direction or movement route;
-- no whole-world creature animation preload;
-- no per-spawn prebuilt GIF/animated WebP production model;
-- no promotion of unresolved appearance data to certain truth.
+- Preserve canonical creature frame-group identity and phase metadata.
+- Export renderable NPC/monster phases with exact pinned sprites, outfit recolouring and addons.
+- Preserve canonical cardinal direction patterns without inventing unsupported direction meanings.
+- Honor canonical phase duration, synchronization, default-start, random-start and loop metadata conservatively.
+- Never mutate factual spawn positions or simulate creature pathing.
+- Keep browser animation viewport/zoom bounded with bounded caches and static canonical fallback.
+- Keep canonical inputs restricted to `vendor/map-analysis/**`.
+- Real pinned-data integration must cover a canonical NPC and monster.
+- Real Chromium E2E must prove time-varying phases for the same NPC and same monster in the production viewer.
+- Independent clean-runner audit must have zero material findings.
+- Existing atlas/factual/environment/static-creature regressions and exact-head Required/CI must pass before merge.
 
 ## Context checkpoint
 
 ```yaml
-checkpoint_version: 1
-updated_at: 2026-08-15T10:47:00+02:00
+policy_version: 2
+checkpoint_version: 2
+phase: validate
+task_kind: implementation
+implementation_authorized: true
+session_id: chat-github-20260815-atlas-creature-animation
+session_role: validator
+execution_mode: chat-github
+execution_reason: GitHub connector and GitHub Actions are sufficient; no Codex or owner-funded AI quota is used.
+updated_at: 2026-08-15T11:49:00+02:00
+invocation_started_at: 2026-08-15T10:47:00+02:00
+last_progress_at: 2026-08-15T11:49:00+02:00
+lease_expires_at: null
+context_pressure: medium
+context_growth: stable
+context_score: 7
+estimate_confidence: high
+decomposition_decision: phased
+decomposition_reason: one cohesive atlas feature moved through implementation, repair, independent audit and E2E on one branch/PR.
+validation_level: full
+session_rotation_count: 0
+heavy_validation_runs: 5
+stale_takeover_count: 0
+human_interruptions: 0
+ci_checks_for_current_head: 3
+unchanged_state_checks: 0
+identical_failure_retries: 0
+repair_cycles_for_current_gate: 3
+context_reconstruction_attempts: 0
+stall_warnings: 1
 base_main: 75e121478beadbe12d4c77343f693f74887f489d
-branch: feat/otbm-atlas-creature-animation
-status: in_progress
+pr: 399
+validated_runtime_head: 780e2dd94bfd44d05c158ce134200582af9584c6
+validated_audit_head: b7d9c6079a5f0f84c9976ef2fddfe1343fc885e6
+checkpoint_commit_scope: documentation-only durable-state correction; runtime implementation is unchanged
 proven:
-  - completion audit classifies original full OTBM atlas core as DONE
-  - canonical static NPC and monster sprite parity is merged and archived
-  - current CreatureSpriteRenderer is intentionally static and selects one frame group, one direction pattern and one default phase
-  - assets.py already decodes animation phase durations, synchronization, start and loop metadata but does not retain frame-group type
-  - existing environment runtime already provides bounded animation timing/cache concepts suitable for reuse
-  - current main has no competing creature-animation PR
+  - current main remained 75e121478beadbe12d4c77343f693f74887f489d during feature validation
+  - canonical Tibia protobuf frame groups are preserved as idle/moving rather than flattened
+  - canonical N/E/S/W direction patterns and all renderable phases are exported without invented path movement
+  - asynchronous non-random animations use a bounded per-spawn first-seen clock so defaultStartPhase is honored
+  - random per-spawn offset is applied only when canonical randomStartPhase metadata permits it
+  - static canonical sprite/dot fallbacks remain conservative
+  - browser work is bounded to enabled creature layers and visible chunks with bounded image, shard, descriptor and start-clock LRUs
+  - real pinned-data NPC Tanyt lookType 1199 resolves from vendor/map-analysis/crystalserver/data-global/npc/tanyt.lua
+  - real pinned-data monster Silver Rabbit lookType 262 resolves from vendor/map-analysis/crystalserver/data-global/monster/mammals/silver_rabbit.lua
+  - both prove 8 distinct south phase images at 300 ms per phase and canonical north/east/south/west directions
+  - real Chromium creature-animation E2E run 31876770535 on exact runtime head 780e2dd94bfd44d05c158ce134200582af9584c6 completed SUCCESS; job 94993568366
+  - prior human-viewable production artifact run 31876571280 completed SUCCESS and uploaded otbm-creature-animation-showcase artifact 9245078739
+  - independent clean-runner audit run 31877436007 on head b7d9c6079a5f0f84c9976ef2fddfe1343fc885e6 completed SUCCESS with materialFindings=0; job 94995134683
+  - exact-head Required run 31877435952 on b7d9c6079a5f0f84c9976ef2fddfe1343fc885e6 completed SUCCESS
+  - exact-head CI run 31877436065 on b7d9c6079a5f0f84c9976ef2fddfe1343fc885e6 completed SUCCESS
+  - exact-head autofix run 31877435954 on b7d9c6079a5f0f84c9976ef2fddfe1343fc885e6 completed SUCCESS
+  - exact-head factual-layer audit run 31877435998 completed SUCCESS
+  - exact-head factual-layer integration run 31877435971 completed SUCCESS
+  - exact-head extended item animation browser E2E job 94995134580 completed SUCCESS
+  - PR 399 is mergeable and all known review threads are resolved
+pending:
+  - final-head creature-animation E2E run 31877435955 is still running
+  - final-head canonical static creature showcase run 31877435947 is still running
+  - final-head environment-animation canonical build job 94995134637 is still running
+  - final-head OTBM Atlas Tests run 31877435956 is queued
 constraints:
-  - canonical vendored sources only
-  - do not simulate server/world movement
-  - do not consume owner-funded AI/Codex quota
+  - do not merge PR 399 before every required final gate is terminal PASS
+  - do not deploy or mutate any protected/live environment
+  - do not simulate creature movement beyond canonical appearance phase playback
+  - do not use owner-funded Codex/OpenAI quota
 blockers: []
-next_action: extend appearance decoding with frame-group identity and implement canonical multi-phase creature animation export/runtime with focused tests
+status: waiting
+next_action: inspect each pending final-head workflow once when terminal; if all required gates PASS and review remains clean, enable/perform protected expected-head squash merge of PR 399, then archive this task and perform the single permitted atlas lifecycle closeout/cleanup task in a fresh session only if the new invocation budget permits it
 ```
+
+## Anti-stall stop reason
+
+The foreground invocation reached the repository's normal 60-minute runtime budget while required final-head workflows were still pending. Further polling in the same invocation is forbidden by `ANTI_STALL_AND_EXECUTION_BUDGET.md`; durable state is therefore `waiting`, with no active owner/lease.
