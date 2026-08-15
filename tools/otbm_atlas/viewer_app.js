@@ -49,6 +49,7 @@ function viewportBounds(){const a=screenToWorld(0,0),b=screenToWorld(canvas.widt
 
 function drawCreatureSprite(record,x,y){
   if(!record.sprite||state.zoom<.45)return false;
+  if(record.spriteAnimation)return true;
   const size=Math.max(14,32*state.zoom),generation=drawGeneration;
   loadImage(record.sprite,image=>{if(generation!==drawGeneration)return;ctx.imageSmoothingEnabled=false;ctx.drawImage(image,x-size/2,y-size/2,size,size)});
   return true;
