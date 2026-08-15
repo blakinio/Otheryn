@@ -47,6 +47,21 @@ class CanonicalCreatureIntegrationTests(unittest.TestCase):
 				return dict(record), outfit
 		raise AssertionError(f"no renderable canonical {kind} base-map spawn")
 
+	@classmethod
+	def _real_animated_spawn(cls, kind: str) -> tuple[dict[str, object], object, dict[str, object]]:
+		key = "npcSpawns" if kind == "npc" else "monsterSpawns"
+		index = cls.npc_index if kind == "npc" else cls.monster_index
+		for source in cls.spawns[key]:
+			if source.get("origin") != "base-map":
+				continue
+			outfit, status = index.resolve(str(source["name"]))
+			if status != "resolved" or outfit is None:
+				continue
+			animation, animation_status = cls.renderer.render_animation_with_status(outfit)
+			if animation is not None and animation_status == "resolved":
+				return dict(source), outfit, animation
+		raise AssertionError(f"no animated canonical {kind} base-map spawn")
+
 	def test_real_vendored_npc_spawn_resolves_and_generates_sprite(self) -> None:
 		record, outfit = self._real_spawn("npc", "Benjamin")
 		with tempfile.TemporaryDirectory() as directory:
@@ -70,6 +85,23 @@ class CanonicalCreatureIntegrationTests(unittest.TestCase):
 		self.assertEqual(stats["resolvedSpawns"], 1)
 		self.assertTrue(str(record["outfitSource"]).startswith("vendor/map-analysis/crystalserver/data-global/monster/"))
 		self.assertEqual(record["lookType"], outfit.look_type)
+
+	def test_real_pinned_npc_and_monster_have_time_based_animation_export(self) -> None:
+		for kind, enrich, definition_root in (("npc", enrich_npc_spawns, NPC_ROOT), ("monster", enrich_monster_spawns, MONSTER_ROOT)):
+			record, _outfit, animation = self._real_animated_spawn(kind)
+			self.assertIn(animation["presentationGroup"], {"idle", "moving"})
+			with tempfile.TemporaryDirectory() as directory:
+				output = Path(directory)
+				stats = enrich(ASSETS, definition_root, output, [record], ROOT)
+				self.assertEqual(stats["animatedSpawns"], 1)
+				self.assertEqual(record["spriteAnimationStatus"], "resolved")
+				manifest_path = output / str(record["spriteAnimation"])
+				self.assertTrue(manifest_path.is_file())
+				manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+				group = manifest["groups"][manifest["presentationGroup"]]
+				self.assertGreater(len(group["phaseDurationsMs"]), 1)
+				self.assertIn(manifest["presentationDirection"], group["frames"])
+				self.assertEqual(len(group["frames"][manifest["presentationDirection"]]), len(group["phaseDurationsMs"]))
 
 	def test_real_vendored_apostrophe_monster_definition_resolves(self) -> None:
 		outfit, status = self.monster_index.resolve("Mooh'Tah Warrior")

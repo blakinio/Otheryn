@@ -1,6 +1,6 @@
-# Canonical creature sprites
+# Canonical creature sprites and animation
 
-OTBM Atlas renders static NPC and monster outfit markers from one shared creature pipeline.
+OTBM Atlas renders canonical NPC and monster outfit overlays from one shared creature pipeline. Resolved creatures retain the established static PNG fallback and may additionally expose bounded time-based animation derived from the pinned Tibia appearance frame groups.
 
 ## Canonical sources
 
@@ -17,52 +17,84 @@ The production atlas source contract is intentionally closed:
 
 ## Architecture
 
-`creature_sprites.py` owns the canonical `CreatureOutfit` model, definition-index conflict rules, colour-mask handling, addon pattern selection, bounded decoded-sheet/sprite caches, deterministic sprite extraction and deduplicated spawn enrichment.
+`assets.py` preserves the outer Tibia appearance frame-group identity in addition to each group's sprite/animation metadata. Creature groups are interpreted only by the pinned protobuf contract:
 
-`npc_sprites.py` and `monster_sprites.py` are thin definition layers:
+- `FIXED_FRAME_GROUP_OUTFIT_IDLE` -> `idle`;
+- `FIXED_FRAME_GROUP_OUTFIT_MOVING` -> `moving`;
+- unrelated/unsupported frame-group kinds are not promoted to creature animation truth.
 
-- NPC definitions require a literal `internalNpcName` and `npcConfig.outfit` with a positive `lookType`.
-- Monster definitions require a literal `Game.createMonsterType("...")` and `monster.outfit` with a positive `lookType`.
+`creature_sprites.py` owns the canonical `CreatureOutfit` model, definition-index conflict rules, colour-mask handling, addon pattern selection, bounded decoded-sheet/sprite caches, deterministic sprite extraction, animation phase rendering and deduplicated spawn enrichment.
+
+`npc_sprites.py` and `monster_sprites.py` remain thin definition layers:
+
+- NPC definitions require a literal `internalNpcName` and `npcConfig.outfit` with a positive `lookType`;
+- monster definitions require a literal `Game.createMonsterType("...")` and `monster.outfit` with a positive `lookType`;
 - matching is case-insensitive;
 - identical duplicate definitions collapse deterministically to the first sorted source;
 - conflicting outfit definitions for one canonical name are `ambiguous-definition` and remain unresolved;
 - aliases are accepted only from explicit evidence supplied to the definition index; filenames, folders, descriptions and appearance similarity are never aliases.
 
-The shared renderer resolves `lookType` against the pinned `appearances-*.dat`, extracts the exact pinned sprite IDs, applies Tibia outfit masks for head/body/legs/feet, applies addon bits, and writes one PNG per outfit key. Multiple spawns with the same outfit therefore share one asset.
+The shared renderer resolves `lookType` against the pinned `appearances-*.dat`, extracts the exact pinned sprite IDs, applies Tibia outfit masks for head/body/legs/feet and applies addon bits to every rendered phase.
 
-Generated paths are:
+## Static sprite contract
 
-- `data/npc-sprites/<outfitKey>.png` and `data/npc-sprites/index.json`;
-- `data/monster-sprites/<outfitKey>.png` and `data/monster-sprites/index.json`.
+The established static marker remains the conservative fallback. One PNG is written per outfit key and reused by every spawn with that outfit:
 
-The index files include source-root provenance and resolution statistics.
+- `data/npc-sprites/<outfitKey>.png`;
+- `data/monster-sprites/<outfitKey>.png`.
 
-## Spawn enrichment and fallback
+If a definition, look type, creature appearance or sprite cannot be proven from the vendored corpus, the record remains factual and `spriteStatus` records the unresolved reason. The viewer keeps the existing dot marker when no canonical sprite is available.
 
-NPC and monster spawns are enriched immediately after `scan_spawns(...)`, before `data/spawns.json`, spatial shards and search indexes are written. Consequently a resolved monster record carries the same factual outfit fields as a resolved NPC record:
+## Animation export contract
 
-- `lookType`;
-- `lookHead`;
-- `lookBody`;
-- `lookLegs`;
-- `lookFeet`;
-- `lookAddons`;
-- `outfitSource`;
-- `sprite`;
-- `spriteStatus`.
+When a resolved appearance has a safely renderable canonical idle or moving group with more than one phase, the exporter writes one deduplicated animation package per outfit instead of one animation per spawn:
 
-If a definition, look type, creature appearance or sprite cannot be proven from the vendored corpus, the record remains factual and `spriteStatus` records the unresolved reason. The viewer keeps the existing dot marker. No appearance is invented and no cross-datapack fallback is attempted.
+- `data/<kind>-sprites/<outfitKey>/animation.json`;
+- `data/<kind>-sprites/<outfitKey>/<group>/<direction>/<phase>.png`.
 
-## Viewer policy
+The manifest retains:
 
-At close zoom, `drawCreatureSprite(record, ...)` is shared by NPC and monster spawn kinds. Browser image loading remains lazy and bounded by the existing LRU, image smoothing stays disabled for pixel-perfect scaling, and marker hit-testing/details/search/URL state continue to use the same records.
+- frame-group type/id;
+- canonical phase count;
+- phase duration ranges and deterministic runtime durations;
+- default start phase;
+- synchronization metadata;
+- loop type/count;
+- supported presentation directions;
+- the exact exported phase paths.
 
-Monster overlays remain suppressed below zoom `0.25`; the viewer does not try to load or draw the world-wide monster population at low zoom.
+Direction semantics are conservative. Four-pattern-or-wider creature groups expose canonical north/east/south/west pattern indices `0/1/2/3`; one-pattern groups expose one presentation direction using their only provable pattern. Two- or three-pattern groups are not assigned invented cardinal meanings.
 
-## Animation boundary
+The production map does **not** simulate creature pathing. Spawn coordinates remain the factual XML positions. A moving frame group can be presented in place as canonical appearance animation, but the atlas never claims that the NPC or monster walked to another tile or faced a server-observed direction.
 
-This slice is **static canonical creature sprite parity**. It does not implement creature idle/walk animation, direction changes, simulated movement, GIFs or animated WebP. The runtime item/environment animation system remains separate. A future creature-animation layer should reuse the same appearance lookup, outfit model and bounded caches rather than create another renderer.
+If animation metadata or phase resources cannot be rendered safely, `spriteAnimationStatus` remains explicit and the browser retains the canonical static sprite. No generated/mock frame, cross-datapack fallback or guessed movement is used.
+
+## Browser runtime
+
+`creature_animation_runtime.js` owns the time-based browser overlay. It is separate from the base map canvas and reuses the existing atlas timing/cache concepts rather than producing GIFs, animated WebP or videos for production.
+
+Runtime behavior is bounded:
+
+- creature animation activates only at close zoom (`CREATURE_ANIMATION_SCALE = 0.45`);
+- only enabled creature layers are considered;
+- only visible spatial chunks are loaded;
+- chunk JSON, animation descriptors and decoded images use bounded LRUs;
+- the browser never requests a world-wide creature animation payload at startup;
+- image smoothing stays disabled for pixel-art scaling;
+- marker hit testing, details, search and URL state continue to use the same factual spawn records.
+
+Monster overlays retain their existing low-zoom suppression below `0.25`.
+
+## Relationship to environment animation
+
+Creature animation and item/environment animation use different appearance categories and exporters. They intentionally share only safe runtime concepts such as bounded caches and canonical phase timing. Creature frame-group/direction semantics are not inferred from object animation semantics.
 
 ## Verification
 
-`tools/otbm_atlas/tests/test_canonical_creatures.py` is the real pinned-data integration suite (enabled with `OTBM_ATLAS_CANONICAL_INTEGRATION=1`). `.github/workflows/otbm-creature-showcase.yml` runs it, generates full NPC/monster resolution statistics, renders a real vendored map region containing one renderable NPC and monster, proves both sprite resources load in real Chromium, and uploads `otbm-creature-showcase` with the screenshot and JSON source fingerprints.
+`tools/otbm_atlas/tests/test_canonical_creatures.py` is the real pinned-data integration suite (enabled with `OTBM_ATLAS_CANONICAL_INTEGRATION=1`). It requires renderable canonical creature records and verifies that at least one real NPC and one real monster can export time-based canonical animation metadata and phase resources.
+
+`.github/workflows/otbm-creature-showcase.yml` remains the static canonical NPC/monster regression showcase.
+
+`.github/workflows/otbm-creature-animation-tests.yml` is the dedicated animation gate. It builds a real fixture from the pinned world/definitions/assets, opens the production viewer in real Chromium, requires multiple canonical phase resources for the same NPC and the same monster, verifies time-varying creature overlay output, and uploads machine-readable provenance plus human-viewable map-context/phase evidence.
+
+A creature animation feature is not considered complete merely because phase PNGs were exported. The Chromium phase-playback gate and exact-head repository validation must pass.

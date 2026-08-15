@@ -1,0 +1,248 @@
+---
+name: OTBM Creature Animation E2E
+
+on:
+  pull_request:
+    paths:
+      - "tools/otbm_atlas/**"
+      - ".github/workflows/otbm-creature-animation-tests.yml"
+      - "vendor/map-analysis/crystalserver/creature-sources-manifest.json"
+      - "vendor/map-analysis/crystalserver/data-global/world/**"
+      - "vendor/map-analysis/crystalserver/data-global/npc/**"
+      - "vendor/map-analysis/crystalserver/data-global/monster/**"
+      - "vendor/map-analysis/tibia-client/15.25.bd5a04/assets/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  canonical-creature-animation:
+    name: Pinned NPC and monster phase playback
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          persist-credentials: false
+      - name: Run focused animation checks
+        env:
+          OTBM_ATLAS_CANONICAL_INTEGRATION: "1"
+        run: |
+          node --check tools/otbm_atlas/viewer_app.js
+          node --check tools/otbm_atlas/creature_animation_runtime.js
+          node tools/otbm_atlas/tests/test_creature_animation_runtime.mjs
+          python3 -m unittest discover -s tools/otbm_atlas/tests -p 'test_*.py' -v
+      - name: Install Chromium harness
+        run: |
+          python3 -m pip install --disable-pip-version-check playwright==1.54.0
+          python3 -m playwright install --with-deps chromium
+      - name: Build real canonical animated creature fixture
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          from tools.otbm_atlas.assets import FRAME_GROUP_OUTFIT_IDLE, FRAME_GROUP_OUTFIT_MOVING
+          from tools.otbm_atlas.creature_sprites import CreatureSpriteRenderer
+          from tools.otbm_atlas.monster_sprites import enrich_monster_spawns, parse_monster_definition_index
+          from tools.otbm_atlas.npc_sprites import enrich_npc_spawns, parse_npc_definition_index
+          from tools.otbm_atlas.render import render_region
+          from tools.otbm_atlas.spatial import write_spatial_data
+          from tools.otbm_atlas.spawns import scan_spawns
+          from tools.otbm_atlas.viewer import write_viewer
+
+          repo = Path('.')
+          world_root = repo / 'vendor/map-analysis/crystalserver/data-global/world'
+          npc_root = repo / 'vendor/map-analysis/crystalserver/data-global/npc'
+          monster_root = repo / 'vendor/map-analysis/crystalserver/data-global/monster'
+          assets = repo / 'vendor/map-analysis/tibia-client/15.25.bd5a04/assets'
+          map_path = world_root / 'world.otbm'
+          source_manifest = repo / 'vendor/map-analysis/crystalserver/creature-sources-manifest.json'
+          root = Path('/tmp/otbm-creature-animation-showcase')
+          root.mkdir(parents=True, exist_ok=True)
+
+          spawns = scan_spawns(world_root)
+          npc_index = parse_npc_definition_index(npc_root, repo)
+          monster_index = parse_monster_definition_index(monster_root, repo)
+          renderer = CreatureSpriteRenderer(assets)
+
+          def select(kind, index):
+              key = 'npcSpawns' if kind == 'npc' else 'monsterSpawns'
+              for source in spawns[key]:
+                  if source.get('origin') != 'base-map':
+                      continue
+                  outfit, status = index.resolve(str(source['name']))
+                  if status != 'resolved' or outfit is None:
+                      continue
+                  appearance = renderer.appearances.get(outfit.look_type)
+                  if appearance is None:
+                      continue
+                  eligible = any(
+                      frame.frame_group_type in (FRAME_GROUP_OUTFIT_IDLE, FRAME_GROUP_OUTFIT_MOVING)
+                      and frame.animation_phases > 1
+                      and (frame.pattern_width == 1 or frame.pattern_width >= 4)
+                      for frame in appearance.frames
+                  )
+                  if not eligible:
+                      continue
+                  animation, animation_status = renderer.render_animation_with_status(outfit)
+                  if animation is None or animation_status != 'resolved':
+                      continue
+                  group = animation['groups'][animation['presentationGroup']]
+                  frames = group['directionFrames'][animation['presentationDirection']]
+                  if len({hashlib.sha256(payload).digest() for payload in frames}) < 2:
+                      continue
+                  return dict(source)
+              raise AssertionError(f'no canonical visibly animated {kind} base-map spawn')
+
+          npc = select('npc', npc_index)
+          monster = select('monster', monster_index)
+          npc_stats = enrich_npc_spawns(assets, npc_root, root, [npc], repo)
+          monster_stats = enrich_monster_spawns(assets, monster_root, root, [monster], repo)
+          assert npc.get('spriteAnimation') and npc_stats['animatedSpawns'] == 1, (npc, npc_stats)
+          assert monster.get('spriteAnimation') and monster_stats['animatedSpawns'] == 1, (monster, monster_stats)
+
+          records = [('npc', npc), ('monster', monster)]
+          chunk_records = {}
+          for kind, record in records:
+              p = record['position']; key = (p['z'], p['x'] // 128, p['y'] // 128)
+              chunk_records.setdefault(key, []).append((kind, record))
+          chunks = []
+          for (z, chunk_x, chunk_y), entries in sorted(chunk_records.items()):
+              margin = 6
+              x1 = min(entry['position']['x'] for _kind, entry in entries) - margin
+              x2 = max(entry['position']['x'] for _kind, entry in entries) + margin
+              y1 = min(entry['position']['y'] for _kind, entry in entries) - margin
+              y2 = max(entry['position']['y'] for _kind, entry in entries) + margin
+              bounds = (x1, x2, y1, y2, z)
+              png, report = render_region(map_path, assets, bounds)
+              assert report['renderOperations'] > 0, report
+              image_path = f'tiles/z{z}/{chunk_x}_{chunk_y}.png'
+              image = root / image_path; image.parent.mkdir(parents=True, exist_ok=True); image.write_bytes(png)
+              chunks.append({
+                  'z': z, 'chunkX': chunk_x, 'chunkY': chunk_y,
+                  'logicalBounds': list(bounds), 'bounds': list(bounds),
+                  'path': image_path, 'overviewPath': image_path, 'lowOverviewPath': image_path,
+                  'imageWidth': report['imageWidth'], 'imageHeight': report['imageHeight'],
+              })
+          (root / 'manifest.json').write_text(json.dumps({'schemaVersion': 3, 'chunkSize': 128, 'chunks': chunks}, sort_keys=True), encoding='utf-8')
+          write_spatial_data(root, 128, {'npcSpawns': [npc], 'monsterSpawns': [monster]})
+          (root / 'data/search-index.json').parent.mkdir(parents=True, exist_ok=True)
+          (root / 'data/search-index.json').write_text(json.dumps({'records': []}), encoding='utf-8')
+          (root / 'data/environment-animations').mkdir(parents=True, exist_ok=True)
+          (root / 'data/environment-animations/index.json').write_text(json.dumps({'schemaVersion': 2, 'statistics': {'instances': 0, 'uniqueAnimations': 0, 'chunks': 0, 'staticFallbacks': 0}}), encoding='utf-8')
+          write_viewer(root)
+
+          def sha256(path):
+              digest = hashlib.sha256()
+              with path.open('rb') as handle:
+                  for block in iter(lambda: handle.read(1024 * 1024), b''):
+                      digest.update(block)
+              return digest.hexdigest()
+
+          def public(record):
+              manifest_path = root / record['spriteAnimation']
+              animation = json.loads(manifest_path.read_text(encoding='utf-8'))
+              group = animation['groups'][animation['presentationGroup']]
+              frames = group['frames'][animation['presentationDirection']]
+              assert len(frames) > 1, animation
+              return {
+                  'name': record['name'], 'position': record['position'], 'lookType': record['lookType'],
+                  'outfitSource': record['outfitSource'], 'sprite': record['sprite'],
+                  'spriteAnimation': record['spriteAnimation'], 'presentationGroup': animation['presentationGroup'],
+                  'presentationDirection': animation['presentationDirection'], 'frames': frames,
+                  'phaseDurationsMs': group['phaseDurationsMs'], 'durationRangesMs': group['durationRangesMs'],
+                  'synchronized': group['synchronized'], 'loopType': group['loopType'], 'loopCount': group['loopCount'],
+              }
+
+          creature_manifest = json.loads(source_manifest.read_text(encoding='utf-8'))
+          appearance = next(assets.glob('appearances-*.dat'))
+          evidence = {
+              'npc': public(npc), 'monster': public(monster),
+              'statistics': {'npcSprites': npc_stats, 'monsterSprites': monster_stats},
+              'canonicalSources': {
+                  'mapSha256': sha256(map_path), 'appearanceSha256': sha256(appearance),
+                  'catalogSha256': sha256(assets / 'catalog-content.json'),
+                  'creatureSourceManifestSha256': creature_manifest['contentManifestSha256'],
+                  'creatureSourceCommit': creature_manifest['commit'],
+              },
+              'policy': {'spatialMovement': 'not simulated', 'animation': 'pinned appearance frame groups only'},
+          }
+          (root / 'evidence.json').write_text(json.dumps(evidence, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          print(json.dumps({kind: evidence[kind] for kind in ('npc', 'monster')}, sort_keys=True))
+          PY
+      - name: Prove real Chromium phase changes
+        run: |
+          python3 -m http.server 8125 --directory /tmp/otbm-creature-animation-showcase >/tmp/otbm-creature-animation-http.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" || true' EXIT
+          python3 - <<'PY'
+          import base64
+          import json
+          from pathlib import Path
+          from playwright.sync_api import sync_playwright
+
+          root = Path('/tmp/otbm-creature-animation-showcase')
+          evidence_path = root / 'evidence.json'
+          evidence = json.loads(evidence_path.read_text(encoding='utf-8'))
+          errors = []
+
+          def capture(page, kind, record):
+              p = record['position']; layer = 'npcSpawns' if kind == 'npc' else 'monsterSpawns'
+              page.goto(f"http://127.0.0.1:8125/?x={p['x'] + .5}&y={p['y'] + .5}&z={p['z']}&zoom=1&render=detailed&layers={layer}", wait_until='networkidle')
+              page.wait_for_function("document.querySelector('#status').textContent.includes('Drag to pan')")
+              expected = record['frames']
+              page.wait_for_function("""paths => { const urls=performance.getEntriesByType('resource').map(entry=>entry.name); return paths.filter(path=>urls.some(url=>url.endsWith(path))).length >= 2; }""", arg=expected, timeout=10000)
+              page.wait_for_timeout(160)
+              seen = []
+              for _ in range(60):
+                  value = page.eval_on_selector('#creatureAnimations', 'canvas => canvas.toDataURL("image/png")')
+                  if value not in seen:
+                      seen.append(value)
+                  if len(seen) >= 2:
+                      break
+                  page.wait_for_timeout(50)
+              assert len(seen) >= 2, {'kind': kind, 'record': record}
+              for index, data_url in enumerate(seen[:2]):
+                  payload = base64.b64decode(data_url.split(',', 1)[1])
+                  (root / f'{kind}-overlay-phase-{index}.png').write_bytes(payload)
+              page.screenshot(path=str(root / f'{kind}-map-context.png'), full_page=True)
+              resources = page.evaluate("performance.getEntriesByType('resource').map(entry=>entry.name)")
+              loaded = [path for path in expected if any(url.endswith(path) for url in resources)]
+              return {'distinctCanvasFrames': len(seen), 'expectedPhaseFrames': len(expected), 'loadedPhaseFrames': len(loaded), 'phasePathsObserved': loaded}
+
+          with sync_playwright() as pw:
+              browser = pw.chromium.launch(headless=True)
+              page = browser.new_page(viewport={'width': 1200, 'height': 900})
+              page.on('pageerror', lambda exc: errors.append(str(exc)))
+              evidence['browser'] = {
+                  'npc': capture(page, 'npc', evidence['npc']),
+                  'monster': capture(page, 'monster', evidence['monster']),
+              }
+              browser.close()
+          assert not errors, errors
+          for kind in ('npc', 'monster'):
+              result = evidence['browser'][kind]
+              assert result['distinctCanvasFrames'] >= 2, result
+              assert result['loadedPhaseFrames'] >= 2, result
+          evidence['browser']['status'] = 'PASS'
+          evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          print(json.dumps(evidence['browser'], sort_keys=True))
+          PY
+      - name: Upload canonical creature animation evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: otbm-creature-animation-showcase
+          path: |
+            /tmp/otbm-creature-animation-showcase/evidence.json
+            /tmp/otbm-creature-animation-showcase/npc-overlay-phase-0.png
+            /tmp/otbm-creature-animation-showcase/npc-overlay-phase-1.png
+            /tmp/otbm-creature-animation-showcase/npc-map-context.png
+            /tmp/otbm-creature-animation-showcase/monster-overlay-phase-0.png
+            /tmp/otbm-creature-animation-showcase/monster-overlay-phase-1.png
+            /tmp/otbm-creature-animation-showcase/monster-map-context.png
+          if-no-files-found: error
+          retention-days: 7

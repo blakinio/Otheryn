@@ -15,6 +15,11 @@ class AssetError(ValueError):
 	pass
 
 
+FRAME_GROUP_OUTFIT_IDLE = 0
+FRAME_GROUP_OUTFIT_MOVING = 1
+FRAME_GROUP_OBJECT_INITIAL = 2
+
+
 @dataclass(frozen=True, slots=True)
 class SpriteInfo:
 	pattern_width: int
@@ -29,6 +34,8 @@ class SpriteInfo:
 	random_start_phase: bool
 	loop_type: int
 	loop_count: int
+	frame_group_type: int = FRAME_GROUP_OUTFIT_IDLE
+	frame_group_id: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +85,7 @@ def _fields(data: bytes) -> Iterator[tuple[int, int, int | bytes]]:
 	offset = 0
 	while offset < len(data):
 		key, offset = _varint(data, offset)
+		offset += 0
 		field = key >> 3
 		wire = key & 7
 		if field == 0:
@@ -117,7 +125,7 @@ def _first_int(values: dict[int, list[int | bytes]], field: int, default: int = 
 	return int(entries[0]) if entries and isinstance(entries[0], int) else default
 
 
-def _sprite_info(data: bytes) -> SpriteInfo:
+def _sprite_info(data: bytes, frame_group_type: int = FRAME_GROUP_OUTFIT_IDLE, frame_group_id: int = 0) -> SpriteInfo:
 	values = _message_values(data)
 	animation = values.get(6, [])
 	animation_values = _message_values(animation[0]) if animation and isinstance(animation[0], bytes) else {}
@@ -142,6 +150,8 @@ def _sprite_info(data: bytes) -> SpriteInfo:
 		random_start_phase=bool(_first_int(animation_values, 3)),
 		loop_type=_first_int(animation_values, 4),
 		loop_count=_first_int(animation_values, 5),
+		frame_group_type=frame_group_type,
+		frame_group_id=frame_group_id,
 	)
 
 
@@ -159,7 +169,7 @@ def _appearance(data: bytes) -> Appearance:
 		frame = _message_values(frame_data)
 		sprite_payload = _flag_message(frame, 3)
 		if sprite_payload is not None:
-			frames.append(_sprite_info(sprite_payload))
+			frames.append(_sprite_info(sprite_payload, _first_int(frame, 1), _first_int(frame, 2)))
 	shift_data = _flag_message(flags, 26)
 	shift = None
 	if shift_data is not None:
