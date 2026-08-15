@@ -1,0 +1,112 @@
+{
+  "verdict": "WEBP_LOSSLESS_WIN",
+  "repo_head": "d77d78fba6fc50ada1706f9adb5fe63a1581c6f2",
+  "environment": {
+    "os": "Windows-11-10.0.26200-SP0",
+    "cpu": "AMD64 Family 26 Model 68 Stepping 0, AuthenticAMD",
+    "python": "3.12.13 (main, Aug  7 2026, 02:26:41) [MSC v.1944 64 bit (AMD64)]",
+    "pillow": "12.3.0",
+    "libwebp": "1.6.0",
+    "encoder": {
+      "format": "WEBP",
+      "lossless": true,
+      "method": 6,
+      "exact": true
+    }
+  },
+  "corpus": {
+    "detail_chunks": 3494,
+    "detail_png_bytes": 10996609082,
+    "benchmarked": 240,
+    "floors": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15
+    ],
+    "selection": "deterministic union of 6 evenly distributed paths per floor, 16 per size quartile, then evenly distributed sorted paths; filled to exactly 240"
+  },
+  "storage": {
+    "png_bytes": 626957721,
+    "webp_bytes": 318561438,
+    "saving_bytes": 308396283,
+    "saving_percent": 49.18932691475698,
+    "ratio": 0.5081067308524302,
+    "percentiles": {
+      "p10": 34.75371351076859,
+      "p25": 47.10178363948155,
+      "p50": 64.0805078482289,
+      "p75": 78.99862552370926,
+      "p90": 91.80457292224499,
+      "p95": 96.62477614041617
+    },
+    "mean": 62.17786245855283,
+    "median": 64.0805078482289,
+    "best": 98.88447304230802,
+    "worst": -1.9247751013112768
+  },
+  "timing_ms": {
+    "encode": {
+      "total": 362604.1627,
+      "mean": 1510.8506779166667,
+      "median": 588.88195,
+      "p95": 4672.32178
+    },
+    "png_decode": {
+      "mean": 21.338264166666665,
+      "median": 16.0233,
+      "p95": 55.28444000000001
+    },
+    "webp_decode": {
+      "mean": 57.53127,
+      "median": 39.7994,
+      "p95": 156.43464,
+      "delta_percent": 148.3845400136052
+    }
+  },
+  "rgba_exact": true,
+  "full_atlas": {
+    "kind": "ESTIMATED",
+    "webp_bytes": 5587451091,
+    "saving_bytes": 5409157991,
+    "saving_percent": 49.189326915822434
+  },
+  "visual_samples": [
+    "build/full-map-atlas/tiles/z7/256_254.png",
+    "build/full-map-atlas/tiles/z8/258_253.png",
+    "build/full-map-atlas/tiles/z7/255_247.png",
+    "build/full-map-atlas/tiles/z14/262_257.png",
+    "build/full-map-atlas/tiles/z1/80_78.png",
+    "build/full-map-atlas/tiles/z10/80_80.png",
+    "build/full-map-atlas/tiles/z11/108_109.png",
+    "build/full-map-atlas/tiles/z12/94_93.png",
+    "build/full-map-atlas/tiles/z11/249_255.png",
+    "build/full-map-atlas/tiles/z6/255_250.png",
+    "build/full-map-atlas/tiles/z14/249_249.png",
+    "build/full-map-atlas/tiles/z12/257_254.png",
+    "build/full-map-atlas/tiles/z7/259_244.png",
+    "build/full-map-atlas/tiles/z7/262_249.png",
+    "build/full-map-atlas/tiles/z12/251_255.png",
+    "build/full-map-atlas/tiles/z12/262_249.png",
+    "build/full-map-atlas/tiles/z10/101_101.png",
+    "build/full-map-atlas/tiles/z10/94_94.png",
+    "build/full-map-atlas/tiles/z13/95_93.png",
+    "build/full-map-atlas/tiles/z14/95_93.png",
+    "build/full-map-atlas/tiles/z0/257_255.png",
+    "build/full-map-atlas/tiles/z1/257_246.png",
+    "build/full-map-atlas/tiles/z3/255_251.png",
+    "build/full-map-atlas/tiles/z4/258_248.png"
+  ]
+}
