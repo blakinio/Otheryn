@@ -89,9 +89,14 @@ jobs:
                   if not eligible:
                       continue
                   animation, animation_status = renderer.render_animation_with_status(outfit)
-                  if animation is not None and animation_status == 'resolved':
-                      return dict(source)
-              raise AssertionError(f'no canonical animated {kind} base-map spawn')
+                  if animation is None or animation_status != 'resolved':
+                      continue
+                  group = animation['groups'][animation['presentationGroup']]
+                  frames = group['directionFrames'][animation['presentationDirection']]
+                  if len({hashlib.sha256(payload).digest() for payload in frames}) < 2:
+                      continue
+                  return dict(source)
+              raise AssertionError(f'no canonical visibly animated {kind} base-map spawn')
 
           npc = select('npc', npc_index)
           monster = select('monster', monster_index)
@@ -190,7 +195,7 @@ jobs:
               page.goto(f"http://127.0.0.1:8125/?x={p['x'] + .5}&y={p['y'] + .5}&z={p['z']}&zoom=1&render=detailed&layers={layer}", wait_until='networkidle')
               page.wait_for_function("document.querySelector('#status').textContent.includes('Drag to pan')")
               expected = record['frames']
-              page.wait_for_function("""paths => { const urls=performance.getEntriesByType('resource').map(entry=>entry.name); return paths.filter(path=>urls.some(url=>url.endsWith(path))).length >= 2; }""", expected, timeout=10000)
+              page.wait_for_function("""paths => { const urls=performance.getEntriesByType('resource').map(entry=>entry.name); return paths.filter(path=>urls.some(url=>url.endsWith(path))).length >= 2; }""", arg=expected, timeout=10000)
               page.wait_for_timeout(160)
               seen = []
               for _ in range(60):
