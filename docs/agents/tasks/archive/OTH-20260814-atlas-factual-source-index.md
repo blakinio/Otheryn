@@ -5,7 +5,7 @@ owner: none
 branch: agent/oth-20260814-atlas-factual-source-index
 base_branch: main
 created: 2026-08-14
-updated: 2026-08-15T12:22:00+02:00
+updated: 2026-08-15T12:24:00+02:00
 project_lane: otheryn-content
 execution_mode: chat-github
 related_pr: "385"
@@ -21,7 +21,7 @@ PR #385 implemented the conservative deterministic factual-source producer again
 
 Delivered producer contracts cover static AID/UID mechanics, proven scripted teleport destinations, explicit `rewardBoss` evidence, raid/event areas and point spawns, and NPC shop/bank/guild-bank/travel evidence with exact provenance.
 
-PR #390 subsequently consumed this producer in `tools/otbm_atlas/**`, closing the original producer/consumer boundary. The historical closeout PR #388 was closed as superseded on 2026-08-15 because its missing-consumer P1 is no longer applicable and its unique archive intent is preserved here.
+PR #390 subsequently consumed this producer in `tools/otbm_atlas/**`, closing the original producer/consumer boundary. Historical closeout PR #388 was closed as superseded on 2026-08-15 because its missing-consumer P1 is no longer applicable and its unique archive intent is preserved here.
 
 ## Terminal evidence
 
@@ -50,6 +50,7 @@ closeout:
       - deterministic factual JSON to production chunked atlas layers
   pull_requests:
     open_related_prs: 0
+    unresolved_review_threads: 0
     terminal_prs:
       - number: 385
         state: merged
@@ -64,5 +65,7 @@ closeout:
   ownership_released: true
   stale_branches_reconciled: true
 ```
+
+The two historical P1 threads on superseded PR #388 were formally resolved during this final closeout: the production consumer is concretely PR #390, and the non-UI CLI boundary is recorded as E2E PASS rather than `NOT_APPLICABLE`.
 
 No factual-source-index work remains schedulable under `docs/agents/tasks/active/`.
