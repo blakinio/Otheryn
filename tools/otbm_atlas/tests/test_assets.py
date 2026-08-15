@@ -3,7 +3,14 @@ from __future__ import annotations
 import struct
 import unittest
 
-from tools.otbm_atlas.assets import SpriteSheet, encode_png, extract_sprite, load_creature_appearances, load_object_appearances
+from tools.otbm_atlas.assets import (
+	FRAME_GROUP_OUTFIT_MOVING,
+	SpriteSheet,
+	encode_png,
+	extract_sprite,
+	load_creature_appearances,
+	load_object_appearances,
+)
 from tools.otbm_atlas.tests.test_semantic import string
 
 
@@ -43,6 +50,20 @@ class AssetTests(unittest.TestCase):
 		self.assertEqual(decoded.frames[0].sprite_ids, (123,))
 		self.assertEqual((decoded.frames[0].pattern_width, decoded.frames[0].pattern_height), (2, 1))
 		self.assertEqual(decoded.frames[0].default_start_phase, 0)
+
+	def test_appearance_wire_decoder_preserves_frame_group_type_and_id(self) -> None:
+		sprite_info = varint(1 << 3) + b"\x04" + varint(5 << 3) + varint(321)
+		frame = varint(1 << 3) + varint(FRAME_GROUP_OUTFIT_MOVING) + varint(2 << 3) + varint(7) + field(3, sprite_info)
+		appearance = varint(1 << 3) + varint(138) + field(2, frame)
+		root = field(2, appearance)
+		import tempfile
+		from pathlib import Path
+		with tempfile.TemporaryDirectory() as directory:
+			path = Path(directory, "appearances.dat"); path.write_bytes(root)
+			decoded = load_creature_appearances(path)[138].frames[0]
+		self.assertEqual(decoded.frame_group_type, FRAME_GROUP_OUTFIT_MOVING)
+		self.assertEqual(decoded.frame_group_id, 7)
+		self.assertEqual(decoded.pattern_width, 4)
 
 	def test_creature_appearance_loader_uses_creature_category(self) -> None:
 		appearance = varint(1 << 3) + varint(138)
