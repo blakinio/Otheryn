@@ -103,7 +103,10 @@ def enrich_existing_atlas(asset_dir: Path, npc_root: Path, output: Path, source_
 		for record in content.get("npcSpawns", []):
 			updated = by_name.get(str(record.get("name", "")).casefold())
 			if updated:
-				record.update({key: value for key, value in updated.items() if key.startswith("look") or key in {"outfitSource", "sprite", "spriteStatus"}})
+				record.update({
+					key: value for key, value in updated.items()
+					if key.startswith("look") or key in {"outfitSource", "sprite", "spriteStatus", "spriteAnimation", "spriteAnimationStatus"}
+				})
 		path.write_text(json.dumps(content, separators=(",", ":"), sort_keys=True) + "\n", encoding="utf-8")
 	return statistics
 
