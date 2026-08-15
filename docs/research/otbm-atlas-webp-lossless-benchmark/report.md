@@ -2,7 +2,8 @@ VERDICT: WEBP_LOSSLESS_WIN
 
 ## Environment
 
-- Repository head: `d77d78fba6fc50ada1706f9adb5fe63a1581c6f2`
+- Local checkout commit at measurement time: `d77d78fba6fc50ada1706f9adb5fe63a1581c6f2` (the temporary remote branch was later deleted; this commit is recorded as historical context, not as the durable corpus identity)
+- Durable atlas corpus identity from `build/full-map-atlas/manifest.json`: schema 2, atlas version 2, chunk size 128, map SHA-256 `3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034`, assets SHA-256 `4d11c5be0438c8fa08d079a558fe99f5f28d3db5df0aa742c5a46d4260c905c2`
 - OS: Windows-11-10.0.26200-SP0
 - CPU: AMD64 Family 26 Model 68 Stepping 0, AuthenticAMD
 - Python: 3.12.13; Pillow: 12.3.0; libwebp: 1.6.0

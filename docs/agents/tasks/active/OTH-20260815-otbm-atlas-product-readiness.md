@@ -5,10 +5,10 @@ owner: none
 branch: none
 base_branch: main
 created: 2026-08-15T14:09:00+02:00
-updated: 2026-08-15T14:27:00+02:00
+updated: 2026-08-15T14:29:00+02:00
 project_lane: otheryn-content
 execution_mode: chat-github
-related_pr: "405"
+related_pr: "406"
 ownership_released: true
 ---
 
@@ -36,7 +36,7 @@ The durable continuation handover is:
 - The reported 240-chunk sample spans Z0..Z15 and measures existing PNG `626957721` bytes versus lossless WebP `318561438` bytes: `308396283` bytes / `49.18932691475698%` aggregate saving, with decoded RGBA equality for all `240/240` tested chunks.
 - The reported local detail directory contains 3494 PNG chunks totaling `10996609082` bytes. The reported `5587451091`-byte full-detail WebP value is explicitly ESTIMATED from the sample ratio, not measured by converting all chunks.
 - Reported Pillow/libwebp decode timings are local codec measurements only, not browser benchmarks.
-- PR #405 fixes the committed benchmark script's repository-root bug and records the measured local corpus manifest identity.
+- PR #405 merged the benchmark repository-root correction and records the measured local corpus manifest identity.
 - That manifest identifies the measured local corpus as schema/Atlas version 2 with assets SHA-256 `4d11c5be0438c8fa08d079a558fe99f5f28d3db5df0aa742c5a46d4260c905c2`.
 - The current canonical Atlas implementation is version 3, and the certified full-world release evidence is Atlas version 3 with assets SHA-256 `4c78aa441bc6eed6a614092423a58dc6275cf2c36ea5d4bde13746c9b4ee7ee7` and the same canonical map SHA-256 `3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034`.
 - Therefore the supplied benchmark is useful codec-direction evidence on real generated Atlas detail chunks, but it is not yet a verified benchmark of the current certified Atlas v3 detail corpus.
@@ -52,14 +52,15 @@ No worker/branch ownership is held while waiting.
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-08-15T14:27:00+02:00
+updated_at: 2026-08-15T14:29:00+02:00
 status: waiting
 project_lane: otheryn-content
 execution_mode: chat-github
-base_main_at_verification: 5e87f6cb50681b3f9b00d3eb4fbdaf2c0509f461
+base_main_at_verification: 596c37c832a75999f4049b4b16a79ed47b1dbf9b
 related_prs:
   - 404
   - 405
+  - 406
 proven:
   - technical Atlas implementation and full-world certification are already DONE/VERIFIED
   - PR 404 merged a deterministic 240-detail-chunk benchmark spanning Z0..Z15
@@ -71,7 +72,7 @@ proven:
   - per-floor sample counts sum to 240 and per-floor byte totals sum exactly to the aggregate PNG/WebP totals
   - the reported full-detail WebP size 5587451091 bytes is ESTIMATED, not measured
   - local PNG/WebP decode timings are not browser-performance evidence
-  - PR 405 corrects the benchmark repository-root calculation
+  - PR 405 corrected the benchmark repository-root calculation
   - PR 405 records the measured local manifest as Atlas version 2 with map SHA 3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034 and assets SHA 4d11c5be0438c8fa08d079a558fe99f5f28d3db5df0aa742c5a46d4260c905c2
   - current canonical Atlas code uses ATLAS_VERSION 3
   - certified full-world evidence uses Atlas version 3 with assets SHA 4c78aa441bc6eed6a614092423a58dc6275cf2c36ea5d4bde13746c9b4ee7ee7
