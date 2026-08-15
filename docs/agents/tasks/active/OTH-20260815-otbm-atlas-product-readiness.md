@@ -135,7 +135,7 @@ validation:
     evidence: no whitespace errors on the focused provenance diff
   - command: independent exact-diff audit
     result: PASS
-    evidence: fresh validator found no material findings before the existing-checkout remediation follow-up; final remediation requires a new exact-head audit
+    evidence: fresh validator found no material findings on the final remediation; repair gating, atomic replacement, idempotence, refusal behavior and exact changed paths passed
 blockers:
   - owner review of the local visual A/B artifacts and product format decision remains pending
 next_action: present the verified current-v3 benchmark and local comparison.html to the owner for visual review without implementing WebP migration
