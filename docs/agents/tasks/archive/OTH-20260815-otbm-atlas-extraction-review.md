@@ -4,7 +4,7 @@ status: completed
 branch: task/OTH-20260815-otbm-atlas-extraction-review
 base_branch: main
 created: 2026-08-15T14:20:00+02:00
-updated: 2026-08-15T14:29:00+02:00
+updated: 2026-08-15T21:13:00+02:00
 project_lane: otheryn-content
 execution_mode: chat-github
 related_pr: 407
@@ -39,7 +39,7 @@ Audit the current OTBM Atlas in legacy `blakinio/Otheryn` and document future ow
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-08-15T14:29:00+02:00
+updated_at: 2026-08-15T21:13:00+02:00
 head: branch head recorded by PR 407
 branch: task/OTH-20260815-otbm-atlas-extraction-review
 pr: 407
@@ -57,6 +57,11 @@ proven:
   - tools/otbm_atlas/atlas.py and factual_layers.py are mixed ownership hotspots and must be split/reimplemented before clean path extraction
   - generated build artifacts are ignored and must be regenerated rather than history-extracted
   - path-scoped Atlas Git history exists and can be preserved selectively after ownership refactor
+  - PR 407 merged the audit as main commit 7fccfccdd4d6380acbefd0c8e509dee6f4989488
+  - revalidation at main 92ad2ef36d31fe0ada838d55032ffd29907f1b6b found that post-audit PRs 408 and 409 touched only the codec benchmark and benchmark research artifacts, so they do not change the ownership or extraction verdict
+derived:
+  - the EXTRACTABLE_WITH_REFACTOR verdict remains valid at main 92ad2ef36d31fe0ada838d55032ffd29907f1b6b
+  - the two post-audit codec benchmark fixes do not require a new architecture report revision
 unknown:
   - exact destination package layout and implementation language
   - final Game-to-Atlas export serialization format
@@ -79,6 +84,9 @@ validation:
   - command: scope review
     result: PASS
     evidence: documentation/task changes only; no migration/runtime/source implementation changes
+  - command: current-main revalidation
+    result: PASS
+    evidence: main 92ad2ef36d31fe0ada838d55032ffd29907f1b6b; PR 408 changed docs/research/otbm-atlas-webp-lossless-benchmark/report.md, docs/research/otbm-atlas-webp-lossless-benchmark/summary.json and tools/otbm_atlas/codec_benchmark.py; PR 409 changed only tools/otbm_atlas/codec_benchmark.py
 blockers: []
 next_action: none
 ```
