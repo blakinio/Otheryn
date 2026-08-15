@@ -7,11 +7,24 @@ import json
 from pathlib import Path
 from typing import Iterable
 
-from .assets import Appearance, decode_sheet, encode_png, extract_sprite, load_creature_appearances, load_sprite_catalog, sheet_for_sprite
+from .assets import (
+	Appearance,
+	FRAME_GROUP_OUTFIT_IDLE,
+	FRAME_GROUP_OUTFIT_MOVING,
+	SpriteInfo,
+	decode_sheet,
+	encode_png,
+	extract_sprite,
+	load_creature_appearances,
+	load_sprite_catalog,
+	sheet_for_sprite,
+)
 
 HSI_H_STEPS = 19
 HSI_SI_VALUES = 7
 _MASK_FIELDS = {(255, 255, 0, 255): "head", (255, 0, 0, 255): "body", (0, 255, 0, 255): "legs", (0, 0, 255, 255): "feet"}
+_DIRECTION_PATTERNS = {"north": 0, "east": 1, "south": 2, "west": 3}
+_FRAME_GROUP_NAMES = {FRAME_GROUP_OUTFIT_IDLE: "idle", FRAME_GROUP_OUTFIT_MOVING: "moving"}
 
 
 @dataclass(frozen=True)
@@ -175,12 +188,38 @@ def _enabled_y_patterns(pattern_height: int, addons: int) -> tuple[int, ...]:
 	return tuple([0] + [value for value in range(1, pattern_height) if addons & (1 << (value - 1))])
 
 
-def _sprite_index(frame, layer: int, x_pattern: int, y_pattern: int, z_pattern: int, phase: int) -> int:
+def _sprite_index(frame: SpriteInfo, layer: int, x_pattern: int, y_pattern: int, z_pattern: int, phase: int) -> int:
 	return ((((phase * frame.pattern_depth + z_pattern) * frame.pattern_height + y_pattern) * frame.pattern_width + x_pattern) * frame.layers + layer)
 
 
+def _supported_directions(frame: SpriteInfo) -> tuple[str, ...]:
+	if frame.pattern_width == 1:
+		return ("south",)
+	if frame.pattern_width >= 4:
+		return ("north", "east", "south", "west")
+	return ()
+
+
+def _direction_pattern(frame: SpriteInfo, direction: str) -> int | None:
+	if direction not in _DIRECTION_PATTERNS:
+		return None
+	if frame.pattern_width == 1:
+		return 0
+	if frame.pattern_width >= 4:
+		return _DIRECTION_PATTERNS[direction]
+	return None
+
+
+def _duration_ranges(frame: SpriteInfo) -> list[tuple[int, int]]:
+	# assets.py maps protobuf zero durations to 1/1. Match the existing object-animation
+	# safety rule by substituting the first non-1ms range when the canonical file used 0/0.
+	ranges = list(frame.phase_durations)
+	fallback = next((value for value in ranges if value != (1, 1)), (1, 1))
+	return [fallback if value == (1, 1) else value for value in ranges]
+
+
 class CreatureSpriteRenderer:
-	"""Render one static canonical creature outfit with bounded decoded-sheet caching."""
+	"""Render canonical creature outfits and animation phases with bounded sprite caches."""
 
 	def __init__(self, asset_dir: Path, sheet_cache_limit: int = 48, sprite_cache_limit: int = 4096) -> None:
 		appearance_paths = sorted(asset_dir.glob("appearances-*.dat"))
@@ -213,16 +252,13 @@ class CreatureSpriteRenderer:
 			self.sprite_cache.popitem(last=False)
 		return result
 
-	def render_with_status(self, outfit: CreatureOutfit) -> tuple[bytes | None, str]:
-		appearance: Appearance | None = self.appearances.get(outfit.look_type)
-		if appearance is None or not appearance.frames:
-			return None, "missing-creature-appearance"
-		frame = appearance.frames[0]
+	def _render_frame_with_status(self, outfit: CreatureOutfit, frame: SpriteInfo, x_pattern: int, phase: int) -> tuple[bytes | None, str]:
 		if not frame.sprite_ids:
 			return None, "missing-sprite"
-		x_pattern = 2 % frame.pattern_width
+		if not 0 <= x_pattern < frame.pattern_width:
+			return None, "unsupported-direction-pattern"
 		z_pattern = 0
-		phase = frame.default_start_phase % frame.animation_phases
+		phase %= max(1, frame.animation_phases)
 		canvas: bytearray | None = None
 		width = height = 0
 		for y_pattern in _enabled_y_patterns(frame.pattern_height, outfit.addons):
@@ -252,8 +288,110 @@ class CreatureSpriteRenderer:
 			return None, "missing-sprite"
 		return encode_png(width, height, bytes(canvas)), "resolved"
 
+	def render_with_status(self, outfit: CreatureOutfit) -> tuple[bytes | None, str]:
+		appearance: Appearance | None = self.appearances.get(outfit.look_type)
+		if appearance is None or not appearance.frames:
+			return None, "missing-creature-appearance"
+		frame = appearance.frames[0]
+		# Preserve the established canonical static marker: south-facing default phase.
+		return self._render_frame_with_status(outfit, frame, 2 % frame.pattern_width, frame.default_start_phase)
+
+	def render_animation_with_status(self, outfit: CreatureOutfit) -> tuple[dict[str, object] | None, str]:
+		appearance: Appearance | None = self.appearances.get(outfit.look_type)
+		if appearance is None or not appearance.frames:
+			return None, "missing-creature-appearance"
+		groups: dict[str, dict[str, object]] = {}
+		for frame in appearance.frames:
+			group_name = _FRAME_GROUP_NAMES.get(frame.frame_group_type)
+			if group_name is None:
+				continue
+			if group_name in groups:
+				return None, "ambiguous-frame-group"
+			directions = _supported_directions(frame)
+			if not directions:
+				continue
+			direction_frames: dict[str, list[bytes]] = {}
+			group_failed = False
+			for direction in directions:
+				x_pattern = _direction_pattern(frame, direction)
+				if x_pattern is None:
+					group_failed = True
+					break
+				payloads: list[bytes] = []
+				for phase in range(frame.animation_phases):
+					payload, status = self._render_frame_with_status(outfit, frame, x_pattern, phase)
+					if payload is None:
+						group_failed = True
+						break
+					payloads.append(payload)
+				if group_failed:
+					break
+				direction_frames[direction] = payloads
+			if group_failed:
+				continue
+			ranges = _duration_ranges(frame)
+			loop = -1 if frame.loop_type > 1 else frame.loop_type
+			groups[group_name] = {
+				"frameGroupType": frame.frame_group_type,
+				"frameGroupId": frame.frame_group_id,
+				"animationPhases": frame.animation_phases,
+				"phaseDurationsMs": [max(1, (low + high) // 2) for low, high in ranges],
+				"durationRangesMs": [[low, high] for low, high in ranges],
+				"defaultStartPhase": frame.default_start_phase % max(1, frame.animation_phases),
+				"synchronized": frame.synchronized,
+				"randomStartPhase": frame.random_start_phase,
+				"loopType": loop,
+				"loopCount": frame.loop_count,
+				"directions": list(directions),
+				"directionFrames": direction_frames,
+			}
+		if not groups:
+			return None, "no-renderable-frame-group"
+		presentation_group = next((name for name in ("idle", "moving") if name in groups and int(groups[name]["animationPhases"]) > 1), None)
+		if presentation_group is None:
+			return None, "static-only-appearance"
+		return {
+			"schemaVersion": 1,
+			"presentationGroup": presentation_group,
+			"presentationDirection": "south",
+			"groups": groups,
+			"policy": "canonical-frame-groups-no-spatial-movement",
+		}, "resolved"
+
 	def render(self, outfit: CreatureOutfit) -> bytes | None:
 		return self.render_with_status(outfit)[0]
+
+
+def _write_animation(sprite_root: Path, kind: str, outfit: CreatureOutfit, animation: dict[str, object]) -> str:
+	root = sprite_root / outfit.key
+	public_groups: dict[str, object] = {}
+	groups = animation["groups"]
+	assert isinstance(groups, dict)
+	for group_name, raw_group in groups.items():
+		assert isinstance(raw_group, dict)
+		group = {key: value for key, value in raw_group.items() if key != "directionFrames"}
+		direction_frames = raw_group["directionFrames"]
+		assert isinstance(direction_frames, dict)
+		frames: dict[str, list[str]] = {}
+		for direction, payloads in direction_frames.items():
+			assert isinstance(payloads, list)
+			paths: list[str] = []
+			for phase, payload in enumerate(payloads):
+				relative = f"data/{kind}-sprites/{outfit.key}/{group_name}/{direction}/{phase}.png"
+				path = sprite_root.parents[1] / relative
+				path.parent.mkdir(parents=True, exist_ok=True)
+				path.write_bytes(payload)
+				paths.append(relative)
+			frames[str(direction)] = paths
+		group["frames"] = frames
+		group["animationKey"] = f"{kind}-{outfit.key}-{group_name}"
+		public_groups[str(group_name)] = group
+	manifest = {key: value for key, value in animation.items() if key != "groups"}
+	manifest["outfitKey"] = outfit.key
+	manifest["groups"] = public_groups
+	root.mkdir(parents=True, exist_ok=True)
+	(root / "animation.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+	return f"data/{kind}-sprites/{outfit.key}/animation.json"
 
 
 def enrich_creature_spawns(
@@ -272,9 +410,12 @@ def enrich_creature_spawns(
 	sprite_root = output / "data" / f"{kind}-sprites"
 	sprite_root.mkdir(parents=True, exist_ok=True)
 	generated: dict[str, str] = {}
+	animations: dict[str, str] = {}
 	failures: dict[str, str] = {}
-	resolved = unresolved = 0
+	animation_failures: dict[str, str] = {}
+	resolved = unresolved = animated_spawns = 0
 	status_counts: dict[str, int] = {}
+	animation_status_counts: dict[str, int] = {}
 	for record in records:
 		outfit, definition_status = definitions.resolve(str(record.get("name", "")))
 		if outfit is None:
@@ -292,6 +433,13 @@ def enrich_creature_spawns(
 				path = f"data/{kind}-sprites/{outfit.key}.png"
 				(sprite_root / f"{outfit.key}.png").write_bytes(payload)
 				generated[outfit.key] = path
+				animation_method = getattr(renderer, "render_animation_with_status", None)
+				if animation_method is not None:
+					animation, animation_status = animation_method(outfit)
+					if animation is None:
+						animation_failures[outfit.key] = animation_status
+					else:
+						animations[outfit.key] = _write_animation(sprite_root, kind, outfit, animation)
 		if path is None:
 			status = failures[outfit.key]
 			record["spriteStatus"] = status
@@ -301,19 +449,34 @@ def enrich_creature_spawns(
 		record["sprite"] = path
 		record["spriteStatus"] = "resolved"
 		status_counts["resolved"] = status_counts.get("resolved", 0) + 1
+		animation_path = animations.get(outfit.key)
+		if animation_path is not None:
+			record["spriteAnimation"] = animation_path
+			record["spriteAnimationStatus"] = "resolved"
+			animation_status_counts["resolved"] = animation_status_counts.get("resolved", 0) + 1
+			animated_spawns += 1
+		else:
+			animation_status = animation_failures.get(outfit.key, "static-only-renderer")
+			record["spriteAnimationStatus"] = animation_status
+			animation_status_counts[animation_status] = animation_status_counts.get(animation_status, 0) + 1
 		resolved += 1
 	statistics = {
 		"uniqueSprites": len(generated),
+		"uniqueAnimations": len(animations),
 		"resolvedSpawns": resolved,
+		"animatedSpawns": animated_spawns,
 		"unresolvedSpawns": unresolved,
 		"ambiguousDefinitions": len(definitions.ambiguous),
 	}
 	index = {
-		"schemaVersion": 1,
+		"schemaVersion": 2,
 		"sprites": sorted(generated.values()),
+		"animations": sorted(animations.values()),
 		"statistics": statistics,
 		"statusCounts": dict(sorted(status_counts.items())),
+		"animationStatusCounts": dict(sorted(animation_status_counts.items())),
 		"provenance": {"definitionRoot": definition_root, "appearanceAssetRoot": asset_root},
+		"policy": {"movement": "spawn positions remain factual; animation never simulates pathing", "fallback": "unsupported animation retains canonical static sprite"},
 	}
 	(sprite_root / "index.json").write_text(json.dumps(index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	return statistics
