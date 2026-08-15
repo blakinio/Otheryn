@@ -24,7 +24,11 @@ files=sorted(CORPUS.glob("z*/*.png"), key=lambda p:p.relative_to(CORPUS).as_posi
 if not files: raise SystemExit("BLOCKED: no detailed chunks")
 atlas_root=CORPUS.parent
 manifest=json.loads((atlas_root/"manifest.json").read_text(encoding="utf-8"))
-manifest_chunks={str(chunk["path"]):str(chunk["checksum"]) for chunk in manifest.get("chunks",[])}
+chunk_entries=manifest.get("chunks",[])
+manifest_paths=[str(chunk["path"]) for chunk in chunk_entries]
+if len(manifest_paths)!=len(set(manifest_paths)):
+    raise SystemExit("BLOCKED: duplicate detail path in atlas manifest")
+manifest_chunks={str(chunk["path"]):str(chunk["checksum"]) for chunk in chunk_entries}
 actual_chunks={p.relative_to(atlas_root).as_posix():p for p in files}
 if actual_chunks.keys()!=manifest_chunks.keys():
     missing=sorted(manifest_chunks.keys()-actual_chunks.keys()); extra=sorted(actual_chunks.keys()-manifest_chunks.keys())
