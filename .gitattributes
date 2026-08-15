@@ -17,3 +17,7 @@ docker/**/*.yml text eol=lf
 docker/**/*.yaml text eol=lf
 docker/**/*.md text eol=lf
 docker/**/*.dist text eol=lf
+
+# Canonical Atlas fingerprints hash worktree bytes. Keep the immutable client
+# asset corpus byte-identical to its Git blobs on every platform.
+vendor/map-analysis/tibia-client/15.25.bd5a04/assets/** -text
