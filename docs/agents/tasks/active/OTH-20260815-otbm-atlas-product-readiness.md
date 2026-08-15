@@ -1,19 +1,16 @@
 ---
 task_id: OTH-20260815-otbm-atlas-product-readiness
-status: validating
-owner: codex-atlas-provenance-20260815
-branch: blakinio/atlas-provenance-stability
+status: waiting
+owner: none
+branch: none
 base_branch: main
 created: "2026-08-15T14:09:00+02:00"
 updated: "2026-08-15T21:52:00+02:00"
 project_lane: otheryn-content
 execution_mode: chat-github
 related_pr: "412"
-ownership_released: false
-owned_paths:
-  - .gitattributes
-  - tools/otbm_atlas/tests/test_atlas.py
-  - docs/agents/tasks/active/OTH-20260815-otbm-atlas-product-readiness.md
+ownership_released: true
+owned_paths: []
 ---
 
 # OTBM Atlas product-readiness continuation
@@ -50,7 +47,7 @@ The durable continuation handover is:
 
 `ATLAS-PR-010` cannot be marked VERIFIED under the owner's benchmark contract because the measured corpus is Atlas v2 rather than the current certified Atlas v3 corpus. `ATLAS-PR-011` therefore remains INCONCLUSIVE and no PNG-to-WebP migration is authorized.
 
-The owner-facing codec decision remains waiting; PR #412 temporarily owns only the provenance correction paths listed above.
+After PR #412 merges, the provenance correction is terminal and no worker/branch ownership remains while the owner-facing codec decision waits.
 
 ## Current-v3 desktop generation finding
 
@@ -69,18 +66,15 @@ checkpoint_version: 1
 updated_at: 2026-08-15T21:52:00+02:00
 head: 94949a61aba66386c77dc2a6bb2d4d44ba7c1e84
 head_scope: latest committed checkpoint evidence before this documentation-only update
-branch: blakinio/atlas-provenance-stability
+branch: none
 pr: 412
-status: validating
+status: waiting
 project_lane: otheryn-content
 execution_mode: chat-github
 base_main_at_verification: a4878325b892b2044f514d27a1a3104e5ce843f7
 context_routes:
   - docs/maps/otbm-atlas-product-readiness-backlog-20260815.md
-owned_paths:
-  - .gitattributes
-  - tools/otbm_atlas/tests/test_atlas.py
-  - docs/agents/tasks/active/OTH-20260815-otbm-atlas-product-readiness.md
+owned_paths: []
 proven:
   - technical Atlas implementation and full-world certification are already DONE/VERIFIED
   - canonical Git and clean-corpus bytes contain 6031 assets and fingerprint as 4c78aa441bc6eed6a614092423a58dc6275cf2c36ea5d4bde13746c9b4ee7ee7
@@ -135,34 +129,12 @@ validation:
   - command: git diff --check
     result: PASS
     evidence: no whitespace errors on the focused provenance diff
+  - command: independent exact-diff audit
+    result: PASS
+    evidence: fresh validator found no material findings on the focused three-path change
 blockers:
   - owner review of the local visual A/B artifacts and product format decision remains pending
-next_action: complete independent audit and exact-head CI for PR #412, then merge the focused provenance correction
-```
-
-## Recovery checkpoint
-
-```yaml
-recovery:
-  policy_version: 1
-  generation: 1
-  session_id: atlas-provenance-20260815-2205
-  session_started_at: 2026-08-15T21:30:00+02:00
-  checkpointed_at: 2026-08-15T21:52:00+02:00
-  last_progress_at: 2026-08-15T21:52:00+02:00
-  phase: validate
-  exact_head: 94949a61aba66386c77dc2a6bb2d4d44ba7c1e84
-  pull_request: 412
-  active_operation: independent audit and exact-head CI preparation
-  external_run_ids: []
-  operation_started_at: null
-  wait_deadline_at: null
-  check_generation: null
-  checks_used: 0
-  status: active
-  safe_to_resume: true
-  resume_condition: branch remains exclusively owned and benchmark evidence remains unchanged
-  next_action: complete independent diff audit, finalize PR #412 and verify required CI on its exact head
+next_action: present the verified current-v3 benchmark and local comparison.html to the owner for visual review without implementing WebP migration
 ```
 
 ## Closeout rule
