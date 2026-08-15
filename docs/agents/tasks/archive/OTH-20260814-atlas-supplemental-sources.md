@@ -5,7 +5,7 @@ owner: none
 branch: agent/oth-20260814-atlas-supplemental-sources
 base_branch: main
 created: 2026-08-14
-updated: 2026-08-15T12:24:00+02:00
+updated: 2026-08-15T12:38:00+02:00
 project_lane: otheryn-content
 execution_mode: chat-github
 related_pr: "383"
@@ -51,9 +51,16 @@ closeout:
     journeys:
       - supplemental sources to deterministic factual index
       - factual index to production atlas factual layers
+  final_ci:
+    head: cb11cc41e9b090f851bdeb0b871d24cae23be613
+    result: PASS
+    required_checks:
+      - Required run 31816802200: SUCCESS
   pull_requests:
     open_related_prs: 0
     unresolved_review_threads: 0
+    review_evidence:
+      - PR 383: 0 unresolved review threads after both historical checkpoint-metadata findings were formally resolved
     terminal_prs:
       - number: 383
         state: merged
