@@ -5,10 +5,10 @@ owner: none
 branch: none
 base_branch: main
 created: "2026-08-15T14:09:00+02:00"
-updated: "2026-08-15T21:52:00+02:00"
+updated: "2026-08-15T22:24:00+02:00"
 project_lane: otheryn-content
 execution_mode: chat-github
-related_pr: "412"
+related_pr: "413"
 ownership_released: true
 owned_paths: []
 ---
@@ -33,21 +33,21 @@ The durable continuation handover is:
 - Full canonical world certification remains Z0..Z15 / 3494 chunks / zero certified missing sprites.
 - PR #401 preserved local-preview/storage/codec evidence and the real-chunk benchmark prompt.
 - PR #402 preserved the complete product-readiness backlog and owner requirement `ATLAS-PR-013` for a Tile ID hover inspector.
-- PR #404 merged the owner's local Codex benchmark report, machine-readable results and reproduction script.
-- The reported 240-chunk sample spans Z0..Z15 and measures existing PNG `626957721` bytes versus lossless WebP `318561438` bytes: `308396283` bytes / `49.18932691475698%` aggregate saving, with decoded RGBA equality for all `240/240` tested chunks.
-- The reported local detail directory contains 3494 PNG chunks totaling `10996609082` bytes. The reported `5587451091`-byte full-detail WebP value is explicitly ESTIMATED from the sample ratio, not measured by converting all chunks.
-- Reported Pillow/libwebp decode timings are local codec measurements only, not browser benchmarks.
-- PR #405 merged the benchmark repository-root correction and records the measured local corpus manifest identity.
-- That manifest identifies the measured local corpus as schema/Atlas version 2 with assets SHA-256 `4d11c5be0438c8fa08d079a558fe99f5f28d3db5df0aa742c5a46d4260c905c2`.
-- The current canonical Atlas implementation is version 3, and the certified full-world release evidence is Atlas version 3 with assets SHA-256 `4c78aa441bc6eed6a614092423a58dc6275cf2c36ea5d4bde13746c9b4ee7ee7` and the same canonical map SHA-256 `3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034`.
-- Therefore the supplied benchmark is useful codec-direction evidence on real generated Atlas detail chunks, but it is not yet a verified benchmark of the current certified Atlas v3 detail corpus.
-- The 24 PNG/WebP A/B pairs and `comparison.html` are reported to exist locally but are not durable GitHub artifacts, so they have not been independently inspected in this coordinator session.
+- PR #404 merged the historical deterministic 240-chunk PNG-versus-lossless-WebP benchmark. That historical sample measured PNG `626957721` bytes versus WebP `318561438` bytes, saving `308396283` bytes (`49.18932691475698%`), with decoded RGBA equality for all `240/240` tested chunks.
+- PR #405 corrected benchmark repository-root handling and made the historical corpus identity explicit; that earlier measured manifest was Atlas version 2.
+- PR #412 merged the canonical asset-provenance repair. Canonical 6,031-file asset bytes fingerprint as `4c78aa441bc6eed6a614092423a58dc6275cf2c36ea5d4bde13746c9b4ee7ee7`; the desktop build's `4d11c5be0438c8fa08d079a558fe99f5f28d3db5df0aa742c5a46d4260c905c2` value was proven to come only from Windows CRLF materialization of one `NON_RENDER_INPUT` proficiencies JSON.
+- The preserved current Atlas v3 desktop corpus contains exactly 3494 detail PNG chunks and all 3494 manifest paths/checksums validate. Renderer inputs were canonical, so no detail rerender is required.
+- The verified current-v3 benchmark tested a deterministic 240-chunk sample spanning Z0..Z15. PNG files totalled `629930622` bytes and lossless WebP totalled `320113728` bytes, saving `309816894` bytes (`49.18270094829586%`), with decoded RGBA equality for all `240/240` chunks.
+- The complete current-v3 detail PNG corpus totals `10995096999` bytes. Applying the measured sample ratio estimates `5587411323` WebP bytes and `5407685676` bytes saved (`49.1827009483575%`); this full-corpus WebP value remains `ESTIMATED`, not measured.
+- `ATLAS-PR-010` is VERIFIED on current-v3 detail evidence.
+- `ATLAS-PR-011` remains an owner product decision. PNG-to-WebP migration is not authorized yet because owner visual acceptance and browser/runtime impact remain unresolved.
+- The 24 PNG/WebP A/B pairs and `comparison.html` passed local artifact-consistency validation; owner visual review remains pending.
 
 ## Waiting reason
 
-`ATLAS-PR-010` cannot be marked VERIFIED under the owner's benchmark contract because the measured corpus is Atlas v2 rather than the current certified Atlas v3 corpus. `ATLAS-PR-011` therefore remains INCONCLUSIVE and no PNG-to-WebP migration is authorized.
+`ATLAS-PR-010` is complete and VERIFIED. The task remains `waiting` because `ATLAS-PR-011` requires the owner's product-format decision after reviewing the local A/B comparison, and browser/runtime impact of a future WebP migration remains UNKNOWN. No PNG-to-WebP migration is authorized before that decision.
 
-After PR #412 merges, the provenance correction is terminal and no worker/branch ownership remains while the owner-facing codec decision waits.
+PR #412 is merged and the provenance correction is terminal. No worker/branch ownership is held while the owner-facing codec decision waits.
 
 ## Current-v3 desktop generation finding
 
@@ -65,20 +65,21 @@ The verified current-v3 benchmark tested a deterministic 240-chunk sample spanni
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-08-15T21:52:00+02:00
-head: 94949a61aba66386c77dc2a6bb2d4d44ba7c1e84
-head_scope: latest committed checkpoint evidence before this documentation-only update
+updated_at: 2026-08-15T22:24:00+02:00
+head: d231cac122ff40a5c1c7f0e2d176327df7e05105
+head_scope: latest committed checkpoint evidence before the PR-link update on the documentation-only follow-up
 branch: none
-pr: 412
+pr: 413
 status: waiting
 project_lane: otheryn-content
 execution_mode: chat-github
-base_main_at_verification: a4878325b892b2044f514d27a1a3104e5ce843f7
+base_main_at_verification: 28a33496f33b252556ac0efdcde97ba9e22da215
 context_routes:
   - docs/maps/otbm-atlas-product-readiness-backlog-20260815.md
 owned_paths: []
 proven:
   - technical Atlas implementation and full-world certification are already DONE/VERIFIED
+  - PR 412 is merged as 28a33496f33b252556ac0efdcde97ba9e22da215
   - canonical Git and clean-corpus bytes contain 6031 assets and fingerprint as 4c78aa441bc6eed6a614092423a58dc6275cf2c36ea5d4bde13746c9b4ee7ee7
   - 4d11c5be0438c8fa08d079a558fe99f5f28d3db5df0aa742c5a46d4260c905c2 is the observed Windows worktree-byte fingerprint caused only by core.autocrlf converting the proficiencies JSON to CRLF
   - CRLF-to-LF restores the canonical proficiencies file SHA and complete asset-tree SHA; all other 6030 assets match canonical bytes
@@ -91,10 +92,11 @@ proven:
   - the complete current-v3 detail PNG corpus contains 3494 chunks totalling 10995096999 bytes
   - estimated complete current-v3 detail WebP size is 5587411323 bytes; it is ESTIMATED rather than measured
   - 24 local PNG/WebP A/B pairs and comparison.html passed file, hash, metadata and reference validation
+  - ATLAS-PR-010 has verified current-v3 evidence
   - the environment-animation exporter performance and resume defect is preserved in OTH-20260815-atlas-environment-animation-export-performance
 derived:
   - WebP lossless is strongly promising for Atlas v3 detail storage, subject to owner review and a separate implementation decision
-  - ATLAS-PR-010 now has verified current-v3 evidence; ATLAS-PR-011 remains an owner product decision
+  - ATLAS-PR-011 remains an owner product decision; no WebP migration is authorized yet
 unknown:
   - exact measured WebP size for all 3494 current-v3 detail chunks
   - owner visual acceptance of the locally generated 24 PNG/WebP A/B pairs and comparison.html
@@ -109,33 +111,20 @@ rejected_hypotheses:
   - the historical v2 codec result can close the current-v3 evidence gap
   - current Git/canonical asset bytes fingerprint as 4d11c5be; that value came from Windows worktree line-ending conversion
 changed_paths:
-  - .gitattributes
   - docs/agents/tasks/active/OTH-20260815-otbm-atlas-product-readiness.md
-  - tools/otbm_atlas/README.md
-  - tools/otbm_atlas/repair_asset_checkout.py
-  - tools/otbm_atlas/tests/test_atlas.py
 validation:
   - command: python tools/otbm_atlas/codec_benchmark.py
     result: PASS
-    evidence: 240 deterministic v3 chunks across Z0-Z15; 240/240 RGBA exact
+    evidence: previously verified current-v3 run; 240 deterministic chunks across Z0-Z15 and 240/240 RGBA exact
   - command: independent artifact consistency checks
     result: PASS
     evidence: 3494/3494 manifest paths and PNG checksums; 240 CSV rows across Z0-Z15 all record RGBA equality; JSON, CSV and Markdown totals agree; 24 retained A/B pairs decode RGBA-identically and their metadata, hashes and 48 HTML references agree
-  - command: python -m unittest tools.otbm_atlas.tests.test_atlas -v
+  - command: PR 412 focused tests and exact-diff audit
     result: PASS
-    evidence: 6/6 tests pass including canonical asset raw-byte SHA, Git attribute contract and safe legacy-CRLF repair/refusal cases
-  - command: python -m unittest discover -s tools/otbm_atlas/tests -v
+    evidence: canonical asset provenance repair, regression coverage and independent audit completed before merge
+  - command: focused task-record consistency review
     result: PASS
-    evidence: 84 tests pass; 5 canonical integration tests skip behind their explicit opt-in environment gate
-  - command: repository _tree_sha256 on corrected Windows checkout
-    result: PASS
-    evidence: 6031 files fingerprint as 4c78aa441bc6eed6a614092423a58dc6275cf2c36ea5d4bde13746c9b4ee7ee7
-  - command: git diff --check
-    result: PASS
-    evidence: no whitespace errors on the focused provenance diff
-  - command: independent exact-diff audit
-    result: PASS
-    evidence: fresh validator found no material findings on the final remediation; repair gating, atomic replacement, idempotence, refusal behavior and exact changed paths passed
+    evidence: Current state, Waiting reason and Context checkpoint now agree that ATLAS-PR-010 is VERIFIED and ATLAS-PR-011 is the remaining owner decision
 blockers:
   - owner review of the local visual A/B artifacts and product format decision remains pending
 next_action: present the verified current-v3 benchmark and local comparison.html to the owner for visual review without implementing WebP migration
