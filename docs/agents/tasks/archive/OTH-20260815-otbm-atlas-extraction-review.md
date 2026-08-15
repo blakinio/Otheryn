@@ -4,7 +4,7 @@ status: completed
 branch: task/OTH-20260815-otbm-atlas-extraction-review
 base_branch: main
 created: 2026-08-15T14:20:00+02:00
-updated: 2026-08-15T21:13:00+02:00
+updated: 2026-08-15T21:32:00+02:00
 project_lane: otheryn-content
 execution_mode: chat-github
 related_pr: 407
@@ -39,7 +39,7 @@ Audit the current OTBM Atlas in legacy `blakinio/Otheryn` and document future ow
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-08-15T21:13:00+02:00
+updated_at: 2026-08-15T21:32:00+02:00
 head: branch head recorded by PR 407
 branch: task/OTH-20260815-otbm-atlas-extraction-review
 pr: 407
@@ -88,5 +88,5 @@ validation:
     result: PASS
     evidence: main 92ad2ef36d31fe0ada838d55032ffd29907f1b6b; PR 408 changed docs/research/otbm-atlas-webp-lossless-benchmark/report.md, docs/research/otbm-atlas-webp-lossless-benchmark/summary.json and tools/otbm_atlas/codec_benchmark.py; PR 409 changed only tools/otbm_atlas/codec_benchmark.py
 blockers: []
-next_action: none
+next_action: Retain this archived audit as the migration-source decision record; start any migration only under a separately authorized task.
 ```
