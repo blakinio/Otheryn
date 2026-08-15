@@ -149,11 +149,11 @@ class CreatureSpriteTests(unittest.TestCase):
 			stats = enrich_creature_spawns(Path("assets"), root, records, definitions, "monster", "vendor/monster", "vendor/assets", FakeAnimatedRenderer())  # type: ignore[arg-type]
 			manifest = root / "data/monster-sprites/35-0-0-0-0-0/animation.json"
 			phase0 = root / "data/monster-sprites/35-0-0-0-0-0/moving/south/0.png"
-		self.assertTrue(manifest.is_file())
-		self.assertTrue(phase0.is_file())
-		self.assertEqual(stats["uniqueAnimations"], 1)
-		self.assertEqual(stats["animatedSpawns"], 3)
-		self.assertEqual({record["spriteAnimation"] for record in records}, {"data/monster-sprites/35-0-0-0-0-0/animation.json"})
+			self.assertTrue(manifest.is_file())
+			self.assertTrue(phase0.is_file())
+			self.assertEqual(stats["uniqueAnimations"], 1)
+			self.assertEqual(stats["animatedSpawns"], 3)
+			self.assertEqual({record["spriteAnimation"] for record in records}, {"data/monster-sprites/35-0-0-0-0-0/animation.json"})
 
 
 if __name__ == "__main__":
