@@ -5,7 +5,7 @@ owner: none
 branch: agent/oth-20260814-atlas-factual-source-index
 base_branch: main
 created: 2026-08-14
-updated: 2026-08-15T12:24:00+02:00
+updated: 2026-08-15T12:38:00+02:00
 project_lane: otheryn-content
 execution_mode: chat-github
 related_pr: "385"
@@ -48,9 +48,20 @@ closeout:
     journeys:
       - pinned CrystalServer source corpus to deterministic factual JSON
       - deterministic factual JSON to production chunked atlas layers
+  final_ci:
+    head: 18535002a6de147c24759aba5ec17a2c72b5f5e8
+    result: PASS
+    required_checks:
+      - OTBM Atlas Facts Tests run 31822755644: SUCCESS
+      - Required run 31822755759: SUCCESS
+      - CI run 31822755883: SUCCESS
+      - autofix.ci run 31822755641: SUCCESS
   pull_requests:
     open_related_prs: 0
     unresolved_review_threads: 0
+    review_evidence:
+      - PR 385: 0 unresolved review threads after both implementation findings were resolved
+      - PR 388: 0 unresolved review threads after both superseded closeout findings were resolved
     terminal_prs:
       - number: 385
         state: merged
