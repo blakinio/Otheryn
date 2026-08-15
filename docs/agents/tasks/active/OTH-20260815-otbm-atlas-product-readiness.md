@@ -1,143 +1,171 @@
 ---
 task_id: OTH-20260815-otbm-atlas-product-readiness
-status: waiting
-owner: none
-branch: none
+status: in_progress
+owner: chat-github
+branch: blakinio/atlas-synology-preview
 base_branch: main
 created: "2026-08-15T14:09:00+02:00"
-updated: "2026-08-15T22:50:00+02:00"
+updated: "2026-08-15T23:35:00+02:00"
 project_lane: otheryn-content
 execution_mode: chat-github
-related_pr: "414"
-ownership_released: true
-owned_paths: []
+related_pr: ""
+ownership_released: false
+owned_paths:
+  - docker/otbm-atlas-synology/
+  - .github/workflows/otbm-atlas-synology-preview.yml
+  - tools/otbm_atlas/preview_corpus_check.py
+  - tools/otbm_atlas/tests/test_preview_corpus_check.py
+  - docs/agents/tasks/active/OTH-20260815-otbm-atlas-product-readiness.md
 ---
 
 # OTBM Atlas product-readiness continuation
 
 ## Goal
 
-Continue the OTBM Atlas from technical DONE/VERIFIED to owner-facing product readiness without reopening already-proven parser/render/full-world work.
+Move the technically verified canonical OTBM Atlas to a real private browser preview served by a Synology Container Manager container through DSM Reverse Proxy, then collect real browser E2E and performance evidence before any PNG-to-WebP product decision.
 
-The canonical product backlog is:
+The canonical product backlog remains `docs/maps/otbm-atlas-product-readiness-backlog-20260815.md`.
 
-`docs/maps/otbm-atlas-product-readiness-backlog-20260815.md`
+## Owner decision for this continuation
 
-The durable continuation handover is:
+The owner superseded the previous codec-first waiting state for this invocation. The required preview architecture is now:
 
-`docs/maps/otbm-atlas-continuation-handover-20260815.md`
+```text
+generated static Atlas
+-> Synology persistent folder
+-> Synology Container Manager static HTTP container
+-> local host TCP port
+-> DSM Reverse Proxy
+-> normal browser
+```
 
-## Current state
+Constraints: private/local preview; no Oteryn Platform integration; no SSH, SSH tunnel, SCP, `docker exec`, privileged container, Docker socket, public DNS/Cloudflare exposure or full-world rebuild on Synology. Atlas generation remains a desktop responsibility. The owner creates the DSM reverse-proxy rule in DSM UI.
 
-- Technical Atlas closeout remains DONE/VERIFIED.
-- Full canonical world certification remains Z0..Z15 / 3494 chunks / zero certified missing sprites.
-- PR #401 preserved local-preview/storage/codec evidence and the real-chunk benchmark prompt.
-- PR #402 preserved the complete product-readiness backlog and owner requirement `ATLAS-PR-013` for a Tile ID hover inspector.
-- PR #404 merged the historical deterministic 240-chunk PNG-versus-lossless-WebP benchmark. That historical sample measured PNG `626957721` bytes versus WebP `318561438` bytes, saving `308396283` bytes (`49.18932691475698%`), with decoded RGBA equality for all `240/240` tested chunks.
-- PR #405 corrected benchmark repository-root handling and made the historical corpus identity explicit; that earlier measured manifest was Atlas version 2.
-- PR #412 merged the canonical asset-provenance repair. Canonical 6,031-file asset bytes fingerprint as `4c78aa441bc6eed6a614092423a58dc6275cf2c36ea5d4bde13746c9b4ee7ee7`; the desktop build's `4d11c5be0438c8fa08d079a558fe99f5f28d3db5df0aa742c5a46d4260c905c2` value was proven to come only from Windows CRLF materialization of one `NON_RENDER_INPUT` proficiencies JSON.
-- The preserved current Atlas v3 desktop corpus contains exactly 3494 detail PNG chunks and all 3494 manifest paths/checksums validate. Renderer inputs were canonical, so no detail rerender is required.
-- The verified current-v3 benchmark tested a deterministic 240-chunk sample spanning Z0..Z15. PNG files totalled `629930622` bytes and lossless WebP totalled `320113728` bytes, saving `309816894` bytes (`49.18270094829586%`), with decoded RGBA equality for all `240/240` chunks.
-- The complete current-v3 detail PNG corpus totals `10995096999` bytes. Applying the measured sample ratio estimates `5587411323` WebP bytes and `5407685676` bytes saved (`49.1827009483575%`); this full-corpus WebP value remains `ESTIMATED`, not measured.
-- `ATLAS-PR-010` is VERIFIED on current-v3 detail evidence.
-- `ATLAS-PR-011` remains an owner product decision. PNG-to-WebP migration is not authorized yet because owner visual acceptance and browser/runtime impact remain unresolved.
-- PR #414 publishes the report, JSON, CSV, comparison page and 24 PNG/WebP A/B pairs as durable repository artifacts; owner visual review remains pending.
+## Verified baseline
 
-## Waiting reason
+- Live base for this branch was `main` at `475196ddba675e2f7f0dadcdb3fdb445db79bba2`, the merge of PR #414.
+- Atlas PRs #410, #412, #413 and #414 are merged.
+- No currently open PR owns the Atlas preview/product-readiness paths; open PRs observed at startup were #369, #339, #341 and #347 in unrelated lanes.
+- Technical Atlas rendering remains DONE/VERIFIED.
+- Canonical current-v3 detail corpus identity remains schema/Atlas v3, chunk size 128, map SHA-256 `3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034`, Z0..Z15 and 3494 chunks.
+- The preserved desktop-v3 manifest observed asset worktree SHA-256 `4d11c5be0438c8fa08d079a558fe99f5f28d3db5df0aa742c5a46d4260c905c2`; PR #412 proved the only difference from canonical Git asset SHA-256 `4c78aa441bc6eed6a614092423a58dc6275cf2c36ea5d4bde13746c9b4ee7ee7` is CRLF materialization of one NON_RENDER_INPUT proficiencies JSON. Renderer inputs are canonical and no detail rerender is required.
+- All 3494 current-v3 detail manifest paths/checksums were previously verified.
+- `ATLAS-PR-010` remains VERIFIED: deterministic 240-chunk sample across Z0..Z15 measured PNG `629930622` bytes versus lossless WebP `320113728` bytes, saving `49.18270094829586%`, with decoded RGBA equality for 240/240.
+- Complete current-v3 detail PNG bytes remain `10995096999`; full-corpus WebP size remains estimated rather than measured.
+- PNG-to-WebP migration is not authorized. Browser/runtime impact remains UNKNOWN until the real preview exists.
 
-`ATLAS-PR-010` is complete and VERIFIED. The task remains `waiting` because `ATLAS-PR-011` requires the owner's product-format decision after reviewing the repository-hosted A/B comparison, and browser/runtime impact of a future WebP migration remains UNKNOWN. No PNG-to-WebP migration is authorized before that decision.
+## Environment-animation dependency
 
-PR #412 is merged and the provenance correction is terminal. No worker/branch ownership is held while the owner-facing codec decision waits.
+The preserved desktop canonical-v3 run completed all 3494 detail chunks, both overview levels and the v3 manifest, then was interrupted during `enrich_environment_animations` after bounded long-running attempts. The active dependency is `docs/agents/tasks/active/OTH-20260815-atlas-environment-animation-export-performance.md`.
 
-## Current-v3 desktop generation finding
+The current builder writes final factual enrichment and `write_viewer(output)` only after environment-animation enrichment. The environment exporter writes `data/environment-animations/index.json` only after processing all shards/assets and currently rebuilds its output tree from scratch. Therefore the exact browser-completeness state of the preserved desktop directory must be measured rather than inferred. Do not call `ATLAS-PR-003` complete while the environment-animation final artifact is absent.
 
-The canonical 6,031-file Git/corpus bytes fingerprint as `4c78aa441bc6eed6a614092423a58dc6275cf2c36ea5d4bde13746c9b4ee7ee7`. The desktop build observed `4d11c5be0438c8fa08d079a558fe99f5f28d3db5df0aa742c5a46d4260c905c2` because Windows `core.autocrlf=true` converted only `vendor/map-analysis/tibia-client/15.25.bd5a04/assets/proficiencies-1a915dffd9265cd1c18d39e55da7ede691b2e58add534bc186238ae028a73f22.json` from LF to 27,089 CRLF sequences while Git still reported a clean worktree. The local representation was 489,542 bytes with SHA-256 `ee7b88c09fb8db21405bfd5cc69249e6f513f1b6da7a4553832ed958d941a379`; CRLF-to-LF normalization restores the 462,453-byte Git blob and SHA-256 `1a915dffd9265cd1c18d39e55da7ede691b2e58add534bc186238ae028a73f22`, and restores the complete tree fingerprint to `4c78aa44...`. The other 6,030 paths and bytes match the clean canonical corpus.
+## Current implementation
 
-That file is `NON_RENDER_INPUT`: `AssetRenderer`, appearance decoding and sprite-sheet lookup do not consume it. Every renderer input therefore matched canonical bytes. The schema/Atlas-v3 manifest truthfully retains the worktree fingerprint observed during generation (`4d11c5be...`); it must not be rewritten to imply that the run observed `4c78aa44...`. Proven renderer-input equivalence plus 3,494/3,494 manifest-path and PNG-checksum validation preserves the generated detail corpus as valid v3 codec-benchmark evidence without rerendering.
+Branch `blakinio/atlas-synology-preview` adds a small static deployment package under `docker/otbm-atlas-synology/`:
 
-The vendored corpus now has a narrow `-text` rule so new checkouts retain raw Git bytes. Existing Windows checkouts are not silently rewritten by an attribute-only update, so `python -m tools.otbm_atlas.repair_asset_checkout` provides an idempotent upgrade path: it replaces the known file atomically only when its complete delta from the Git blob is CRLF-to-LF and refuses every other content difference.
+- pinned unprivileged nginx static-server image;
+- read-only generated Atlas bind mount;
+- read-only container root filesystem;
+- all Linux capabilities dropped and `no-new-privileges` enabled;
+- no database/backend/renderer/source assets/Docker socket/privileged mode;
+- loopback-only host publication by default;
+- deterministic `/__health` endpoint;
+- useful nginx stdout/stderr logs;
+- explicit MIME handling through nginx's standard MIME table, including HTML/JS/CSS/JSON/PNG/WebP;
+- `unless-stopped` restart policy;
+- DSM Project/Reverse Proxy runbook with recommended, explicitly unverified NAS path/port values.
 
-The desktop canonical-v3 build produced all 3,494 detail chunks, both overview levels and a schema/Atlas-v3 manifest before spending more than the bounded execution budget in environment-animation enrichment. That phase created hundreds of thousands of small files, remained CPU-active, and did not resume efficiently after interruption. The performance/resume defect is preserved separately in `OTH-20260815-atlas-environment-animation-export-performance`; it does not block benchmarking the already-complete detail PNG corpus because environment-animation assets are excluded from `ATLAS-PR-010`.
+The branch also adds `tools/otbm_atlas/preview_corpus_check.py`, a read-only preflight which separates `browserCoreReady` from `environmentAnimations.ready`/`fullBrowserReady`. The final checksum pass hashes the manifest-referenced detail, overview and low-overview images; it also verifies viewer/factual/spatial files, creature sprite/animation references and environment-animation shard/assets references without rebuilding the Atlas.
 
-The verified current-v3 benchmark tested a deterministic 240-chunk sample spanning Z0..Z15. Original generated PNG files totalled `629930622` bytes and genuine lossless WebP totalled `320113728` bytes, saving `309816894` bytes (`49.18270094829586%`) with decoded RGBA equality for all `240/240` chunks. The complete 3,494-detail-PNG corpus totals `10995096999` bytes; applying the measured aggregate sample ratio estimates `5587411323` WebP bytes and `5407685676` bytes saved (`49.1827009483575%`). This full-corpus WebP value remains `ESTIMATED`, not measured. Browser performance remains `UNKNOWN`; local median decode time was `18.05625 ms` for PNG and `46.60915 ms` for WebP. PR #414 retains the report, JSON, CSV, comparison page and 24 A/B pairs under `build/otbm-codec-benchmark/`; source-to-PR hashes, totals, RGBA equality, metadata and HTML references all validate.
+## Product requirement state
+
+### ATLAS-PR-002 — Synology container preview
+
+`PARTIAL`
+
+Repository deployment artifacts are being implemented. Completion still requires observable evidence that the container is running on the owner's Synology, serving the verified corpus read-only, survives restart and is reachable through DSM Reverse Proxy from a normal browser without an SSH tunnel.
+
+### ATLAS-PR-003 — real browser E2E
+
+`NOT_RUN`
+
+No real DSM preview URL is available in this execution environment. Chromium E2E must use the same private DSM URL as the owner. Environment animation remains an explicit dependency until the desktop corpus preflight proves `environmentAnimations.ready: true`.
+
+### ATLAS-PR-004 — production-like browser performance
+
+`NOT_RUN`
+
+Cold/warm/navigation browser measurements remain UNKNOWN until the real DSM URL exists. No targets will be invented.
+
+### ATLAS-PR-011 — PNG/WebP decision
+
+`WAITING`
+
+No migration is authorized. The existing storage/decode benchmark is evidence only; the owner decision waits for real browser cold/warm/interaction measurements.
+
+### ATLAS-PR-001 — owner visual review
+
+`PENDING`
+
+Only the owner can accept the resulting browser UI or record exact UX defects.
+
+## Synology recommendations requiring runtime confirmation
+
+Repository Docker quickstart conventions already use host ports 8080 and 8088, so the Atlas project recommends host port `18088`. Repository history also contains a Synology operational path below `/volume1/docker/oteryn/`, so the preview recommends:
+
+```text
+project: /volume1/docker/oteryn/atlas-project
+atlas data: /volume1/docker/oteryn/atlas/current
+host bind: 127.0.0.1:18088 -> container 8080
+DSM reverse-proxy destination: HTTP / 127.0.0.1 / 18088 / /
+```
+
+These are `RECOMMENDED`, not `VERIFIED_EXISTING`. Actual volume/path existence, port availability, DSM version/menu wording and final private source URL remain UNKNOWN until owner DSM interaction.
 
 ## Context checkpoint
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-08-15T22:50:00+02:00
-head: d1272324f9f3df4b11971e9a3a29edf6230dec9a
-head_scope: committed artifact-publication evidence before this checkpoint update
-branch: none
-pr: 414
-status: waiting
+updated_at: 2026-08-15T23:35:00+02:00
+base_main: 475196ddba675e2f7f0dadcdb3fdb445db79bba2
+branch: blakinio/atlas-synology-preview
+pr: pending
+status: in_progress
 project_lane: otheryn-content
 execution_mode: chat-github
-base_main_at_verification: 7fbd1475cc0e3fd199a8b2b1449fe6395cce0a43
-context_routes:
-  - docs/maps/otbm-atlas-product-readiness-backlog-20260815.md
-owned_paths: []
-proven:
-  - technical Atlas implementation and full-world certification are already DONE/VERIFIED
-  - PR 412 is merged as 28a33496f33b252556ac0efdcde97ba9e22da215
-  - canonical Git and clean-corpus bytes contain 6031 assets and fingerprint as 4c78aa441bc6eed6a614092423a58dc6275cf2c36ea5d4bde13746c9b4ee7ee7
-  - 4d11c5be0438c8fa08d079a558fe99f5f28d3db5df0aa742c5a46d4260c905c2 is the observed Windows worktree-byte fingerprint caused only by core.autocrlf converting the proficiencies JSON to CRLF
-  - CRLF-to-LF restores the canonical proficiencies file SHA and complete asset-tree SHA; all other 6030 assets match canonical bytes
-  - the proficiencies JSON is NON_RENDER_INPUT and every AssetRenderer appearance and sprite input is canonical
-  - the current-v3 desktop corpus manifest is schema and Atlas version 3 with chunk size 128, 3494 detail chunks, map SHA 3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034 and observed worktree assets SHA 4d11c5be0438c8fa08d079a558fe99f5f28d3db5df0aa742c5a46d4260c905c2
-  - every current-v3 detail path and original PNG checksum matches the manifest
-  - the verified current-v3 sample contains 240 deterministic chunks spanning Z0 through Z15
-  - current-v3 sample PNG/WebP bytes are 629930622 / 320113728, saving 309816894 bytes / 49.18270094829586 percent
-  - WebP used lossless=True, method=6 and exact=True; all 240 decodes are RGBA byte-identical to the original PNG decodes
-  - the complete current-v3 detail PNG corpus contains 3494 chunks totalling 10995096999 bytes
-  - estimated complete current-v3 detail WebP size is 5587411323 bytes; it is ESTIMATED rather than measured
-  - 24 local PNG/WebP A/B pairs and comparison.html passed file, hash, metadata and reference validation
-  - ATLAS-PR-010 has verified current-v3 evidence
-  - the environment-animation exporter performance and resume defect is preserved in OTH-20260815-atlas-environment-animation-export-performance
-derived:
-  - WebP lossless is strongly promising for Atlas v3 detail storage, subject to owner review and a separate implementation decision
-  - ATLAS-PR-011 remains an owner product decision; no WebP migration is authorized yet
-unknown:
-  - exact measured WebP size for all 3494 current-v3 detail chunks
-  - owner visual acceptance of the locally generated 24 PNG/WebP A/B pairs and comparison.html
-  - browser/runtime impact of any future WebP migration
-  - final owner format decision
-  - final DSM preview hostname/path and live Synology configuration
-conflicts: []
-first_failure:
-  marker: none
-  evidence: none
-rejected_hypotheses:
-  - the historical v2 codec result can close the current-v3 evidence gap
-  - current Git/canonical asset bytes fingerprint as 4d11c5be; that value came from Windows worktree line-ending conversion
-changed_paths:
-  - build/otbm-codec-benchmark/report.md
-  - build/otbm-codec-benchmark/summary.json
-  - build/otbm-codec-benchmark/results.csv
-  - build/otbm-codec-benchmark/comparison.html
-  - build/otbm-codec-benchmark/samples/
+owned_paths:
+  - docker/otbm-atlas-synology/
+  - .github/workflows/otbm-atlas-synology-preview.yml
+  - tools/otbm_atlas/preview_corpus_check.py
+  - tools/otbm_atlas/tests/test_preview_corpus_check.py
   - docs/agents/tasks/active/OTH-20260815-otbm-atlas-product-readiness.md
+proven:
+  - technical Atlas rendering and canonical full-world certification remain DONE/VERIFIED
+  - current-v3 detail corpus is 3494 chunks across Z0-Z15 with previously verified manifest paths/checksums
+  - map SHA is 3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034
+  - ATLAS-PR-010 is VERIFIED and WebP migration is not authorized
+  - preserved desktop run was interrupted during environment-animation enrichment after detail/overview/manifest generation
+  - build_atlas writes final factual enrichment and viewer files after environment-animation enrichment
+  - final environment-animation runtime index is data/environment-animations/index.json
+  - deployment branch is based on main 475196ddba675e2f7f0dadcdb3fdb445db79bba2
+  - deployment design uses a small server image plus read-only persistent Atlas mount rather than baking Atlas data into the image
+derived:
+  - the preserved desktop corpus may support a useful partial preview but cannot be called full-browser-ready until read-only preflight proves final viewer/factual/creature/environment artifacts
+unknown:
+  - current desktop corpus preflight result for browserCoreReady and environmentAnimations.ready
+  - owner NAS existence of the recommended Atlas paths
+  - availability of recommended host port 18088 on the NAS
+  - exact DSM version/menu path
+  - final private DSM browser URL
+  - real Chromium E2E and production-like browser performance
+conflicts: []
 validation:
-  - command: python tools/otbm_atlas/codec_benchmark.py
-    result: PASS
-    evidence: previously verified current-v3 run; 240 deterministic chunks across Z0-Z15 and 240/240 RGBA exact
-  - command: independent artifact consistency checks
-    result: PASS
-    evidence: 3494/3494 manifest paths and PNG checksums; 240 CSV rows across Z0-Z15 all record RGBA equality; JSON, CSV and Markdown totals agree; 24 retained A/B pairs decode RGBA-identically and their metadata, hashes and 48 HTML references agree
-  - command: PR 412 focused tests and exact-diff audit
-    result: PASS
-    evidence: canonical asset provenance repair, regression coverage and independent audit completed before merge
-  - command: focused task-record consistency review
-    result: PASS
-    evidence: Current state, Waiting reason and Context checkpoint now agree that ATLAS-PR-010 is VERIFIED and ATLAS-PR-011 is the remaining owner decision
-  - command: published-artifact integrity check
-    result: PASS
-    evidence: 76/76 files exactly match the validated local source; 240 CSV rows span Z0-Z15, 24/24 retained pairs decode RGBA-identically, metadata hashes pass and the comparison page references all 48 sample assets
-blockers:
-  - owner review of the local visual A/B artifacts and product format decision remains pending
-next_action: present the verified current-v3 benchmark and repository-hosted comparison.html to the owner for visual review without implementing WebP migration
+  - focused/component CI: pending PR execution
+blockers: []
+next_action: open the Synology preview PR from blakinio/atlas-synology-preview and run/fix all exact-head focused and repository CI before any owner DSM action
 ```
 
 ## Closeout rule
 
-This task is not complete merely when the codec decision is made. Continue through the applicable REQUIRED product-readiness inventory unless the owner explicitly narrows or supersedes scope. Preserve one exact `next_action` whenever the task remains incomplete.
+Do not mark runtime requirements complete from committed configuration or CI alone. `ATLAS-PR-002` requires real Synology + DSM browser reachability, `ATLAS-PR-003` requires real Chromium against that DSM URL, `ATLAS-PR-004` requires measured browser evidence, and `ATLAS-PR-011` remains an explicit owner format decision.
