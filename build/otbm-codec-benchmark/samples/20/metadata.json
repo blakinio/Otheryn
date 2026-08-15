@@ -1,0 +1,19 @@
+{
+  "path": "build/full-map-atlas/tiles/z14/95_93.png",
+  "floor": 14,
+  "width": 928,
+  "height": 1216,
+  "pixels": 1128448,
+  "png_bytes": 4467,
+  "webp_bytes": 88,
+  "saving_bytes": 4379,
+  "saving_percent": 98.02999776136109,
+  "encode_ms": 5.5725,
+  "png_decode_ms": 2.0086,
+  "webp_decode_ms": 4.8174,
+  "entropy": 1.584962500721156,
+  "rgba_equal": true,
+  "png_sha256": "34f9f71c360c06234c203a59dc71699307259dfd66b12219dd67b35a53151fc3",
+  "webp_sha256": "e1c8e27ea522379ca283ad35c1afb308c2ad218f67689992c5c9da8fae138339",
+  "original_atlas_path": "build/full-map-atlas/tiles/z14/95_93.png"
+}

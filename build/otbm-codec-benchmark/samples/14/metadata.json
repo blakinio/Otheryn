@@ -1,0 +1,19 @@
+{
+  "path": "build/full-map-atlas/tiles/z7/262_249.png",
+  "floor": 7,
+  "width": 4160,
+  "height": 4160,
+  "pixels": 17305600,
+  "png_bytes": 11248035,
+  "webp_bytes": 8106946,
+  "saving_bytes": 3141089,
+  "saving_percent": 27.9256687945939,
+  "encode_ms": 7761.8504,
+  "png_decode_ms": 72.0643,
+  "webp_decode_ms": 237.4243,
+  "entropy": 8.151516916314609,
+  "rgba_equal": true,
+  "png_sha256": "2d21545d36e024630babb5879f83e632f7f4c1e6b465bf636e25daa060ac1522",
+  "webp_sha256": "873b1a0dc4626d2c3d1d2ef0ca49258e7eab581ee68b66e3feb4f26e15beeb48",
+  "original_atlas_path": "build/full-map-atlas/tiles/z7/262_249.png"
+}
