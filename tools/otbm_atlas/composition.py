@@ -1,4 +1,4 @@
-"""Classify canonical OTBM additions from repository runtime evidence."""
+"""Classify canonical OTBM additions from vendored CrystalServer runtime evidence."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 
 QUOTED = re.compile(r'''(["'])(.*?)\1''')
+CANONICAL_SCRIPTS_ROOT = Path("vendor/map-analysis/crystalserver/data-global/scripts")
 
 
 def _token(value: str) -> str:
@@ -15,7 +16,7 @@ def _token(value: str) -> str:
 
 
 def classify_maps(world_root: Path, repository_root: Path) -> dict[str, object]:
-	scripts_root = repository_root / "data-otservbr-global"
+	scripts_root = repository_root / CANONICAL_SCRIPTS_ROOT
 	scripts = []
 	if scripts_root.exists():
 		for path in sorted(scripts_root.rglob("*.lua"), key=lambda value: value.relative_to(repository_root).as_posix()):
