@@ -23,6 +23,10 @@
       "map_sha256": "3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034",
       "assets_sha256": "4d11c5be0438c8fa08d079a558fe99f5f28d3db5df0aa742c5a46d4260c905c2"
     },
+    "manifest_validation": {
+      "path_set_equal": true,
+      "checksums_equal": true
+    },
     "detail_chunks": 3494,
     "detail_png_bytes": 10996609082,
     "benchmarked": 240,
