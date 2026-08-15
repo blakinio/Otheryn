@@ -130,6 +130,7 @@ validation:
     evidence: 6031 files fingerprint as 4c78aa441bc6eed6a614092423a58dc6275cf2c36ea5d4bde13746c9b4ee7ee7
   - command: git diff --check
     result: PASS
+    evidence: no whitespace errors on the focused provenance diff
 blockers:
   - owner review of the local visual A/B artifacts and product format decision remains pending
 next_action: validate the provenance fix and preserved benchmark artifacts, then open the focused provenance PR
