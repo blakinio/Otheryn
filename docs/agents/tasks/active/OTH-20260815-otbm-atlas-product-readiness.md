@@ -5,10 +5,10 @@ owner: none
 branch: none
 base_branch: main
 created: "2026-08-15T14:09:00+02:00"
-updated: "2026-08-15T22:21:00+02:00"
+updated: "2026-08-15T22:24:00+02:00"
 project_lane: otheryn-content
 execution_mode: chat-github
-related_pr: "412"
+related_pr: "413"
 ownership_released: true
 owned_paths: []
 ---
@@ -65,11 +65,11 @@ The verified current-v3 benchmark tested a deterministic 240-chunk sample spanni
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-08-15T22:21:00+02:00
-head: 28a33496f33b252556ac0efdcde97ba9e22da215
-head_scope: trusted main after PR 412 merge and before this documentation-consistency follow-up
+updated_at: 2026-08-15T22:24:00+02:00
+head: d231cac122ff40a5c1c7f0e2d176327df7e05105
+head_scope: latest committed checkpoint evidence before the PR-link update on the documentation-only follow-up
 branch: none
-pr: none
+pr: 413
 status: waiting
 project_lane: otheryn-content
 execution_mode: chat-github
