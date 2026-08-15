@@ -22,6 +22,16 @@ def sha(b): return hashlib.sha256(b).hexdigest()
 
 files=sorted(CORPUS.glob("z*/*.png"), key=lambda p:p.relative_to(CORPUS).as_posix())
 if not files: raise SystemExit("BLOCKED: no detailed chunks")
+atlas_root=CORPUS.parent
+manifest=json.loads((atlas_root/"manifest.json").read_text(encoding="utf-8"))
+manifest_chunks={str(chunk["path"]):str(chunk["checksum"]) for chunk in manifest.get("chunks",[])}
+actual_chunks={p.relative_to(atlas_root).as_posix():p for p in files}
+if actual_chunks.keys()!=manifest_chunks.keys():
+    missing=sorted(manifest_chunks.keys()-actual_chunks.keys()); extra=sorted(actual_chunks.keys()-manifest_chunks.keys())
+    raise SystemExit(f"BLOCKED: atlas manifest/tile path mismatch; missing={missing[:5]} extra={extra[:5]}")
+for relative,p in actual_chunks.items():
+    if sha(p.read_bytes())!=manifest_chunks[relative]:
+        raise SystemExit(f"BLOCKED: atlas manifest checksum mismatch: {relative}")
 sizes={p:p.stat().st_size for p in files}
 by_floor={}
 for p in files: by_floor.setdefault(int(p.parent.name[1:]),[]).append(p)
@@ -95,10 +105,9 @@ with (OUT/"results.csv").open("w",newline="",encoding="utf-8") as f:
 
 savings=[r["saving_percent"] for r in rows]; enc=[r["encode_ms"] for r in rows]; pd=[r["png_decode_ms"] for r in rows]; wd=[r["webp_decode_ms"] for r in rows]
 head=subprocess.check_output(["git","rev-parse","HEAD"],cwd=ROOT,text=True).strip()
-manifest=json.loads((ROOT/"build/full-map-atlas/manifest.json").read_text(encoding="utf-8"))
 sources=manifest.get("sources",{})
 atlas_identity={"schema_version":manifest.get("schemaVersion"),"atlas_version":sources.get("atlasVersion"),"chunk_size":sources.get("chunkSize"),"map_sha256":sources.get("mapSha256"),"assets_sha256":sources.get("assetsSha256")}
-summary={"verdict":"WEBP_LOSSLESS_WIN" if 100*(png_total-webp_total)/png_total>=10 else "NO_MATERIAL_GAIN","repo_head":head,"environment":{"os":platform.platform(),"cpu":platform.processor(),"python":sys.version,"pillow":Image.__version__,"libwebp":features.version("webp"),"encoder":{"format":"WEBP","lossless":True,"method":6,"exact":True}},"corpus":{"atlas_manifest":atlas_identity,"detail_chunks":len(files),"detail_png_bytes":all_png,"benchmarked":len(rows),"floors":sorted({r['floor'] for r in rows}),"selection":"deterministic union of 6 evenly distributed paths per floor, 16 per size quartile, then evenly distributed sorted paths; filled to exactly 240"},"storage":{"png_bytes":png_total,"webp_bytes":webp_total,"saving_bytes":png_total-webp_total,"saving_percent":100*(png_total-webp_total)/png_total,"ratio":webp_total/png_total,"percentiles":{f"p{p}":pct(savings,p) for p in (10,25,50,75,90,95)},"mean":statistics.mean(savings),"median":statistics.median(savings),"best":max(savings),"worst":min(savings)},"timing_ms":{"encode":{"total":sum(enc),"mean":statistics.mean(enc),"median":statistics.median(enc),"p95":pct(enc,95)},"png_decode":{"mean":statistics.mean(pd),"median":statistics.median(pd),"p95":pct(pd,95)},"webp_decode":{"mean":statistics.mean(wd),"median":statistics.median(wd),"p95":pct(wd,95),"delta_percent":100*(statistics.median(wd)/statistics.median(pd)-1)}},"rgba_exact":all(r['rgba_equal'] for r in rows),"full_atlas":{"kind":"ESTIMATED","webp_bytes":estimate,"saving_bytes":all_png-estimate,"saving_percent":100*(all_png-estimate)/all_png},"visual_samples":[r['path'] for r in visual]}
+summary={"verdict":"WEBP_LOSSLESS_WIN" if 100*(png_total-webp_total)/png_total>=10 else "NO_MATERIAL_GAIN","repo_head":head,"environment":{"os":platform.platform(),"cpu":platform.processor(),"python":sys.version,"pillow":Image.__version__,"libwebp":features.version("webp"),"encoder":{"format":"WEBP","lossless":True,"method":6,"exact":True}},"corpus":{"atlas_manifest":atlas_identity,"manifest_validation":{"path_set_equal":True,"checksums_equal":True},"detail_chunks":len(files),"detail_png_bytes":all_png,"benchmarked":len(rows),"floors":sorted({r['floor'] for r in rows}),"selection":"deterministic union of 6 evenly distributed paths per floor, 16 per size quartile, then evenly distributed sorted paths; filled to exactly 240"},"storage":{"png_bytes":png_total,"webp_bytes":webp_total,"saving_bytes":png_total-webp_total,"saving_percent":100*(png_total-webp_total)/png_total,"ratio":webp_total/png_total,"percentiles":{f"p{p}":pct(savings,p) for p in (10,25,50,75,90,95)},"mean":statistics.mean(savings),"median":statistics.median(savings),"best":max(savings),"worst":min(savings)},"timing_ms":{"encode":{"total":sum(enc),"mean":statistics.mean(enc),"median":statistics.median(enc),"p95":pct(enc,95)},"png_decode":{"mean":statistics.mean(pd),"median":statistics.median(pd),"p95":pct(pd,95)},"webp_decode":{"mean":statistics.mean(wd),"median":statistics.median(wd),"p95":pct(wd,95),"delta_percent":100*(statistics.median(wd)/statistics.median(pd)-1)}},"rgba_exact":all(r['rgba_equal'] for r in rows),"full_atlas":{"kind":"ESTIMATED","webp_bytes":estimate,"saving_bytes":all_png-estimate,"saving_percent":100*(all_png-estimate)/all_png},"visual_samples":[r['path'] for r in visual]}
 (OUT/"summary.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
 
 per_floor=[]
