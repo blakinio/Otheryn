@@ -8,7 +8,7 @@ created: "2026-08-15T14:09:00+02:00"
 updated: "2026-08-15T22:05:00+02:00"
 project_lane: otheryn-content
 execution_mode: chat-github
-related_pr: "406"
+related_pr: "412"
 ownership_released: false
 owned_paths:
   - .gitattributes
@@ -50,7 +50,7 @@ The durable continuation handover is:
 
 `ATLAS-PR-010` cannot be marked VERIFIED under the owner's benchmark contract because the measured corpus is Atlas v2 rather than the current certified Atlas v3 corpus. `ATLAS-PR-011` therefore remains INCONCLUSIVE and no PNG-to-WebP migration is authorized.
 
-No worker/branch ownership is held while waiting.
+The owner-facing codec decision remains waiting; PR #412 temporarily owns only the provenance correction paths listed above.
 
 ## Current-v3 desktop generation finding
 
@@ -67,9 +67,9 @@ The verified current-v3 benchmark tested a deterministic 240-chunk sample spanni
 ```yaml
 checkpoint_version: 1
 updated_at: 2026-08-15T22:05:00+02:00
-head: 73ed5b0a8457ec5f1c5e8da6f917ebd98f8438d7
+head: cd5c8febbc41840782c478a17230c0f75f118fc0
 branch: blakinio/atlas-provenance-stability
-pr: none
+pr: 412
 status: validating
 project_lane: otheryn-content
 execution_mode: chat-github
@@ -118,7 +118,18 @@ validation:
     evidence: 240 deterministic v3 chunks across Z0-Z15; 240/240 RGBA exact
   - command: independent artifact consistency checks
     result: PASS
-    evidence: CSV, JSON, Markdown, per-floor totals, 24 sample metadata files, hashes and 48 HTML references agree
+    evidence: 3494/3494 manifest paths and PNG checksums; 240 CSV rows across Z0-Z15 all record RGBA equality; JSON, CSV and Markdown totals agree; 24 retained A/B pairs decode RGBA-identically and their metadata, hashes and 48 HTML references agree
+  - command: python -m unittest tools.otbm_atlas.tests.test_atlas -v
+    result: PASS
+    evidence: 5/5 tests pass including canonical asset raw-byte SHA and Git attribute contract
+  - command: python -m unittest discover -s tools/otbm_atlas/tests -v
+    result: PASS
+    evidence: 83 tests pass; 5 canonical integration tests skip behind their explicit opt-in environment gate
+  - command: repository _tree_sha256 on corrected Windows checkout
+    result: PASS
+    evidence: 6031 files fingerprint as 4c78aa441bc6eed6a614092423a58dc6275cf2c36ea5d4bde13746c9b4ee7ee7
+  - command: git diff --check
+    result: PASS
 blockers:
   - owner review of the local visual A/B artifacts and product format decision remains pending
 next_action: validate the provenance fix and preserved benchmark artifacts, then open the focused provenance PR
@@ -135,9 +146,9 @@ recovery:
   checkpointed_at: 2026-08-15T22:05:00+02:00
   last_progress_at: 2026-08-15T22:05:00+02:00
   phase: validate
-  exact_head: 73ed5b0a8457ec5f1c5e8da6f917ebd98f8438d7
-  pull_request: none
-  active_operation: preserved benchmark artifact validation
+  exact_head: cd5c8febbc41840782c478a17230c0f75f118fc0
+  pull_request: 412
+  active_operation: independent audit and exact-head CI preparation
   external_run_ids: []
   operation_started_at: null
   wait_deadline_at: null
@@ -146,7 +157,7 @@ recovery:
   status: active
   safe_to_resume: true
   resume_condition: branch remains exclusively owned and benchmark evidence remains unchanged
-  next_action: run read-only checksum, RGBA, totals and A/B-reference validation against the preserved local artifacts
+  next_action: complete independent diff audit, finalize PR #412 and verify required CI on its exact head
 ```
 
 ## Closeout rule
