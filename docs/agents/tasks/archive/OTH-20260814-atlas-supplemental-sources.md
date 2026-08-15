@@ -5,7 +5,7 @@ owner: none
 branch: agent/oth-20260814-atlas-supplemental-sources
 base_branch: main
 created: 2026-08-14
-updated: 2026-08-15T12:22:00+02:00
+updated: 2026-08-15T12:24:00+02:00
 project_lane: otheryn-content
 execution_mode: chat-github
 related_pr: "383"
@@ -25,7 +25,7 @@ PR #383 vendored the exact supplemental CrystalServer source trees required for 
 
 The deterministic manifest records 2054 files, 3,285,973 bytes and content fingerprint `c599e44454b3cd2ec0378f2b1ba296f0858db2f9c683d60ec1da19ffdc672f92`.
 
-The historical active checkpoint remained stale after merge and omitted newer v2 lifecycle metadata. This archive record corrects lifecycle state; it does not modify the vendored source corpus.
+The historical active checkpoint remained stale after merge and omitted newer lifecycle metadata. This archive record corrects lifecycle state; it does not modify the vendored source corpus.
 
 ## Terminal evidence
 
@@ -53,7 +53,7 @@ closeout:
       - factual index to production atlas factual layers
   pull_requests:
     open_related_prs: 0
-    unresolved_runtime_findings: 0
+    unresolved_review_threads: 0
     terminal_prs:
       - number: 383
         state: merged
@@ -64,4 +64,4 @@ closeout:
   stale_branches_reconciled: true
 ```
 
-The two historical PR review findings concerned incomplete checkpoint metadata, not source-integrity defects. They are resolved by this terminal v2 archive record; the merged source trees have since been consumed and repeatedly validated by the production atlas pipeline.
+The two historical P1 review findings concerned incomplete checkpoint metadata, not source-integrity defects. Both GitHub review threads were formally resolved during the final closeout after the terminal archive record added execution/lifecycle metadata and the downstream consumer had been proven merged.
