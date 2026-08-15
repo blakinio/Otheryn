@@ -1,16 +1,16 @@
-# Full OTBM Atlas completion audit — updated 2026-08-15
+# Full OTBM Atlas completion audit — final technical closeout 2026-08-15
 
-This document records the verified completion state of the canonical OTBM Atlas after the full-world, factual-layer, environment-animation and canonical creature-sprite work.
+This document records the verified completion state of the canonical OTBM Atlas after full-world certification, factual layers, environment animation, canonical creature sprites and canonical creature phase animation.
 
-It is a state audit, not a replacement for the earlier product/UX handover in `docs/maps/otbm-atlas-conversation-handover-20260813.md`.
+It remains separate from the product/UX direction in `docs/maps/otbm-atlas-conversation-handover-20260813.md`: automated evidence can prove implementation and runtime behavior, but not a human's subjective visual preference.
 
 ## Audit baseline
 
 Repository: `blakinio/Otheryn`
 
-Audited `main`:
+Verified merged `main` after creature-animation delivery:
 
-`16e740adbf73757523795873c1106517e86dbe35`
+`ffc839a02921caf52077c87d91247d92466afae3`
 
 Canonical CrystalServer revision:
 
@@ -24,7 +24,7 @@ Canonical Tibia assets:
 
 `vendor/map-analysis/tibia-client/15.25.bd5a04/assets/`
 
-Relevant merged delivery PRs include #371-#375, #378-#381, #383-#385, #387, #389-#391, #393-#397.
+Relevant merged atlas delivery PRs include #371-#375, #378-#381, #383-#385, #387, #389-#391, #393-#399.
 
 ## Overall conclusion
 
@@ -32,77 +32,83 @@ Relevant merged delivery PRs include #371-#375, #378-#381, #383-#385, #387, #389
 
 **DONE / VERIFIED.**
 
-The original product contract for a complete canonical OTBM atlas is implemented: full-world preprocessing, bounded chunked browser loading, multi-resolution navigation, exact canonical detail rendering, persistent/shareable map state, factual overlays, conservative mechanics resolution and full-world release certification.
+The canonical full-world atlas contract is implemented: full-world preprocessing, bounded chunked browser loading, multi-resolution navigation, exact canonical detail rendering, persistent/shareable map state, factual overlays, conservative mechanics resolution and full-world release certification.
 
-### Canonical creature sprite parity
+### Canonical environment/item animation
 
 **DONE / VERIFIED.**
 
-PR #395 added one shared bounded `CreatureSpriteRenderer` for NPC and monster overlays using only the pinned vendored CrystalServer definitions and Tibia client appearances/sprite sheets. PR #396 archived the completed task and PR #397 revalidated the archived lifecycle plus the real Chromium creature showcase.
+The production environment animation pipeline supports bounded cyclic canonical animation, including displaced/larger supported geometry, with conservative static fallback and without inferring unknown server-driven state.
 
-This closes the former audit gap for canonical NPC + monster sprite overlays.
+### Canonical creature static sprite parity
 
-### Expanded animation ambition
+**DONE / VERIFIED.**
 
-**PARTIAL / NOT YET VERIFIED AS COMPLETE.**
+NPC and monster overlays use the shared bounded canonical creature renderer against pinned CrystalServer definitions plus pinned Tibia appearances/sprite sheets. Static unresolved/unsupported cases retain conservative fallback.
 
-The current verified creature feature proves canonical close-zoom NPC and monster sprite rendering. It does **not** by itself prove a complete time-based creature walk/idle animation system with all canonical direction/phase semantics.
+### Canonical creature time-based animation
 
-Do not describe creature walk/idle animation as DONE until direct code/tests/E2E prove that behavior.
+**DONE / VERIFIED.**
+
+PR #399 (`feat(atlas): animate canonical creature overlays`) was squash-merged as:
+
+`ffc839a02921caf52077c87d91247d92466afae3`
+
+The implementation preserves canonical creature frame-group identity, supports canonical cardinal direction patterns for supported outfits, exports all renderable phases while preserving recolouring/addons, honors canonical timing metadata conservatively, stays viewport/cache bounded, and never simulates creature path movement.
+
+Real pinned-data Chromium E2E proves phase changes over time for both an NPC and a monster in the production viewer.
+
+### Subjective visual/product parity
+
+**OWNER/HUMAN REVIEW PENDING.**
+
+Real production browser evidence exists. Whether the final visual/interaction result matches the desired Oteryn Thais / TibiaMaps / TibiaRoute direction closely enough is a subjective product-acceptance decision and is intentionally not inferred from automation.
+
+This is not a missing technical atlas runtime capability.
 
 ## Requirement-by-requirement audit
 
 | Requirement | Status | Verified state |
 |---|---|---|
-| Canonical CrystalServer `world.otbm` | DONE | Exact pinned map is vendored and used as the atlas source of truth. |
+| Canonical CrystalServer `world.otbm` | DONE | Exact pinned map is vendored and used as source of truth. |
 | Canonical client assets | DONE | Owner-selected Tibia 15.25 assets are vendored and fingerprinted. |
 | Complete world support | DONE | All populated `Z=0..15` are supported. |
 | No whole-world browser load | DONE | Viewer uses spatial chunks, viewport loading/prefetch and bounded caches. |
-| Full-world release certification | DONE | Canonical release run completed all 16 floors and exactly 3494 chunks. |
-| Full-world source consistency | DONE | Aggregate release validation records one canonical source fingerprint/map SHA. |
-| Missing sprites in certified world render | DONE | Full-world release certification records `missingSprites == {}` for every floor. |
-| Low/medium-zoom overview | DONE | Lightweight derived overview imagery is available for navigation. |
+| Full-world release certification | DONE | All 16 floors and exactly 3494 chunks passed canonical release validation. |
+| Missing sprites in certified world render | DONE | `missingSprites == {}` for every certified floor. |
+| Low/medium-zoom overview | DONE | Lightweight derived overview imagery is available. |
 | Maximum/detail canonical sprite render | DONE | Detail mode uses pinned canonical OTBM + client assets. |
-| `Auto` render mode | DONE | Supported as a first-class mode. |
-| `Detailed` render mode | DONE | Supported without removing viewport/chunk bounded loading. |
-| `Performance` render mode | DONE | Supported as lightweight overview-only behavior. |
-| X/Y/Z state | DONE | Raw OTBM coordinates are first-class viewer state. |
-| Zoom state | DONE | Preserved by viewer state. |
-| Render-mode persistence | DONE | Persisted and represented in URL state. |
-| Layer persistence | DONE | Enabled layers participate in persisted/shareable state. |
-| URL/shareable state | DONE | Coordinates, zoom, render mode and layer state are restorable/shareable. |
-| NPC spawn layer | DONE | Canonical spawn positions and source provenance are available. |
-| NPC canonical sprites | DONE | Shared canonical creature renderer resolves NPC definitions from vendored CrystalServer data and renders close-zoom sprite overlays with conservative fallback. |
-| Monster spawn layer | DONE | Canonical CrystalServer spawn positions are available as factual overlay data. |
-| Monster canonical sprites | DONE | PR #395 added canonical monster sprite parity through the shared bounded creature renderer. |
-| Creature source contract | DONE | Map/spawns, scripts, NPC definitions, monster definitions and appearance/sprite data are all pinned to `vendor/map-analysis/**`; no canonical creature fallback to `data-otservbr-global` or network data is permitted. |
-| Creature low-zoom boundedness | DONE | Monster sprites retain low-zoom suppression and bounded image loading; unresolved records fall back conservatively. |
-| Verified boss layer | DONE | Boss markers require explicit resolved `rewardBoss=true`; names/paths/categories alone never promote a creature to boss truth. |
+| Auto / Detailed / Performance modes | DONE | All three modes are first-class and preserve bounded loading. |
+| X/Y/Z, zoom and URL state | DONE | Coordinates, zoom, render mode and layers are restorable/shareable. |
+| NPC spawn layer | DONE | Canonical spawn positions and provenance are available. |
+| Monster spawn layer | DONE | Canonical spawn positions and provenance are available. |
+| Canonical NPC sprites | DONE | Pinned canonical appearance/sprite data with conservative fallback. |
+| Canonical monster sprites | DONE | Pinned canonical appearance/sprite data with conservative fallback. |
+| Canonical NPC animation phases | DONE | Time-based canonical phase playback proven in production Chromium E2E. |
+| Canonical monster animation phases | DONE | Time-based canonical phase playback proven in production Chromium E2E. |
+| Creature frame-group semantics | DONE | Idle/moving frame-group identity is preserved instead of flattened. |
+| Creature cardinal direction semantics | DONE | Supported N/E/S/W canonical patterns are exported; unsupported geometry is not guessed. |
+| Creature animation timing | DONE | Default start, synchronization, random-start and loop metadata are handled conservatively. |
+| Creature animation boundedness | DONE | Visible-chunk runtime, bounded LRUs, no whole-world creature animation preload. |
+| Creature spatial truth | DONE | Animation never mutates factual spawn positions or simulates pathing. |
+| Creature source contract | DONE | Canonical creature inputs remain restricted to `vendor/map-analysis/**`; no network or `data-otservbr-global` visual fallback. |
+| Verified boss layer | DONE | Requires explicit resolved `rewardBoss=true`. |
 | Direct OTBM teleports | DONE | Kept distinct from scripted transition evidence. |
-| Scripted teleport/mechanics layer | DONE | Only `RESOLVED` + `PROVEN_STATIC` transitions are promoted to navigable truth; conditionality/provenance are preserved. |
-| AID | DONE | Indexed and exposed with conservative resolution states. |
-| UID | DONE | Indexed and exposed with conservative resolution states. |
-| Houses | DONE | OTBM spatial data and world-house metadata are available. |
-| House doors | DONE | Indexed as factual spatial records. |
-| Towns | DONE | Parsed directly from canonical OTBM. |
-| Waypoints | DONE | Parsed directly from canonical OTBM. |
+| Scripted mechanics/teleports | DONE | Only proven static resolved transitions become navigable truth. |
+| AID / UID | DONE | Indexed with conservative resolution states. |
+| Houses / house doors / towns / waypoints | DONE | Available as factual map/world records. |
 | Raids/events | DONE | Point spawns and exact rectangular areas are exposed. |
-| Raid rectangle sharding | DONE | A rectangle is present in every spatial chunk it intersects. |
-| NPC shop services | DONE | Resolved from pinned NPC definitions/helper semantics. |
-| NPC bank/guild-bank services | DONE | Resolved conservatively from pinned definitions/helper semantics. |
-| NPC travel services | DONE | Proven destinations/costs can be exposed with source evidence. |
-| Search/details integration | DONE | Factual layers participate in viewer search/details behavior. |
-| Unknown/ambiguous behavior | DONE | `UNKNOWN`, `UNRESOLVED` and `AMBIGUOUS` are not silently promoted to certain spatial truth. |
-| Environment/item cyclic animations | DONE | Runtime animation pipeline is wired into production and supports safe bounded animated object geometry. |
-| Large/displaced animated item geometry | DONE | Merged implementation supports canonical 32x32, 32x64, 64x32 and 64x64 cyclic object geometry with conservative fallback. |
-| Real NPC + monster browser showcase | DONE | PR #395 and #397 produced/validated real Chromium `otbm-creature-showcase` artifacts with both selected NPC and monster sprites loaded at 64x64. |
-| Full animated NPC walk/idle cycles | NOT VERIFIED | Canonical NPC sprites are proven; complete time-based walk/idle phase playback has not been proven by the evidence reviewed here. |
-| Full animated monster walk/idle cycles | NOT VERIFIED | Canonical monster sprites are proven; complete time-based walk/idle phase playback has not been proven by the evidence reviewed here. |
-| Subjective visual parity with Oteryn Thais/TibiaMaps/TibiaRoute direction | NOT VERIFIED | Real production browser evidence exists, but subjective UX parity requires human visual review rather than inference from automated tests. |
+| NPC shop/bank/guild-bank/travel services | DONE | Resolved from pinned definitions/helper semantics. |
+| Search/details factual integration | DONE | Factual layers participate in viewer search/details and URL-preserved layers. |
+| UNKNOWN/UNRESOLVED/AMBIGUOUS handling | DONE | Uncertain evidence is never silently promoted to certain spatial truth. |
+| Environment/item cyclic animation | DONE | Production runtime animation with bounded conservative contract. |
+| Real NPC + monster static browser showcase | DONE | Real production Chromium evidence exists. |
+| Real NPC + monster time-based browser E2E | DONE | Exact-head creature-animation workflow proves distinct phases over time. |
+| Subjective visual parity | OWNER REVIEW | Requires human visual/product acceptance. |
 
 ## Full-world certification evidence
 
-PR #389 archives the successful full-world release validation for implementation SHA:
+PR #389 archives successful full-world release validation for implementation SHA:
 
 `1021d08978f078ff845e6f3f82fbbbc482cbf543`
 
@@ -117,129 +123,111 @@ Recorded evidence:
 - `verification.ok == true`;
 - `missingSprites == {}` on every floor.
 
-The former full-world-final-gate exception is closed and must not be reported as outstanding.
+The former full-world-final-gate exception is closed.
 
-## Factual-layer completion evidence
+## Factual-layer evidence
 
-PR #390 consumes the pinned `tools/otbm_atlas_facts` producer inside the production chunked atlas.
+PR #385 merged the deterministic conservative factual-source producer as:
 
-The archived task record is:
+`2cf8035401a05873c307af7388872141a76309ef`
 
-`docs/agents/tasks/archive/OTH-20260814-atlas-factual-layers.md`
-
-Verified behavior includes:
-
-- direct OTBM teleports remain separate from scripted transitions;
-- only proven static scripted transitions become navigable spatial records;
-- raid/event point spawns and exact areas are rendered;
-- only explicit resolved `rewardBoss=true` evidence creates verified boss markers;
-- NPC shop/bank/guild-bank/travel services enrich base-map NPC spawns;
-- unknown, unresolved and ambiguous evidence remains non-authoritative;
-- all added records remain spatially chunked and viewport bounded;
-- search/details and URL-preserved layer controls cover the factual layers.
-
-Final implementation head:
-
-`06b467a33f267c31b1ac85fbe768f2b3b71aa1ef`
-
-Squash merge:
+PR #390 then consumed the producer in the canonical production atlas and was squash-merged as:
 
 `2bfacdd8349003aaa9675604269b8ae8004c19a6`
 
-Recorded final validation includes CI, Required, autofix, independent factual audit, real Chromium factual-layer E2E, environment-animation E2E and OTBM Atlas Tests including canonical Thais render/browser validation.
+Verified behavior includes proven static scripted transitions, raid/event geometry, explicit reward-boss truth, NPC services, conservative uncertainty states, spatial chunking, search/details integration and URL-preserved factual layers.
 
-## Canonical creature sprite completion evidence
+The formerly stale task `OTH-20260814-atlas-factual-source-index` is now archived. Historical closeout PR #388 was closed as superseded because the production consumer has long since merged and the terminal archive is consolidated with this final closeout.
 
-PR #395 (`feat(atlas): add canonical monster sprite parity`) was squash-merged as:
+## Supplemental-source evidence
+
+PR #383 was merged as:
+
+`80e07b9afece08506c1fe401f20df073c93833f1`
+
+Pinned source trees:
+
+- scripts: `0e3b0102c7d841345dc5b9d4a3b81631930dc362`;
+- raids: `95da7008cf26e5b41ad9f6ef6b5666707feb295c`;
+- NPC system: `8c95fc6faf1dc2c6c573cb57973838897a458a28`.
+
+The deterministic manifest records 2054 files, 3,285,973 bytes and fingerprint:
+
+`c599e44454b3cd2ec0378f2b1ba296f0858db2f9c683d60ec1da19ffdc672f92`
+
+The stale supplemental-source task is now archived; its historical review findings concerned checkpoint/lifecycle metadata rather than source integrity.
+
+## Canonical static creature sprite evidence
+
+PR #395 was squash-merged as:
 
 `ea1810ed0a878230d1e68ad45e455c01ef7fc99d`
-
-Final implementation head:
-
-`bc2050cb604524cfc1699374a3e3dc691023a70d`
-
-Canonical source contract used by that feature:
-
-- map/spawns: `vendor/map-analysis/crystalserver/data-global/world/**`;
-- runtime map-composition evidence: `vendor/map-analysis/crystalserver/data-global/scripts/**`;
-- NPC definitions: `vendor/map-analysis/crystalserver/data-global/npc/**`;
-- monster definitions: `vendor/map-analysis/crystalserver/data-global/monster/**`;
-- appearances/sprite sheets: `vendor/map-analysis/tibia-client/15.25.bd5a04/assets/**`.
-
-Final exact-head workflows recorded by PR #395 were green, including Required, CI, OTBM Atlas Tests, Environment Animation E2E, factual-layer audit/tests and the canonical creature showcase.
 
 Pinned corpus results recorded by #395:
 
 - NPC: 752 unique sprites, 974 resolved spawns, 94 unresolved, 8 ambiguous definitions;
 - monsters: 719 unique sprites, 87,193 resolved spawns, 372 unresolved, 0 ambiguous definitions.
 
-The real Chromium `otbm-creature-showcase` from #395 contained both a PNG screenshot and JSON source/statistics evidence; both selected NPC and monster sprites decoded as 64x64 before capture.
+These unresolved records remain explicit fallback/evidence states; they are not silently guessed.
 
-PR #396 archived `OTH-20260815-otbm-atlas-creature-sprites` after merge. PR #397 then fixed the post-closeout lifecycle regression and re-ran the relevant atlas/showcase validation on exact head `48f6be02191c5b9c5e4454c731d292eed943eeb8`, producing another PASS creature showcase artifact. PR #397 was merged as:
+PR #397 later revalidated the archived static-creature lifecycle and showcase and was merged as:
 
 `16e740adbf73757523795873c1106517e86dbe35`
 
-The creature-sprite task is therefore completed and archived, not resumable under `docs/agents/tasks/active/`.
+## Canonical creature animation evidence
 
-## Animation completion boundary
+PR #399 final implementation head:
 
-The production environment/item animation pipeline is complete for its documented conservative contract.
+`c6b1bc6acafcf52c376bd2095ab8e7dd938c2d35`
 
-Merged PR #387 generalizes runtime cyclic object animation while preserving:
+Squash merge:
 
-- canonical shift/height displacement;
-- safe underlay/phase/overlay composition;
-- bounded per-instance browser behavior;
-- deterministic static fallback for unsafe/unsupported cases;
-- no inferred server-driven appearance state.
+`ffc839a02921caf52077c87d91247d92466afae3`
 
-PR #395 additionally closes canonical static sprite parity for both NPCs and monsters. That is a stronger state than the 2026-08-14 audit originally recorded.
+All final-head pull-request workflows completed SUCCESS:
 
-However, **static canonical creature sprite parity is not equivalent to verified time-based creature walk/idle animation**. Future work must inspect the actual renderer/runtime and prove phase/direction playback before changing that classification.
+- Required `31878003609`;
+- CI `31878003676`;
+- autofix.ci `31878003610`;
+- OTBM Atlas Tests `31878003687`;
+- OTBM Canonical Creature Showcase `31878003689`;
+- OTBM Environment Animation E2E `31878003600`;
+- OTBM Creature Animation E2E `31878003617`;
+- OTBM Creature Animation Audit `31878003672`;
+- OTBM Atlas Factual Layer Audit `31878003660`;
+- OTBM Atlas Factual Layers `31878003597`.
 
-## Remaining work outside the completed atlas core
+Independent creature-animation audit result: **PASS, material findings = 0**.
 
-### P1 — verify and, if absent, implement full creature walk/idle animation
+Pinned audit examples:
 
-Before implementing anything, inspect current `main` to determine whether canonical time-based creature direction/phase playback already exists under a different name or path.
+- NPC `Tanyt`, lookType `1199`: 8 canonical phases, 300 ms each, N/E/S/W;
+- monster `Silver Rabbit`, lookType `262`: 8 canonical phases, 300 ms each, N/E/S/W.
 
-If absent, the next feature slice should be:
+The browser runtime uses bounded image, shard, descriptor and per-spawn start-clock caches. For asynchronous animations with `randomStartPhase=false`, playback begins from the canonical default start using a bounded first-seen clock; deterministic per-spawn offset is applied only when canonical metadata permits random start.
 
-**Canonical Creature Animation — NPC + Monsters**
+The implementation explicitly does **not** change `record.position` and does not present animation as actual server movement.
 
-Required properties:
+## Historical Thais counting note
 
-- use canonical creature appearance animation phases and direction semantics from pinned assets;
-- no generated/mock animation;
-- preserve conservative fallback when a phase/direction cannot be proven;
-- remain viewport/chunk bounded;
-- keep bounded image/animation caches;
-- avoid world-wide creature payloads at browser startup;
-- retain spawn/source provenance;
-- real Chromium E2E must prove time changes between canonical animation phases for at least one NPC and one monster;
-- human-viewable browser capture must come from the real production viewer.
+The earlier product handover records a historical counting difference of 15,037 child items versus 14,993 in a newer semantic parser for a Thais slice.
 
-### P2 — human visual UX review
+No later repository evidence proves that those two values use an identical counting definition. Therefore this audit does not force them to equality or invent a correction. The certified full-world render, canonical source fingerprints and zero-missing-sprite release gates are independent of that historical counter-definition discrepancy.
 
-PR #392 was closed unmerged because its NPC-only evidence scope was superseded by the broader canonical NPC+monster showcase in #395.
+Treat it as a documented historical measurement-definition difference unless a future task explicitly proves otherwise.
 
-The evidence gap is no longer "no showcase exists". Real browser screenshots now exist. The remaining question is subjective/product-facing: whether the current production viewer matches the desired Oteryn Thais / TibiaMaps / TibiaRoute visual and interaction direction closely enough.
+## Repository hygiene after final closeout
 
-Do not call subjective visual parity proven until a human has inspected the actual production artifact.
+Final-closeout intent:
 
-## Repository hygiene noted by this audit
-
-State after the creature-sprite work:
-
-- PR #386 is closed unmerged; merged PR #387 remains the canonical item-animation implementation;
-- PR #392 is closed unmerged and superseded by the broader canonical creature showcase in #395;
-- PR #388 remains an old factual-source lifecycle closeout and should be reconciled/closed separately if still open.
-
-These are repository-hygiene items, not missing atlas runtime functionality.
+- PR #399: merged and canonical;
+- PR #388: closed superseded;
+- `OTH-20260815-otbm-atlas-creature-animation`: archived;
+- `OTH-20260814-atlas-factual-source-index`: archived;
+- `OTH-20260814-atlas-supplemental-sources`: archived;
+- no atlas runtime implementation task above remains falsely active.
 
 ## Completion classification
-
-Use the following classification in future continuation work:
 
 ```yaml
 original_full_otbm_atlas:
@@ -253,24 +241,25 @@ original_full_otbm_atlas:
   canonical_environment_item_animation: DONE
   canonical_npc_sprite_overlays: DONE
   canonical_monster_sprite_overlays: DONE
-  real_npc_monster_browser_showcase: DONE
+  canonical_npc_phase_animation: DONE
+  canonical_monster_phase_animation: DONE
+  creature_direction_phase_semantics: VERIFIED
+  creature_runtime_boundedness: VERIFIED
+  real_creature_animation_chromium_e2e: PASS
 
-expanded_animation_ambition:
-  status: NOT_VERIFIED
-  canonical_npc_walk_idle_animation: NOT_VERIFIED
-  canonical_monster_walk_idle_animation: NOT_VERIFIED
+technical_completion:
+  status: DONE
+  known_material_findings: 0
+  stale_atlas_runtime_tasks: 0
+  stale_atlas_closeout_prs: 0
 
 visual_product_review:
   real_browser_evidence: DONE
-  subjective_ux_parity_review: NOT_VERIFIED
-
-next_action:
-  name: Verify creature animation phases/directions on current main
-  priority: P1
+  subjective_ux_parity_review: OWNER_REVIEW_PENDING
 ```
 
 ## Source-of-truth rule
 
-Future agents must inspect current live `main`, active task records, open PRs and CI before acting. This document is a verified snapshot updated on 2026-08-15, not authority over newer repository state.
+Future agents must inspect live `main`, active task records, open PRs and CI before acting. This document is the final technical closeout snapshot for the atlas state reached on 2026-08-15.
 
-When evidence is incomplete, preserve `UNKNOWN` / `NOT VERIFIED` rather than filling the gap by inference.
+When evidence is incomplete, preserve `UNKNOWN` / `NOT VERIFIED`; do not fill gaps by inference.
