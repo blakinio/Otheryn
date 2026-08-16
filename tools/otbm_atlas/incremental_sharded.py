@@ -33,11 +33,15 @@ def execute(
     dirty_overview = {str(value) for value in overview.get("dirtyChunks", [])} if isinstance(overview, Mapping) else set()
 
     resolved_workers = workers if workers is not None else max(1, os.cpu_count() or 1)
-    resolved_shards = shards if shards is not None else max(1, resolved_workers * 4)
+    requested_shards = shards if shards is not None else resolved_workers
     if resolved_workers <= 0:
         raise ValueError("worker count must be positive")
-    if resolved_shards <= 0:
+    if requested_shards <= 0:
         raise ValueError("shard count must be positive")
+    # render_selected_chunks() initializes an AssetRenderer for every shard task.
+    # Until workers retain renderer state between tasks, more shards than worker
+    # processes repeat that heavy setup and can make the build slower.
+    resolved_shards = min(requested_shards, resolved_workers)
 
     manifest: dict[str, object] = {"schemaVersion": 1, "chunks": []}
     if dirty_detail:
@@ -64,7 +68,8 @@ def execute(
         "dirtyDetailChunks": len(dirty_detail),
         "overviewOnlyChunks": len(overview_only),
         "workers": resolved_workers,
-        "requestedShards": resolved_shards,
+        "requestedShards": requested_shards,
+        "effectiveShards": resolved_shards,
         "renderedChunks": len(manifest.get("chunks", [])) if isinstance(manifest.get("chunks"), list) else 0,
     }
 
