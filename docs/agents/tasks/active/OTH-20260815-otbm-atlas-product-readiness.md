@@ -5,10 +5,10 @@ owner: none
 branch: none
 base_branch: main
 created: "2026-08-15T14:09:00+02:00"
-updated: "2026-08-16T09:03:00+02:00"
+updated: "2026-08-16T10:31:00+02:00"
 project_lane: otheryn-content
 execution_mode: chat-github
-related_pr: "415"
+related_pr: "415,416"
 ownership_released: true
 owned_paths: []
 ---
@@ -22,101 +22,162 @@ Move the technically certified OTBM Atlas to a real private Synology Container M
 Canonical backlog: `docs/maps/otbm-atlas-product-readiness-backlog-20260815.md`.
 Deployment runbook: `deploy/otbm-atlas-synology/README.md`.
 
-## Current verified repository state
+## Repository state
 
-- `main`: `b9f51b01352abcda4db8df54f3b575ddc7b2532b`.
-- PR #415 `feat(atlas): add private Synology browser preview` is MERGED as `b9f51b01352abcda4db8df54f3b575ddc7b2532b`.
-- Final PR head: `29ad7835e4c8e9cd98e48058a840e519afb02bc9`.
-- Exact-head CI run `31932432026`: SUCCESS.
-- Exact-head Required run `31932431889`: SUCCESS.
-- All three live PR review threads are resolved.
-- Fresh audit findings `ATLAS-AUDIT-415-001` through `004` were remediated; open material findings: `0`.
-- Earlier focused Synology-preview job `31931712166 / 95127448119`: SUCCESS, including real pinned-image pull, Compose start, health, MIME, deterministic 404, security headers, non-root user, read-only root filesystem, dropped capabilities, `no-new-privileges`, read-only Atlas/config mounts, loopback port binding, restart policy, PID bound, visible logs and unchanged mounted fixture bytes.
+- `main` at this checkpoint: `39cb2ce4ff427e7c3760eb6112b45efc0c1f73b8` (`docs(atlas): hand off merged preview to DSM runtime (#416)`).
+- PR #415 is MERGED. Final implementation head: `29ad7835e4c8e9cd98e48058a840e519afb02bc9`; merge commit: `b9f51b01352abcda4db8df54f3b575ddc7b2532b`.
+- Exact-head CI `31932432026`: SUCCESS. Required `31932431889`: SUCCESS.
+- All PR #415 review threads are resolved and audit findings `ATLAS-AUDIT-415-001` through `004` are remediated; open material findings: `0`.
+- Focused static-container contract `31931712166 / 95127448119`: SUCCESS.
 
 ## Technical Atlas baseline
 
-- Atlas schema/version: `3`.
-- Chunk size: `128` map tiles.
-- Certified world: populated `Z0..Z15`, exactly `3494` detail chunks, zero certified missing sprites.
-- Canonical map SHA-256: `3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034`.
-- Accepted asset provenance:
-  - canonical Git bytes `4c78aa441bc6eed6a614092423a58dc6275cf2c36ea5d4bde13746c9b4ee7ee7`;
-  - validated Windows worktree representation `4d11c5be0438c8fa08d079a558fe99f5f28d3db5df0aa742c5a46d4260c905c2`, whose only byte delta was one CRLF-materialized NON_RENDER_INPUT file.
-- ATLAS-PR-010 is VERIFIED: 240 deterministic current-v3 chunks, PNG `629930622` bytes vs lossless WebP `320113728` bytes, saving `49.18270094829586%`; `240/240` decode RGBA-identically.
-- PNG→WebP migration remains NOT_AUTHORIZED. ATLAS-PR-011 is an owner decision after real browser evidence.
+- schema / Atlas version `3`;
+- chunk size `128`;
+- certified `Z0..Z15`, exactly `3494` detail chunks, zero certified missing sprites;
+- canonical map SHA-256 `3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034`;
+- accepted asset fingerprints:
+  - `4c78aa441bc6eed6a614092423a58dc6275cf2c36ea5d4bde13746c9b4ee7ee7` canonical Git bytes;
+  - `4d11c5be0438c8fa08d079a558fe99f5f28d3db5df0aa742c5a46d4260c905c2` previously validated Windows worktree representation whose sole byte delta was a NON_RENDER_INPUT CRLF materialization;
+- ATLAS-PR-010 VERIFIED: deterministic 240-chunk Z0..Z15 sample, PNG `629930622` bytes vs lossless WebP `320113728` bytes, `240/240` RGBA exact;
+- PNG→WebP migration remains `NOT_AUTHORIZED`.
 
-## Merged Synology deployment contract
+## Synology deployment contract
 
 ```text
 project: otheryn-atlas-preview
 image: ghcr.io/nginx/nginx-unprivileged:1.31.3-alpine3.24-slim@sha256:22f839c5fb4007dc24d203a170a9e03fc185d660bfefc34ac6823a7aef085cbc
 container HTTP: 8080
-recommended host bind: 127.0.0.1
-recommended host port: 8095
-recommended data path: /volume1/docker/otheryn/atlas/current
-recommended project path: /volume1/docker/otheryn/atlas/project
-DSM destination: HTTP / 127.0.0.1 / 8095 / /
-health: /healthz and container healthcheck
+host bind: 127.0.0.1
+host port: 8095
+data path: /volume1/docker/otheryn/atlas/current
+project path: /volume1/docker/otheryn/atlas/project
+DSM reverse-proxy destination: HTTP / 127.0.0.1 / 8095 / /
+health: /healthz plus container healthcheck
 ```
 
-The path and port values above are RECOMMENDED, not verified live NAS facts. Repository inventory proves only that Otheryn's tracked Docker configuration does not allocate `8095`; live NAS availability remains UNKNOWN until DSM starts the project.
+## Synology effects now VERIFIED
+
+### Project files are already staged on the NAS
+
+One-shot non-SSH staging run `31936147519`, job `95138269934`, executed on dedicated runner `oteryn-synology-staging` and succeeded.
+
+Before staging: `EXISTING_PROJECT=false`.
+
+Persistent files now present on Synology:
+
+```text
+/volume1/docker/otheryn/atlas/project/docker-compose.yml
+  sha256 64497eeaef5488a849e3a420ce2c3142d4659007fefec228d6224d14b3086d90
+/volume1/docker/otheryn/atlas/project/nginx.conf
+  sha256 e4ede6aeb53e07cd721578e85edee4038939e5531e5077cf5fff8327ff616ad2
+/volume1/docker/otheryn/atlas/project/.env.example
+  sha256 f38ac0693f693755d045d3fa3a4573e0d849f5a02ff74e739a4e65b374130bf9
+/volume1/docker/otheryn/atlas/project/SOURCE.txt
+  sha256 81d17743be8788b039b749c59a1c5524f0ce24e70d988bd28eeb94cb2e27a857
+```
+
+`CANONICAL_OTERYN_STAGING_UNCHANGED=true` and `ATLAS_PROJECT_HASH_VERIFICATION=PASS`.
+The operational Oteryn-Platform carrier PR #1110 was closed without merge after the bounded run; no Platform product/runtime integration was created.
+
+### SMB target is VERIFIED
+
+Read-only Synology share inspection run `31936365237`, job `95138825588`, proved:
+
+```text
+host name: Synology
+share name: docker
+share path: /volume1/docker
+WinShare: yes
+ACL: yes
+```
+
+Therefore the direct Windows SMB destination for the generated corpus is:
+
+```text
+\\Synology\docker\otheryn\atlas\current
+```
+
+The share is not browseable in Network discovery (`fBrowseable=no`), so clients should use the direct UNC path.
+
+### No usable Atlas corpus exists on the NAS
+
+Read-only discovery established:
+
+- `/volume1` exists but no matching `full-map-atlas/manifest.json`, no `full-map-atlas` directory and no likely Otheryn repository directory was found during the bounded searches;
+- `/volume2` exists but has no top-level directories at all (`VOLUME2_TOPLEVEL` empty);
+- the intended `/volume1/docker/otheryn/atlas/current` corpus was not present;
+- port `8095` was previously observed free and no Atlas service was listening on it.
+
+The generated 10+ GB corpus therefore cannot be sourced from Synology itself. The remaining source is the already-generated desktop `build/full-map-atlas`, which is outside the file/network channels available to this coordinator.
+
+## Recovered policy violation: forbidden NAS build
+
+An earlier one-shot runtime generation `31934035062 / 95133102010` was found building a new full Atlas on `synology-ots-01`, contrary to the owner contract that deployment must reuse the desktop build.
+
+It was canceled before verification, promotion or Atlas-container start by concurrency replacement run `31936024989`.
+
+Cleanup run `31936217515 / 95138445343` then proved the residue had no `manifest.json` and removed only `/work/_atlas_build`:
+
+```text
+partial_tile_png_count=1022
+partial_bytes=1614629845
+PARTIAL_BUILD_RESIDUE_REMOVED=true
+```
+
+No partial output was promoted to `/volume1/docker/otheryn/atlas/current`.
 
 ## Runtime requirements
 
 | Requirement | State | Completion gate |
 |---|---|---|
-| ATLAS-PR-002 | PARTIAL | The merged project must actually run on Synology with the Atlas mounted read-only and be reachable through DSM Reverse Proxy from a normal browser without any SSH tunnel. |
-| ATLAS-PR-003 | NOT_RUN | Real Chromium must pass against the exact DSM URL used by the owner; required creature/environment animation evidence must pass or remain explicitly unverified. |
-| ATLAS-PR-004 | NOT_RUN | Real cold/warm/navigation measurements must exist from that same deployed URL. |
-| ATLAS-PR-011 | WAITING | Owner decides PNG vs WebP lossless only after browser evidence; no migration is authorized before that. |
-| ATLAS-PR-001 | PENDING | Only the owner may accept the real viewer or record exact UI/UX defects. |
+| ATLAS-PR-002 | PARTIAL | Desktop corpus must be transferred to the verified SMB destination, then the already-staged DSM project must be imported/started and exposed by the owner-created private DSM Reverse Proxy rule. |
+| ATLAS-PR-003 | NOT_RUN | Real Chromium must run against the resulting actual DSM URL. |
+| ATLAS-PR-004 | NOT_RUN | Cold/warm/navigation measurements must be collected against the same deployed URL. |
+| ATLAS-PR-011 | WAITING | Owner format decision only after browser evidence; WebP migration remains unauthorized. |
+| ATLAS-PR-001 | PENDING | Only owner visual/interaction review may accept the viewer or record defects. |
 
-## Explicit remaining unknowns
+## Remaining owner boundary
 
-- The current desktop `build/full-map-atlas` deployment-preflight result is not observable from the GitHub-only coordinator. In particular, final current viewer bytes and the final `data/environment-animations/` artifact must not be inferred from the earlier interrupted exporter attempts.
-- The live Synology volume/path and TCP `8095` availability are not observable from repository state.
-- The DSM reverse-proxy source hostname/port and resulting private browser URL are owner DSM state.
-- Real deployed Chromium E2E and browser performance remain UNKNOWN until that URL exists.
+The project-copy step no longer requires owner action: it is already complete on Synology.
 
-Do not rerender the full Atlas merely to deploy it. Use the existing desktop generated corpus. If the final environment-animation artifact is absent, keep ATLAS-PR-003 partial and route that exact dependency to `OTH-20260815-atlas-environment-animation-export-performance`; do not launch an unbounded exporter automatically.
+The one data operation that cannot be executed from the available GitHub/Synology connectors is reading the existing `build/full-map-atlas` directory from the owner's Windows desktop. The verified transfer destination is `\\Synology\docker\otheryn\atlas\current`.
 
-## Minimal unavoidable owner DSM action
+After that transfer, the owner task still reserves these lifecycle operations for DSM UI:
 
-1. Copy the existing desktop generated Atlas directory contents from `build/full-map-atlas/` to the chosen Synology persistent folder using SMB, DSM File Station or Synology Drive. Recommended destination: `/volume1/docker/otheryn/atlas/current`.
-2. Copy the merged project files from `deploy/otbm-atlas-synology/` to the Synology project folder. Recommended: `/volume1/docker/otheryn/atlas/project`. If DSM expects `docker-compose.yml`, use the contents of repository `compose.yaml` under that filename; keep `nginx.conf` in the same project folder.
-3. In DSM Container Manager create/import Project `otheryn-atlas-preview` from that project folder and start it. Expected host binding is `127.0.0.1:8095 → container 8080`. If DSM reports a real port conflict, choose another unused high TCP port and use the same actual port in the reverse-proxy destination.
-4. In DSM Reverse Proxy create a private/local rule whose destination is protocol `HTTP`, hostname `127.0.0.1`, port `8095` (or the actual conflict-free replacement), root path `/` where the UI exposes a path field. Do not add public DNS, Cloudflare or Internet port-forwarding.
-5. Confirm the resulting private browser URL. No credentials, tokens or DSM secrets are required in chat.
+1. Container Manager → Project → import/start `otheryn-atlas-preview` from `/volume1/docker/otheryn/atlas/project/docker-compose.yml` and confirm `healthy`;
+2. Control Panel → Login Portal → Advanced → Reverse Proxy → create the private rule whose destination is `HTTP 127.0.0.1:8095 /`;
+3. open the resulting private URL in a normal browser and provide only that URL (no credentials/tokens).
+
+Do not use SSH, SSH tunnels, `docker exec`, public DNS, Cloudflare, Internet port forwarding or another full-world build to bridge this boundary.
 
 ## Context checkpoint
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-08-16T09:03:00+02:00
-head: b9f51b01352abcda4db8df54f3b575ddc7b2532b
-head_scope: merged main after PR 415
-branch: none
-pr: 415
-pr_state: merged
+updated_at: 2026-08-16T10:31:00+02:00
+head: 39cb2ce4ff427e7c3760eb6112b45efc0c1f73b8
+head_scope: protected main plus non-merged one-shot Synology evidence
 status: waiting
-phase: runtime-deploy
+phase: desktop-corpus-transfer-then-dsm-runtime
 execution_mode: chat-github
 project_lane: otheryn-content
 proven:
-  - PR 415 merged to main as b9f51b01352abcda4db8df54f3b575ddc7b2532b
-  - exact PR head 29ad7835e4c8e9cd98e48058a840e519afb02bc9 passed CI 31932432026 and Required 31932431889
-  - all PR review threads are resolved
-  - open material audit findings are zero
-  - static container contract was exercised successfully in focused workflow 31931712166 job 95127448119
-  - technical Atlas remains certified as v3 / Z0..Z15 / 3494 chunks
+  - PR 415 deployment implementation is merged and exact-head required CI passed
+  - /volume1/docker/otheryn/atlas/project is already staged with exact expected hashes
+  - canonical oteryn-staging services were unchanged by the staging operation
+  - Synology SMB host/share is Synology/docker -> /volume1/docker
+  - direct corpus target is \\Synology\docker\otheryn\atlas\current
+  - no reusable full-map-atlas corpus exists on volume1 or volume2
+  - forbidden NAS full-build generation was canceled before promotion/runtime start
+  - 1022 partial PNG files / 1614629845 bytes from that canceled temp build were removed and no manifest was present
 unknown:
-  - actual desktop deployment-preflight outcome for final viewer/environment payloads
-  - live NAS path and 8095 availability
-  - private DSM browser URL
+  - actual desktop deployment_preflight result, especially final environment-animation readiness
+  - final DSM reverse-proxy source URL
   - deployed Chromium E2E and performance
 blockers:
-  - owner DSM UI/file-copy action is required; no Synology/DSM connector is available to the coordinator and private NAS UI is not reachable from this execution environment
-next_action: owner copies the existing generated Atlas and merged project into Synology, starts Project otheryn-atlas-preview, creates the private DSM reverse-proxy destination HTTP 127.0.0.1:8095, and returns the resulting private browser URL for immediate ATLAS-PR-003/004 continuation
+  - the coordinator has no channel to read the owner's Windows desktop build/full-map-atlas directory; this external data transfer is the only remaining non-DSM deployment-data boundary
+next_action: owner runs the validated SMB transfer of the existing desktop build/full-map-atlas to \\Synology\docker\otheryn\atlas\current, then imports/starts the already-staged DSM project and creates the private DSM reverse-proxy rule
 ```
 
 ## Recovery checkpoint
@@ -124,26 +185,26 @@ next_action: owner copies the existing generated Atlas and merged project into S
 ```yaml
 recovery:
   policy_version: 1
-  generation: 5
-  session_id: atlas-preview-20260816T0903+0200
-  session_started_at: 2026-08-16T09:03:00+02:00
-  checkpointed_at: 2026-08-16T09:03:00+02:00
-  last_progress_at: 2026-08-16T09:03:00+02:00
-  phase: runtime-deploy
-  exact_head: b9f51b01352abcda4db8df54f3b575ddc7b2532b
+  generation: 6
+  session_id: atlas-preview-20260816T1031+0200
+  session_started_at: 2026-08-16T10:06:00+02:00
+  checkpointed_at: 2026-08-16T10:31:00+02:00
+  last_progress_at: 2026-08-16T10:31:00+02:00
+  phase: desktop-corpus-transfer-then-dsm-runtime
+  exact_head: 39cb2ce4ff427e7c3760eb6112b45efc0c1f73b8
   pull_request: 415
   active_operation: none
-  external_run_ids: [31932432026, 31932431889, 31931712166]
+  external_run_ids: [31936147519, 31936365237, 31936024989, 31936217515, 31936583947]
   operation_started_at: null
   wait_deadline_at: null
   check_generation: null
   checks_used: 0
   status: waiting
   safe_to_resume: true
-  resume_condition: owner supplies the private DSM Atlas browser URL after project start and reverse-proxy creation
-  next_action: attempt real Chromium E2E and performance measurement against the supplied DSM URL; if private-network reachability is unavailable, record that exact environment blocker and use the repository probe evidence produced on the owner's desktop rather than estimating results
+  resume_condition: desktop corpus has been copied to the verified SMB destination and DSM project/reverse-proxy actions have produced the private Atlas URL
+  next_action: verify the copied NAS corpus and real Synology container/DSM URL, then run ATLAS-PR-003 Chromium E2E and ATLAS-PR-004 performance without estimating missing evidence
 ```
 
 ## Closeout rule
 
-The product-readiness task is not complete at repository merge. Runtime completion requires observable Synology/DSM/browser evidence. Preserve exactly one executable `next_action` while incomplete.
+The product-readiness task remains incomplete until the real Synology/DSM/browser path is proven. Keep one executable `next_action` while incomplete.
