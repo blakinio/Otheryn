@@ -49,10 +49,10 @@ jobs:
             tools.otbm_atlas.tests.test_chunk_benchmark -v
 
   impact-plan:
-    name: Real canonical change-impact plan
+    name: Real canonical change-impact plan and dirty render
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Checkout exact target head
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
@@ -102,6 +102,47 @@ jobs:
               'domains': plan['classification']['domains'],
           }, indent=2, sort_keys=True))
           PY
+      - name: Execute exactly the planned dirty detail work
+        working-directory: target
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          plan = json.loads(Path('/tmp/atlas-impact-plan.json').read_text(encoding='utf-8'))
+          detail = set(plan['detail']['dirtyChunks'])
+          overview = set(plan['overview']['dirtyChunks'])
+          overview_only = sorted(overview - detail)
+          if overview_only:
+              raise SystemExit(
+                  'overview-only invalidation requires an existing prior detail publication; '
+                  'ordinary PR CI refuses to rebuild detail implicitly. Use the explicit publication/recovery path.'
+              )
+          print(json.dumps({'dirtyDetailChunks': len(detail), 'overviewOnlyChunks': 0}, sort_keys=True))
+          Path('/tmp/atlas-dirty-count').write_text(str(len(detail)), encoding='utf-8')
+          PY
+          dirty_count="$(cat /tmp/atlas-dirty-count)"
+          if [ "$dirty_count" -gt 0 ]; then
+            python3 -m tools.otbm_atlas.incremental render \
+              /tmp/atlas-impact-plan.json \
+              --work /tmp/atlas-impact \
+              --target-root . \
+              --output /tmp/atlas-dirty-render
+            python3 - <<'PY'
+            import json
+            from pathlib import Path
+            plan = json.loads(Path('/tmp/atlas-impact-plan.json').read_text(encoding='utf-8'))
+            rendered = json.loads(Path('/tmp/atlas-dirty-render/incremental-render.json').read_text(encoding='utf-8'))
+            expected = sorted(plan['detail']['dirtyChunks'])
+            actual = sorted(chunk['chunk'] for chunk in rendered['chunks'])
+            assert actual == expected, {'expected': expected, 'actual': actual}
+            print(json.dumps({'plannedDirtyChunks': len(expected), 'renderedDirtyChunks': len(actual), 'result': 'PASS'}, sort_keys=True))
+            PY
+          else
+            echo 'No detail chunks are dirty; rendered 0 chunks as planned.'
+          fi
+      - name: Remove generated dirty-render data
+        if: always()
+        run: rm -rf /tmp/atlas-impact /tmp/atlas-dirty-render /tmp/atlas-impact-plan.json /tmp/atlas-dirty-count /tmp/atlas-changed-paths.txt
 
   representative-e2e:
     name: Incremental pixel-equivalence E2E
