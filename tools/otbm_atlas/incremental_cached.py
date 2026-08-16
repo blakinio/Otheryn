@@ -16,7 +16,6 @@ from .incremental import (
     DEFAULT_CHUNK_SIZE,
     WORLD_REL,
     _paths_require_render_scan,
-    _render_core_transition_reasons,
     build_plan,
     plan_from_states,
 )
@@ -26,6 +25,7 @@ from .incremental_core import (
     render_contract_digest,
     write_json_atomic,
 )
+from .incremental_core_guard import strict_render_core_transition_reasons
 from .incremental_state import (
     prepare_dependency_index,
     prepare_persistent_spool,
@@ -64,7 +64,7 @@ def build_cached_plan(
     work.mkdir(parents=True, exist_ok=True)
     state_root.mkdir(parents=True, exist_ok=True)
 
-    core_reasons = _render_core_transition_reasons(base_root, target_root)
+    core_reasons = strict_render_core_transition_reasons(base_root, target_root)
     if not _paths_require_render_scan(changed, core_reasons):
         plan, _deps, _assets, _spool = build_plan(
             base_root,
