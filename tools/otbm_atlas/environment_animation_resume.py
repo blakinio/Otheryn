@@ -597,6 +597,17 @@ def enrich_environment_animations_resumable(asset_dir: Path, output: Path, worke
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest_chunks = list(manifest.get("chunks", []))
+    missing_spool_chunks: list[str] = []
+    for raw_chunk in manifest_chunks:
+        chunk = dict(raw_chunk)
+        z, chunk_x, chunk_y = int(chunk["z"]), int(chunk["chunkX"]), int(chunk["chunkY"])
+        if not (spool / f"z{z}" / f"{chunk_x}_{chunk_y}.bin").is_file():
+            missing_spool_chunks.append(f"z{z}/{chunk_x}_{chunk_y}")
+    if missing_spool_chunks:
+        sample = ", ".join(missing_spool_chunks[:8])
+        suffix = "" if len(missing_spool_chunks) <= 8 else f" (+{len(missing_spool_chunks) - 8} more)"
+        raise RuntimeError(f"environment animation manifest chunks missing spool shards: {sample}{suffix}")
+
     bootstrap_renderer = AssetRenderer(asset_dir)
     radius = _overlap_radius(bootstrap_renderer)
     source_fingerprint = environment_contract_fingerprint(
