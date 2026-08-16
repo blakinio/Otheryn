@@ -1,0 +1,443 @@
+name: Atlas V3 Distributed Recovery One Shot
+
+on:
+  push:
+    branches:
+      - ops/atlas-runtime-after-copy-20260816
+    paths:
+      - .github/workflows/atlas-v3-distributed-recovery-one-shot.yml
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: atlas-v3-distributed-recovery-20260816
+  cancel-in-progress: false
+
+env:
+  BASE_FLOOR: "7"
+
+jobs:
+  floor:
+    name: Canonical v3 floor Z${{ matrix.floor }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        floor: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    steps:
+      - name: Checkout exact recovery source
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+
+      - name: Free disk for generated floor
+        run: |
+          sudo rm -rf /usr/local/lib/android /opt/ghc /usr/share/dotnet || true
+          df -h /
+
+      - name: Build exactly one canonical v3 floor
+        env:
+          ATLAS_FLOOR: ${{ matrix.floor }}
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          from tools.otbm_atlas.atlas import ATLAS_VERSION, _sha256, _tree_sha256, build_atlas, spool_map
+          floor = int(os.environ['ATLAS_FLOOR'])
+          assert ATLAS_VERSION == 3
+          map_path = Path('vendor/map-analysis/crystalserver/data-global/world/world.otbm')
+          asset_dir = Path('vendor/map-analysis/tibia-client/15.25.bd5a04/assets')
+          output = Path(f'build/recovery-v3-z{floor}')
+          spool = output / '.spool'
+          spool_map(map_path, spool, 128)
+          expected = {
+              'mapSha256': _sha256(map_path),
+              'assetsSha256': _tree_sha256(asset_dir),
+              'chunkSize': 128,
+              'atlasVersion': ATLAS_VERSION,
+          }
+          assert expected['mapSha256'] == '3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034'
+          (spool / 'source.json').write_text(json.dumps(expected, sort_keys=True) + '\n', encoding='utf-8')
+          for path in list(spool.glob('z*/*.bin')):
+              if int(path.parent.name[1:]) != floor:
+                  path.unlink()
+          build_atlas(map_path, asset_dir, output, workers=4)
+          PY
+
+      - name: Independently verify the rendered floor
+        env:
+          ATLAS_FLOOR: ${{ matrix.floor }}
+        run: |
+          set -Eeuo pipefail
+          root="build/recovery-v3-z${ATLAS_FLOOR}"
+          python3 -m tools.otbm_atlas.verify "$root" --output "$root/verification.json"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          floor=int(os.environ['ATLAS_FLOOR'])
+          root=Path(f'build/recovery-v3-z{floor}')
+          m=json.loads((root/'manifest.json').read_text(encoding='utf-8'))
+          v=json.loads((root/'verification.json').read_text(encoding='utf-8'))
+          assert m['schemaVersion']==3
+          assert m['chunkSize']==128
+          assert sorted({int(c['z']) for c in m['chunks']}) == [floor]
+          assert m['sources']['mapSha256']=='3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034'
+          assert m['sources']['atlasVersion']==3
+          assert v['ok'] is True
+          assert v['missingSprites']=={}
+          print(json.dumps({'floor':floor,'chunks':len(m['chunks']),'verify':'PASS'},sort_keys=True))
+          PY
+
+      - name: Package minimal merge bundle
+        env:
+          ATLAS_FLOOR: ${{ matrix.floor }}
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import json, os, shutil
+          from pathlib import Path
+          floor=int(os.environ['ATLAS_FLOOR'])
+          base=int(os.environ['BASE_FLOOR'])
+          src=Path(f'build/recovery-v3-z{floor}')
+          dst=Path(f'build/floor-bundle-z{floor}')
+          if dst.exists(): shutil.rmtree(dst)
+          dst.mkdir(parents=True)
+          shutil.copy2(src/'manifest.json', dst/'floor-manifest.json')
+          for name in ('tiles','overview','overview-low'):
+              source=src/name/f'z{floor}'
+              if source.is_dir():
+                  shutil.copytree(source, dst/name/f'z{floor}', dirs_exist_ok=True)
+          env_src=src/'data/environment-animations'
+          if env_src.is_dir():
+              shutil.copytree(env_src, dst/'data/environment-animations', dirs_exist_ok=True)
+          if floor == base:
+              excluded={'.spool','tiles','overview','overview-low','manifest.json','verification.json'}
+              for entry in src.iterdir():
+                  if entry.name in excluded: continue
+                  target=dst/entry.name
+                  if entry.name == 'data':
+                      target.mkdir(exist_ok=True)
+                      for child in entry.iterdir():
+                          if child.name == 'environment-animations': continue
+                          out=target/child.name
+                          if child.is_dir(): shutil.copytree(child,out,dirs_exist_ok=True)
+                          else: shutil.copy2(child,out)
+                  elif entry.is_dir():
+                      shutil.copytree(entry,target,dirs_exist_ok=True)
+                  else:
+                      shutil.copy2(entry,target)
+          index=src/'data/environment-animations/index.json'
+          if not index.is_file():
+              raise SystemExit(f'floor Z{floor} missing completed environment-animation index')
+          payload=json.loads(index.read_text(encoding='utf-8'))
+          assert payload.get('schemaVersion')==2
+          (dst/'floor-environment-index.json').write_text(json.dumps(payload,sort_keys=True)+'\n',encoding='utf-8')
+          PY
+          tar -C "build/floor-bundle-z${ATLAS_FLOOR}" -cf "build/floor-z${ATLAS_FLOOR}.tar" .
+          ls -lh "build/floor-z${ATLAS_FLOOR}.tar"
+
+      - name: Upload v3 floor bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: atlas-v3-floor-z${{ matrix.floor }}
+          path: build/floor-z${{ matrix.floor }}.tar
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  assemble-deploy:
+    name: Assemble, certify and deploy canonical v3 on Synology
+    needs: floor
+    runs-on: [ots, synology]
+    timeout-minutes: 60
+    steps:
+      - name: Checkout exact recovery source
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+
+      - name: Download all verified floor bundles
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: atlas-v3-floor-z*
+          path: build/recovery-download
+
+      - name: Assemble deterministic full-world v3 corpus
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from __future__ import annotations
+          import hashlib, json, os, shutil, tarfile
+          from pathlib import Path
+          from tools.otbm_atlas.environment_animation_resume import _source_fingerprint
+
+          downloads=Path('build/recovery-download')
+          work=Path('build/recovery-extracted')
+          merged=Path('build/recovery-v3-merged')
+          shutil.rmtree(work,ignore_errors=True); shutil.rmtree(merged,ignore_errors=True)
+          work.mkdir(parents=True); merged.mkdir(parents=True)
+          manifests=[]; env_indexes=[]
+
+          def digest(path: Path)->str:
+              h=hashlib.sha256()
+              with path.open('rb') as f:
+                  for b in iter(lambda:f.read(1024*1024),b''): h.update(b)
+              return h.hexdigest()
+
+          def merge_file(src:Path,dst:Path)->None:
+              dst.parent.mkdir(parents=True,exist_ok=True)
+              if dst.exists():
+                  if digest(src)!=digest(dst):
+                      raise RuntimeError(f'non-identical bundle collision: {dst}')
+                  return
+              shutil.copy2(src,dst)
+
+          def merge_tree(src:Path,dst:Path,*,skip:set[str]=set())->None:
+              for p in sorted(x for x in src.rglob('*') if x.is_file()):
+                  rel=p.relative_to(src).as_posix()
+                  if rel in skip: continue
+                  merge_file(p,dst/rel)
+
+          for floor in range(16):
+              artifact=downloads/f'atlas-v3-floor-z{floor}'/f'floor-z{floor}.tar'
+              if not artifact.is_file(): raise FileNotFoundError(artifact)
+              root=work/f'z{floor}'; root.mkdir()
+              with tarfile.open(artifact,'r') as tf: tf.extractall(root,filter='data')
+              manifest=json.loads((root/'floor-manifest.json').read_text(encoding='utf-8'))
+              assert manifest['schemaVersion']==3 and manifest['chunkSize']==128
+              assert sorted({int(c['z']) for c in manifest['chunks']})==[floor]
+              manifests.append(manifest)
+              env_indexes.append(json.loads((root/'floor-environment-index.json').read_text(encoding='utf-8')))
+
+          base=work/f'z{int(os.environ["BASE_FLOOR"])}'
+          for p in sorted(x for x in base.rglob('*') if x.is_file()):
+              rel=p.relative_to(base).as_posix()
+              if rel in {'floor-manifest.json','floor-environment-index.json'}: continue
+              if rel.startswith('data/environment-animations/') and rel.endswith(('index.json','export-state.json')): continue
+              merge_file(p,merged/rel)
+          for floor in range(16):
+              root=work/f'z{floor}'
+              for prefix in ('tiles','overview','overview-low'):
+                  source=root/prefix
+                  if source.exists(): merge_tree(source,merged/prefix)
+              env=root/'data/environment-animations'
+              if env.exists():
+                  for p in sorted(x for x in env.rglob('*') if x.is_file()):
+                      rel=p.relative_to(env).as_posix()
+                      if rel in {'index.json','export-state.json'}: continue
+                      merge_file(p,merged/'data/environment-animations'/rel)
+
+          first=manifests[0]
+          source_fingerprints={json.dumps(m['sources'],sort_keys=True) for m in manifests}
+          assert len(source_fingerprints)==1
+          chunks=sorted((c for m in manifests for c in m['chunks']),key=lambda c:(int(c['z']),int(c['chunkY']),int(c['chunkX'])))
+          assert len(chunks)==3494, len(chunks)
+          assert sorted({int(c['z']) for c in chunks})==list(range(16))
+          assert all(not c.get('missingSprites') for c in chunks)
+          manifest={k:v for k,v in first.items() if k!='chunks'}
+          manifest['chunks']=chunks
+          assert manifest['sources']['mapSha256']=='3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034'
+          assert manifest['sources']['atlasVersion']==3
+          (merged/'manifest.json').write_text(json.dumps(manifest,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+
+          unknown={}
+          for chunk in chunks:
+              for server_id,occurrences in chunk.get('missingAppearances',{}).items():
+                  sid=int(server_id)
+                  row=unknown.setdefault(sid,{'serverId':sid,'occurrences':0,'chunks':[]})
+                  row['occurrences']+=int(occurrences)
+                  row['chunks'].append({'z':chunk['z'],'chunkX':chunk['chunkX'],'chunkY':chunk['chunkY'],'logicalBounds':chunk['logicalBounds']})
+          unknown_report={'schemaVersion':1,'items':list(unknown.values()),'statistics':{'uniqueServerIds':len(unknown),'occurrences':sum(v['occurrences'] for v in unknown.values())}}
+          (merged/'data/unknown-items.json').write_text(json.dumps(unknown_report,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+
+          env_root=merged/'data/environment-animations'
+          checkpoints=sorted(env_root.glob('checkpoints/z*/*.json'))
+          assert len(checkpoints)==3494, len(checkpoints)
+          instances=fallbacks=chunks_with_records=0; keys=set()
+          for path in checkpoints:
+              c=json.loads(path.read_text(encoding='utf-8'))
+              count=int(c['instances']); instances+=count; fallbacks+=int(c['staticFallbacks'])
+              chunks_with_records += 1 if count else 0
+              keys.update(str(k) for k in c.get('animationKeys',[]))
+          schema={int(x.get('schemaVersion',0)) for x in env_indexes}; assert schema=={2}
+          zoom={x.get('animationZoom') for x in env_indexes}; radius={x.get('overlapSafetyRadiusTiles') for x in env_indexes}
+          assert len(zoom)==1 and len(radius)==1
+          data_files=[p for p in env_root.rglob('*') if p.is_file() and p.name not in {'export-state.json','index.json'}]
+          stats={
+              'instances':instances,'uniqueAnimations':len(keys),'chunks':chunks_with_records,'staticFallbacks':fallbacks,
+              'completedChunks':3494,'reusedChunks':0,'outputFiles':len(data_files),'outputBytes':sum(p.stat().st_size for p in data_files),
+          }
+          exemplar=env_indexes[0]
+          index={
+              'schemaVersion':2,'animationZoom':next(iter(zoom)),'overlapSafetyRadiusTiles':next(iter(radius)),'statistics':stats,
+              'exporter':dict(exemplar.get('exporter',{})),'policy':exemplar.get('policy',{}),
+          }
+          index['exporter']['sourceFingerprint']=_source_fingerprint(manifest)
+          index['exporter']['resumePolicy']='merged verified floor checkpoints; full-world resume safely revalidates fingerprints before reuse'
+          (env_root/'index.json').write_text(json.dumps(index,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+          (env_root/'export-state.json').write_text(json.dumps({'schemaVersion':1,'exportVersion':2,'sourceFingerprint':index['exporter']['sourceFingerprint'],'status':'complete','statistics':stats},indent=2,sort_keys=True)+'\n',encoding='utf-8')
+
+          statistics_path=merged/'data/statistics.json'
+          statistics=json.loads(statistics_path.read_text(encoding='utf-8'))
+          statistics.update({
+              'chunks':len(chunks),'populatedFloors':list(range(16)),
+              'tiles':sum(int(c['tiles']) for c in chunks),'groundItems':sum(int(c['groundItems']) for c in chunks),
+              'childItems':sum(int(c['childItems']) for c in chunks),'renderOperations':sum(int(c['renderOperations']) for c in chunks),
+              'unknownItems':unknown_report['statistics'],'environmentAnimations':stats,
+          })
+          statistics_path.write_text(json.dumps(statistics,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+          print(json.dumps({'schemaVersion':3,'chunks':len(chunks),'floors':list(range(16)),'environmentInstances':instances,'merge':'READY'},sort_keys=True))
+          PY
+
+      - name: Independently certify assembled v3 before NAS mutation
+        run: |
+          set -Eeuo pipefail
+          root=build/recovery-v3-merged
+          python3 -m tools.otbm_atlas.verify "$root" --output "$root/verification-assembled.json"
+          python3 -m tools.otbm_atlas.deploy_preflight "$root" --require-environment-animations --output "$root/deployment-preflight.json"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path('build/recovery-v3-merged')
+          v=json.loads((root/'verification-assembled.json').read_text())
+          p=json.loads((root/'deployment-preflight.json').read_text())
+          assert v['ok'] is True and v['chunks']==3494 and v['missingSprites']=={}
+          assert p['status']=='FULL_RUNTIME_READY', (p['status'],p['errors'],p['requirementErrors'])
+          assert p['corePreviewReady'] is True and p['fullRuntimeReady'] is True
+          print('ASSEMBLED_V3_CERTIFICATION=PASS')
+          PY
+
+      - name: Transfer verified v3 to isolated Synology staging
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "${RUNNER_NAME:-}" == "synology-ots-01" ]]
+          image=alpine:3.22
+          docker pull "$image" >/dev/null
+          tar -C build/recovery-v3-merged -cf - . | \
+            docker run --rm -i --name "atlas-v3-transfer-${GITHUB_RUN_ID}" -v /volume1/docker:/nas "$image" sh -lc '
+              set -eu
+              root=/nas/oteryn/atlas/v3-staging
+              rm -rf "$root.new"
+              mkdir -p "$root.new"
+              tar -xf - -C "$root.new"
+              rm -rf "$root"
+              mv "$root.new" "$root"
+            '
+          echo NAS_V3_STAGING_TRANSFER=PASS
+
+      - name: Verify staged NAS bytes using repository verifier
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          tar -C "$GITHUB_WORKSPACE" -cf - tools/otbm_atlas | \
+            docker run --rm -i --name "atlas-v3-nas-verify-${GITHUB_RUN_ID}" -v /volume1/docker:/nas:ro python:3.12-alpine sh -lc '
+              set -eu
+              mkdir -p /repo; tar -xf - -C /repo; export PYTHONPATH=/repo
+              root=/nas/oteryn/atlas/v3-staging
+              python -m tools.otbm_atlas.verify "$root" --output /tmp/v.json
+              python -m tools.otbm_atlas.deploy_preflight "$root" --require-environment-animations --output /tmp/p.json
+              python - <<"PY"
+          import json
+          v=json.load(open('/tmp/v.json')); p=json.load(open('/tmp/p.json'))
+          assert v['ok'] and v['chunks']==3494 and v['missingSprites']=={}
+          assert p['status']=='FULL_RUNTIME_READY' and p['fullRuntimeReady']
+          print('NAS_V3_STAGING_VERIFY=PASS')
+          PY
+            '
+
+      - name: Promote v3 atomically while preserving copied legacy v2
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          docker run --rm --name "atlas-v3-promote-${GITHUB_RUN_ID}" -v /volume1/docker:/nas alpine:3.22 sh -lc '
+            set -eu
+            atlas=/nas/oteryn/atlas
+            current=$atlas/current
+            staging=$atlas/v3-staging
+            legacy=$atlas/legacy-v2-20260816
+            test -f "$staging/manifest.json"
+            if [ -e "$legacy" ]; then
+              echo "legacy preservation target already exists; refusing overwrite" >&2; exit 1
+            fi
+            if [ -e "$current" ]; then mv "$current" "$legacy"; fi
+            mv "$staging" "$current"
+            test -f "$current/manifest.json"
+            echo PROMOTED_CURRENT=/volume1/docker/oteryn/atlas/current
+            echo PRESERVED_LEGACY=/volume1/docker/oteryn/atlas/legacy-v2-20260816
+          '
+
+      - name: Stage corrected Container Manager project
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          tar -C "$GITHUB_WORKSPACE/deploy/otbm-atlas-synology" -cf - compose.yaml nginx.conf | \
+            docker run --rm -i --name "atlas-v3-project-${GITHUB_RUN_ID}" -v /volume1/docker:/nas alpine:3.22 sh -lc '
+              set -eu
+              target=/nas/oteryn/atlas/project
+              mkdir -p "$target"
+              tar -xf - -C "$target"
+              cp "$target/compose.yaml" "$target/docker-compose.yml"
+              cat > "$target/.env" <<"EOF"
+          ATLAS_DATA_DIR=/volume1/docker/oteryn/atlas/current
+          ATLAS_BIND_ADDRESS=127.0.0.1
+          ATLAS_HTTP_PORT=8095
+          EOF
+              chmod 0644 "$target/compose.yaml" "$target/docker-compose.yml" "$target/nginx.conf" "$target/.env"
+            '
+
+      - name: Start private Atlas container
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          existing="$(docker ps -q --filter 'label=com.docker.compose.project=otheryn-atlas-preview' --filter 'label=com.docker.compose.service=atlas' | head -n1)"
+          if [[ -z "$existing" ]] && docker ps --format '{{.Ports}}' | grep -Eq '127\.0\.0\.1:8095->|0\.0\.0\.0:8095->|\[::\]:8095->'; then
+            echo '8095 is allocated by an unrelated container' >&2; exit 1
+          fi
+          docker run --rm --name "atlas-v3-compose-${GITHUB_RUN_ID}" \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v /volume1/docker/oteryn/atlas/project:/volume1/docker/oteryn/atlas/project:ro \
+            -w /volume1/docker/oteryn/atlas/project docker:27-cli sh -lc '
+              set -eu
+              docker compose --env-file .env -f docker-compose.yml config >/tmp/rendered.yml
+              grep -F "/volume1/docker/oteryn/atlas/current:/usr/share/nginx/html:ro" /tmp/rendered.yml >/dev/null
+              docker compose --env-file .env -f docker-compose.yml up -d --pull always
+            '
+
+      - name: Verify healthy local HTTP runtime and security
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cid="$(docker ps -aq --filter 'label=com.docker.compose.project=otheryn-atlas-preview' --filter 'label=com.docker.compose.service=atlas' | head -n1)"
+          test -n "$cid"
+          for _ in $(seq 1 45); do
+            state="$(docker inspect -f '{{.State.Status}}' "$cid")"
+            health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$cid")"
+            echo "state=$state health=$health"
+            [[ "$health" == healthy ]] && break
+            [[ "$state" == exited || "$health" == unhealthy ]] && { docker logs "$cid"; exit 1; }
+            sleep 2
+          done
+          test "$(docker inspect -f '{{.State.Health.Status}}' "$cid")" = healthy
+          docker run --rm --network host alpine:3.22 sh -lc 'test "$(wget -qO- http://127.0.0.1:8095/healthz)" = ok; wget -qO /dev/null http://127.0.0.1:8095/index.html; wget -qO /tmp/m http://127.0.0.1:8095/manifest.json; grep -q '"'"'schemaVersion'"'"'[[:space:]]*:[[:space:]]*3' /tmp/m'
+          docker inspect "$cid" > /tmp/atlas-v3-inspect.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/atlas-v3-inspect.json'))[0]; h=d['HostConfig']
+          assert h['ReadonlyRootfs'] is True
+          assert 'ALL' in (h.get('CapDrop') or [])
+          assert any(x.startswith('no-new-privileges') for x in (h.get('SecurityOpt') or []))
+          mounts={m['Destination']:m for m in d['Mounts']}
+          assert mounts['/usr/share/nginx/html']['RW'] is False
+          assert mounts['/usr/share/nginx/html']['Source']=='/volume1/docker/oteryn/atlas/current'
+          bind=h['PortBindings']['8080/tcp'][0]
+          assert bind['HostIp']=='127.0.0.1' and bind['HostPort']=='8095'
+          print('ATLAS_V3_CONTAINER=HEALTHY')
+          print('ATLAS_V3_LOCAL_HTTP=http://127.0.0.1:8095/')
+          print('ATLAS_V3_RUNTIME_SECURITY=PASS')
+          PY
