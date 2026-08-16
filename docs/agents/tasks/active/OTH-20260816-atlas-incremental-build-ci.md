@@ -5,16 +5,18 @@ owner: chat-github-atlas-incremental
 branch: perf/OTH-20260816-atlas-incremental-build
 base_branch: main
 created: "2026-08-16T10:04:00+02:00"
-updated: "2026-08-16T10:09:00+02:00"
+updated: "2026-08-16T10:24:00+02:00"
 project_lane: otheryn-content
 execution_mode: chat-github
-related_pr: ""
+related_pr: "421"
 ownership_released: false
 owned_paths:
   - tools/otbm_atlas/incremental.py
   - tools/otbm_atlas/incremental_core.py
+  - tools/otbm_atlas/domain_probe.py
   - tools/otbm_atlas/chunk_benchmark.py
   - tools/otbm_atlas/tests/test_incremental.py
+  - tools/otbm_atlas/tests/test_domain_probe.py
   - tools/otbm_atlas/tests/test_chunk_benchmark.py
   - .github/workflows/otbm-atlas-incremental.yml
   - docs/maps/otbm-atlas-incremental-build.md
@@ -40,7 +42,7 @@ feature_scope:
   e2e_required: true
 ```
 
-E2E here means a real incremental builder journey on deterministic fixtures/canonical representative data: unchanged inputs reuse outputs, one map chunk change rebuilds only that chunk, one used asset change invalidates only dependent chunks, unrelated frontend/docs changes do not render the world, and clean/incremental manifests remain equivalent for the same inputs.
+E2E here means a real incremental builder journey on deterministic fixtures/canonical representative data: unchanged inputs reuse outputs, one map chunk change rebuilds only that chunk, one used asset change invalidates only dependent chunks, unrelated data/frontend/docs changes do not render the world, and clean/incremental manifests remain equivalent for the same inputs.
 
 ## Verified constraints at task start
 
@@ -63,12 +65,16 @@ E2E here means a real incremental builder journey on deterministic fixtures/cano
 - [ ] Sprite-sheet changes invalidate only chunks using sprites from changed sheet ranges.
 - [ ] Detail fingerprints depend only on local spool bytes, local render dependencies, render contract and required global gutter profile.
 - [ ] Overview invalidation is separate from detail invalidation.
-- [ ] Change-impact planning separates map, assets, spawn/NPC/monster, mechanics, factual data, frontend and documentation domains.
+- [ ] Change-impact planning separates map, assets, spawn/NPC/monster, houses, mechanics, factual data, frontend and documentation domains.
+- [ ] Non-render-only changes skip map spool/dependency scanning in the incremental planner.
 - [ ] Full-build-required decisions are fail-closed, carry machine-readable reasons and require an explicit allow flag.
+- [ ] Render-sensitive incremental-core changes require an explicit render-core version transition; unversioned semantic drift fails closed.
 - [ ] Content-addressed publication metadata maps logical output paths to SHA-256 objects and supports deterministic patch manifests.
 - [ ] Incremental publication writes are atomic; failed candidate work does not replace the prior publication manifest.
 - [ ] 32/64/128 chunk-size benchmark tooling exists and GitHub Actions runs a bounded representative benchmark before changing the default from 128.
 - [ ] GitHub-hosted Actions run focused incremental tests/build probes without using Synology runners or owner-funded AI.
+- [ ] The PR workflow executes exactly the planned dirty detail chunks and never silently escalates to full-world rendering.
+- [ ] Domain-only changes run only their corresponding non-render validation/delegated specialized workflow.
 - [ ] PR path changes do not automatically trigger canonical full-world build.
 - [ ] A clean-vs-incremental equivalence test runs on deterministic fixtures/representative scope; canonical full-world equivalence remains explicit/manual until a safe sharded GitHub-hosted execution path is proven.
 - [ ] No generated Tibia/CipSoft-derived render corpus is uploaded as a public workflow artifact.
@@ -84,7 +90,7 @@ Do not edit paths currently owned by PRs #417, #418, #419 or #420 while those ta
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-08-16T10:09:00+02:00
+updated_at: 2026-08-16T10:24:00+02:00
 phase: implement
 session_id: chat-github-atlas-incremental-20260816
 session_role: implementer
@@ -93,16 +99,18 @@ project_lane: otheryn-content
 context_pressure: medium
 context_growth: stable
 decomposition_decision: phased
-validation_level: focused
+validation_level: focused-plus-live-ci
 branch: perf/OTH-20260816-atlas-incremental-build
-pr: none
+pr: 421
 status: implementing
-head: 652bd61440ab390110929cdfd627cbfd343fc202
+head_before_checkpoint: 7d7fb073c423caace1435964244a0fef2db9d94b
 owned_paths:
   - tools/otbm_atlas/incremental.py
   - tools/otbm_atlas/incremental_core.py
+  - tools/otbm_atlas/domain_probe.py
   - tools/otbm_atlas/chunk_benchmark.py
   - tools/otbm_atlas/tests/test_incremental.py
+  - tools/otbm_atlas/tests/test_domain_probe.py
   - tools/otbm_atlas/tests/test_chunk_benchmark.py
   - .github/workflows/otbm-atlas-incremental.yml
   - docs/maps/otbm-atlas-incremental-build.md
@@ -111,6 +119,9 @@ proven:
   - current Atlas output exceeds GitHub Pages practical/declared site-size target
   - current public repo has overlapping active Atlas PR ownership
   - Atlas-side incremental build does not require changing Game -> Atlas v1 snapshot semantics
-blockers: []
-next_action: implement deterministic per-chunk change-impact/dependency/publication primitives in new non-overlapping files with focused tests
+  - focused incremental tests passed on earlier exact implementation heads and are rerunning for the expanded exact head
+  - ordinary planner can now skip the map render scan for unrelated domains
+blockers:
+  - final integration into tools/otbm_atlas/atlas.py remains ownership-blocked by active PRs 418 and 419
+next_action: finish exact-head GitHub-hosted validation and benchmark, audit PR 421 independently, then reconcile atlas.py only after active ownership becomes terminal
 ```
