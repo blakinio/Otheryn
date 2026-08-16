@@ -282,10 +282,23 @@ def _render_output_matches_identity(image: Path, report_path: Path, identity: Ma
     return image_ok and report_ok
 
 
+def _report_checksum_matches(image: Path, report_path: Path) -> bool:
+    if not image.is_file() or not report_path.is_file():
+        return False
+    try:
+        report = _read_json(report_path)
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return False
+    checksum = report.get("checksum") if report else None
+    return isinstance(checksum, str) and sha256_file(image) == checksum
+
+
 def _detail_output_reusable(output: Path, chunk_text: str, previous_detail_files: Mapping[str, object] | None) -> bool:
     image, report_path = _render_paths(output, "tiles", chunk_text)
     if previous_detail_files is None:
-        return image.is_file() and report_path.is_file()
+        # One-time legacy adoption must bind actual bytes to the report before
+        # stat-based identities are allowed to make later incremental runs cheap.
+        return _report_checksum_matches(image, report_path)
     identity = previous_detail_files.get(chunk_text)
     return isinstance(identity, Mapping) and _render_output_matches_identity(image, report_path, identity)
 
@@ -305,7 +318,7 @@ def overview_output_reusable(
     if not image.is_file() or not report or report.get("fingerprint") != expected_fingerprint or not isinstance(report.get("checksum"), str):
         return False
     if previous_overview_files is None:
-        return True
+        return sha256_file(image) == report["checksum"]
     identity = previous_overview_files.get(f"{directory}/{chunk_text}")
     return isinstance(identity, Mapping) and _render_output_matches_identity(image, report_path, identity)
 
