@@ -5,7 +5,7 @@ owner: current-agent
 branch: ci/OTH-20260816-actions-concurrency-optimization
 base_branch: main
 created: "2026-08-16T09:16:00+02:00"
-updated: "2026-08-16T09:31:00+02:00"
+updated: "2026-08-16T09:36:00+02:00"
 project_lane: infrastructure
 execution_mode: chat-github
 related_pr: "417"
@@ -43,8 +43,10 @@ Reduce avoidable GitHub-hosted runner occupancy in OTBM Atlas validation without
 
 - Removed task/checkpoint Markdown paths from factual-source and Synology-preview trigger sets.
 - Added per-PR/ref `concurrency` with `cancel-in-progress: true` to factual-source and Synology-preview workflows.
-- Added the previously missing `_deployed_browser_probe_core.py` path to the dedicated preview workflow and compile-check it there.
-- Added deployment-only negative path filters plus stale-run cancellation to `otbm-creature-animation-audit.yml`; the same bounded routing is being applied to the remaining broad Atlas/creature/environment workflows owned by this task.
+- Added `_deployed_browser_probe_core.py` to the dedicated preview trigger and compile check.
+- Added exact negative filters for the four deployment-only tool paths to the broad Atlas suite, canonical creature showcase, creature animation E2E, independent creature animation audit, and environment animation E2E.
+- Added per-PR/ref `concurrency` with `cancel-in-progress: true` to every broad workflow changed by this task.
+- Preserved other `tools/otbm_atlas/**`, vendor, workflow-file and manual-dispatch triggers; a mixed deployment + functional change still emits the applicable heavy workflow.
 - Preserved every real factual source/vendor path in the facts workflow.
 - Core Otheryn CI and required semantics remain untouched.
 
@@ -53,8 +55,8 @@ Reduce avoidable GitHub-hosted runner occupancy in OTBM Atlas validation without
 - [x] Remove task/checkpoint Markdown paths from heavy Atlas workflow path triggers; real deploy/tool/vendor/workflow inputs remain covered.
 - [x] Add per-PR/ref concurrency with `cancel-in-progress: true` to the factual-source and Synology-preview workflows.
 - [x] Dedicated Synology preview covers all four deployment-only tool files and compiles the probe core plus wrappers.
-- [ ] Deployment-only changes do not trigger unrelated Atlas/creature/environment heavy workflows that have no consumer dependency on those files.
-- [ ] Every broad heavy workflow changed by this task cancels superseded runs for the same PR/ref.
+- [x] Deployment-only changes are excluded from unrelated Atlas/creature/environment heavy workflows while mixed relevant changes still match their positive paths.
+- [x] Every broad heavy workflow changed by this task cancels superseded runs for the same PR/ref.
 - [x] Do not route required validation to self-hosted runners while live runner availability remains unproven.
 - [x] Do not change core Otheryn CI scope or required semantics.
 - [ ] Validate workflow syntax and exact changed-file diff.
@@ -71,11 +73,11 @@ Reduce avoidable GitHub-hosted runner occupancy in OTBM Atlas validation without
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-08-16T09:31:00+02:00
+updated_at: 2026-08-16T09:36:00+02:00
 branch: ci/OTH-20260816-actions-concurrency-optimization
 pr: 417
 status: active
-phase: implementation
+phase: validation
 owned_paths:
   - .github/workflows/otbm-atlas-facts-tests.yml
   - .github/workflows/otbm-atlas-synology-preview.yml
@@ -86,10 +88,10 @@ owned_paths:
   - .github/workflows/otbm-environment-animation-tests.yml
 proven:
   - task-only trigger paths removed from factual-source and preview workflows
-  - stale-run cancellation added to factual-source and preview workflows
-  - dedicated preview now owns and compiles the probe core
+  - dedicated preview owns all four deployment-only tool files and compiles the probe core
   - deployment-only trigger waste independently observed from merged PR #415
-  - creature animation audit routing narrowed without reducing deployment validation
+  - five unrelated broad workflows exclude only those four exact deployment-tool paths
+  - all seven changed specialized workflows cancel superseded same-PR/ref runs
   - core CI untouched
-next_action: finish bounded routing and cancellation on remaining broad owned workflows, then inspect exact diff and emitted checks
+next_action: inspect PR #417 exact diff and exact-head emitted checks; remediate any validation failure before ready-for-review
 ```
