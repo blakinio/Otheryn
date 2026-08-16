@@ -6,6 +6,7 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - "deploy/otbm-atlas-synology/**"
+      - "tools/otbm_atlas/_deployed_browser_probe_core.py"
       - "tools/otbm_atlas/deploy_preflight.py"
       - "tools/otbm_atlas/deployed_browser_probe.py"
       - "tools/otbm_atlas/tests/test_deploy_preflight.py"
