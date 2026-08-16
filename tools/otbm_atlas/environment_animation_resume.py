@@ -30,9 +30,12 @@ from .environment_animation import (
     _phase_rgba,
     _rect,
 )
+from .environment_incremental import EnvironmentAssetFingerprinter, environment_contract_fingerprint
 from .environment_spool import decode_spool_tiles
 
-EXPORT_VERSION = 2
+# v3 changes checkpoint identity from monolithic manifest.sources/chunk-list hashing
+# to a global semantic contract plus local spool/appearance/sprite content.
+EXPORT_VERSION = 3
 
 
 def _sha256(path: Path) -> str:
@@ -66,35 +69,6 @@ def _ensure_bytes(path: Path, payload: bytes) -> str:
     if not path.is_file() or _sha256(path) != expected:
         _atomic_bytes(path, payload)
     return expected
-
-
-def _source_fingerprint(manifest: dict[str, Any]) -> str:
-    stable = {
-        "exportVersion": EXPORT_VERSION,
-        "schemaVersion": manifest.get("schemaVersion"),
-        "chunkSize": manifest.get("chunkSize"),
-        "sources": manifest.get("sources"),
-        "chunks": [
-            {
-                "z": chunk.get("z"),
-                "chunkX": chunk.get("chunkX"),
-                "chunkY": chunk.get("chunkY"),
-                "logicalBounds": chunk.get("logicalBounds"),
-            }
-            for chunk in manifest.get("chunks", [])
-        ],
-    }
-    return hashlib.sha256(json.dumps(stable, separators=(",", ":"), sort_keys=True).encode("utf-8")).hexdigest()
-
-
-def _chunk_fingerprint(source_fingerprint: str, spool_path: Path) -> str:
-    digest = hashlib.sha256()
-    digest.update(source_fingerprint.encode("ascii"))
-    digest.update(b"\0")
-    with spool_path.open("rb") as handle:
-        while block := handle.read(1024 * 1024):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 def _content_png(output: Path, kind: str, width: int, height: int, pixels: bytes) -> str:
@@ -177,6 +151,19 @@ def _prepare_root(root: Path, source_fingerprint: str) -> None:
     )
 
 
+def _prune_unreachable_files(root: Path, live_paths: set[Path]) -> None:
+    if not root.exists():
+        return
+    for path in sorted(candidate for candidate in root.rglob("*") if candidate.is_file()):
+        if path not in live_paths:
+            path.unlink()
+    for directory in sorted((candidate for candidate in root.rglob("*") if candidate.is_dir()), reverse=True):
+        try:
+            directory.rmdir()
+        except OSError:
+            pass
+
+
 def enrich_environment_animations_resumable(asset_dir: Path, output: Path) -> dict[str, int]:
     manifest_path = output / "manifest.json"
     spool = output / ".spool"
@@ -195,14 +182,21 @@ def enrich_environment_animations_resumable(asset_dir: Path, output: Path) -> di
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest_chunks = list(manifest.get("chunks", []))
-    source_fingerprint = _source_fingerprint(manifest)
-    root = output / "data" / "environment-animations"
-    _prepare_root(root, source_fingerprint)
-
     renderer = AssetRenderer(asset_dir)
     radius = _overlap_radius(renderer)
+    source_fingerprint = environment_contract_fingerprint(
+        manifest,
+        export_version=EXPORT_VERSION,
+        overlap_radius=radius,
+    )
+    root = output / "data" / "environment-animations"
+    _prepare_root(root, source_fingerprint)
+    asset_fingerprinter = EnvironmentAssetFingerprinter(renderer)
+
     animation_keys: set[str] = set()
     live_assets: set[str] = set()
+    live_checkpoints: set[Path] = set()
+    live_shards: set[Path] = set()
     instances = chunks_with_records = fallbacks = reused = 0
     total = len(manifest_chunks)
 
@@ -213,7 +207,8 @@ def enrich_environment_animations_resumable(asset_dir: Path, output: Path) -> di
         if not spool_path.is_file():
             print(f"ENV_ANIM_PROGRESS completed={ordinal}/{total} reused={reused} chunk=z{z}/{chunk_x}_{chunk_y} status=no-spool", flush=True)
             continue
-        fingerprint = _chunk_fingerprint(source_fingerprint, spool_path)
+        live_checkpoints.add(checkpoint_path)
+        fingerprint = asset_fingerprinter.chunk_fingerprint(source_fingerprint, spool_path, chunk["logicalBounds"])
         checkpoint: dict[str, Any] | None = None
         if checkpoint_path.is_file():
             try:
@@ -229,6 +224,9 @@ def enrich_environment_animations_resumable(asset_dir: Path, output: Path) -> di
             chunks_with_records += 1 if int(checkpoint["instances"]) else 0
             animation_keys.update(str(key) for key in checkpoint.get("animationKeys", []))
             live_assets.update(str(path) for path in checkpoint.get("assets", []))
+            shard = checkpoint.get("shard")
+            if isinstance(shard, str):
+                live_shards.add(output / shard)
             print(f"ENV_ANIM_PROGRESS completed={ordinal}/{total} reused={reused} chunk=z{z}/{chunk_x}_{chunk_y} status=reused", flush=True)
             continue
 
@@ -324,6 +322,7 @@ def enrich_environment_animations_resumable(asset_dir: Path, output: Path) -> di
         canonical_shard_path = output / canonical_shard_relative
         if records:
             shard_relative = canonical_shard_relative
+            live_shards.add(canonical_shard_path)
             canonical_shard_path.parent.mkdir(parents=True, exist_ok=True)
             temporary = canonical_shard_path.with_suffix(canonical_shard_path.suffix + ".tmp")
             temporary.write_text(json.dumps({"schemaVersion": 2, "records": records}, separators=(",", ":"), sort_keys=True) + "\n", encoding="utf-8")
@@ -352,9 +351,12 @@ def enrich_environment_animations_resumable(asset_dir: Path, output: Path) -> di
         live_assets.update(chunk_assets)
         print(f"ENV_ANIM_PROGRESS completed={ordinal}/{total} reused={reused} chunk=z{z}/{chunk_x}_{chunk_y} instances={len(records)} fallbacks={chunk_fallbacks}", flush=True)
 
+    # A deleted Atlas chunk must not leave a stale checkpoint or runtime shard.
+    _prune_unreachable_files(root / "checkpoints", live_checkpoints)
+    _prune_unreachable_files(root / "chunks", live_shards)
+
     # Per-chunk invalidation can make old assets unreachable. Remove only payload
-    # files that no surviving checkpoint/record references; checkpoints and shards
-    # are managed separately and are never inferred from directory contents.
+    # files that no surviving checkpoint/record references.
     for kind in ("frames", "underlays", "overdraws"):
         payload_root = root / kind
         if not payload_root.exists():
@@ -389,8 +391,9 @@ def enrich_environment_animations_resumable(asset_dir: Path, output: Path) -> di
         "exporter": {
             "version": EXPORT_VERSION,
             "sourceFingerprint": source_fingerprint,
-            "resumePolicy": "reuse checkpointed chunks only when spool fingerprint and all referenced assets remain valid",
+            "resumePolicy": "reuse checkpointed chunks only when global environment contract, local spool, logical bounds, used appearance semantics, exact referenced sprite pixels and referenced output bytes remain valid",
             "occurrenceAssetPolicy": "content-addressed deduplication for underlays and overdraws",
+            "invalidationPolicy": "unrelated map/source/sprite changes do not invalidate checkpoints outside their dependent chunks; only global environment-contract or overlap-radius transitions reset the tree",
         },
         "policy": {
             "cyclicAppearance": "browser animated from pinned object appearance phases without GIF/WebP animation assets",
