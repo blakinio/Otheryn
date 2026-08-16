@@ -1,8 +1,9 @@
 """Persistent-state wrapper for the Atlas incremental planner.
 
 This is the GitHub-hosted/production orchestration entry point. It reuses a
-self-validating spatial spool and dependency index between runs, but delegates
-all canonical impact semantics to :mod:`tools.otbm_atlas.incremental`.
+self-validating spatial spool and dependency index between runs, delegates
+canonical plan semantics to :mod:`tools.otbm_atlas.incremental`, then refines
+changed sprite-sheet impact to exact used sprite pixels before execution.
 """
 from __future__ import annotations
 
@@ -16,10 +17,13 @@ from .incremental import (
     DEFAULT_CHUNK_SIZE,
     WORLD_REL,
     _paths_require_render_scan,
+    _rehash_plan,
+    _sorted_chunks,
     build_plan,
     plan_from_states,
 )
 from .incremental_core import (
+    asset_impact,
     collect_asset_state,
     overview_contract_digest,
     render_contract_digest,
@@ -31,6 +35,7 @@ from .incremental_state import (
     prepare_persistent_spool,
     write_operational_state,
 )
+from .sprite_dependency import exact_asset_impact
 
 
 def _link_target_spool(work: Path, target_spool: Path) -> Path:
@@ -45,6 +50,40 @@ def _link_target_spool(work: Path, target_spool: Path) -> Path:
     relative = os.path.relpath(target_spool, start=work)
     link.symlink_to(relative, target_is_directory=True)
     return link
+
+
+def _refine_exact_sprite_impact(
+    plan: dict[str, object],
+    base_root: Path,
+    target_root: Path,
+    base_assets: dict[str, object],
+    target_assets: dict[str, object],
+    dependency_index: dict[str, object],
+    target_hashes: dict[str, str],
+) -> dict[str, object]:
+    coarse = asset_impact(base_assets, target_assets, dependency_index)
+    exact = exact_asset_impact(
+        base_root / ASSET_REL,
+        target_root / ASSET_REL,
+        base_assets,
+        target_assets,
+        dependency_index,
+        coarse,
+    )
+    plan["assets"] = exact
+    if plan.get("fullBuildRequired"):
+        return _rehash_plan(plan)
+    map_info = plan.get("map", {})
+    map_dirty = set()
+    if isinstance(map_info, dict):
+        map_dirty.update(str(value) for value in map_info.get("addedChunks", []))
+        map_dirty.update(str(value) for value in map_info.get("changedChunks", []))
+    detail = map_dirty | {str(value) for value in exact.get("affectedChunks", [])}
+    plan["detail"]["dirtyChunks"] = _sorted_chunks(detail)
+    overview = plan.get("overview", {})
+    if isinstance(overview, dict):
+        overview["dirtyChunks"] = _sorted_chunks(target_hashes if overview.get("contractChanged") else detail)
+    return _rehash_plan(plan)
 
 
 def build_cached_plan(
@@ -109,6 +148,16 @@ def build_cached_plan(
         changed_paths=changed,
         additional_full_reasons=core_reasons,
     )
+    if not core_reasons:
+        plan = _refine_exact_sprite_impact(
+            plan,
+            base_root,
+            target_root,
+            base_assets,
+            target_assets,
+            dependency_index,
+            target_hashes,
+        )
     write_json_atomic(work / "dependency-index.json", dependency_index)
     write_json_atomic(work / "asset-state.json", target_assets)
     write_json_atomic(work / "impact-plan.json", plan)
