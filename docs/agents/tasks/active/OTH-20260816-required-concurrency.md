@@ -5,10 +5,10 @@ owner: current-agent
 branch: ci/OTH-20260816-required-concurrency
 base_branch: main
 created: "2026-08-16T09:50:00+02:00"
-updated: "2026-08-16T09:50:00+02:00"
+updated: "2026-08-16T09:53:00+02:00"
 project_lane: infrastructure
 execution_mode: chat-github
-related_pr: pending
+related_pr: "420"
 ownership_released: false
 owned_paths:
   - .github/workflows/required.yml
@@ -24,29 +24,38 @@ Ensure a superseded pull-request head cannot leave an obsolete `Required` job co
 
 ## Verified evidence
 
-- `.github/workflows/required.yml` runs on PR open/synchronize/reopen/ready-for-review and has no workflow-level concurrency control.
+- `.github/workflows/required.yml` runs on PR open/synchronize/reopen/ready-for-review and had no workflow-level concurrency control.
 - Its `Required` job polls Actions every 10 seconds for up to 35 minutes while waiting for applicable workflows on the exact PR head.
 - Core `.github/workflows/ci.yml` already cancels superseded same-PR work, so keeping an obsolete Required poller provides no latest-head validation value.
-- No open PR currently owns `.github/workflows/required.yml`.
+- No other open PR owned `.github/workflows/required.yml` when this task claimed it.
+- Implementation head `a0132142a2e10f2ba9302739e603383c37a88ddc` emitted Required run #1271 (`31934841782`) before this task checkpoint creates the controlled newer synchronize head.
+
+## Implemented change
+
+- Added workflow concurrency group `${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}`.
+- Enabled `cancel-in-progress: true`.
+- Changed-path classification, applicable workflow names, exact-head matching, timeout, polling loop and success/failure semantics are byte-for-byte unchanged apart from the inserted concurrency block.
 
 ## Acceptance inventory
 
-- [ ] Add per-PR/ref `concurrency` with `cancel-in-progress: true` to `Required`.
-- [ ] Do not change changed-path classification, applicable workflow names, exact-head matching, timeout, polling or success/failure semantics.
+- [x] Add per-PR/ref `concurrency` with `cancel-in-progress: true` to `Required`.
+- [x] Do not change changed-path classification, applicable workflow names, exact-head matching, timeout, polling or success/failure semantics.
 - [ ] Exact-head repository CI/Required succeeds.
-- [ ] Controlled synchronize evidence proves an older Required run becomes cancelled/superseded while the newest head retains its Required gate.
+- [ ] Controlled synchronize evidence proves older Required #1271 becomes cancelled/superseded while the newest head retains its Required gate.
 - [ ] No OTBM Atlas/creature/environment specialized workflow is triggered solely by this task/workflow change unless independently applicable.
-- [ ] No owner-funded AI/Codex/OpenAI quota is used.
+- [x] No owner-funded AI/Codex/OpenAI quota is used.
 
 ## Context checkpoint
 
 ```yaml
 state: PROVEN
-phase: implementation
+phase: validation
 branch: ci/OTH-20260816-required-concurrency
-pr: pending
+pr: 420
+prior_head: a0132142a2e10f2ba9302739e603383c37a88ddc
+prior_required_run: 31934841782
 owned_paths:
   - .github/workflows/required.yml
   - docs/agents/tasks/active/OTH-20260816-required-concurrency.md
-next_action: open an early draft PR and add only same-PR stale-run concurrency to Required
+next_action: verify the prior Required run is cancelled by this newer synchronize head, then require exact-head CI/Required and closeout
 ```
