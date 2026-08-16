@@ -5,16 +5,12 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
-      - "tools/otbm_atlas/incremental.py"
-      - "tools/otbm_atlas/incremental_core.py"
-      - "tools/otbm_atlas/chunk_benchmark.py"
-      - "tools/otbm_atlas/tests/test_incremental.py"
-      - "tools/otbm_atlas/tests/test_chunk_benchmark.py"
-      - "tools/otbm_atlas/render.py"
-      - "tools/otbm_atlas/assets.py"
-      - "tools/otbm_atlas/semantic.py"
-      - "tools/otbm_atlas/overview.py"
-      - "vendor/map-analysis/crystalserver/data-global/world/world.otbm"
+      - "tools/otbm_atlas/**"
+      - "tools/otbm_atlas_facts/**"
+      - "vendor/map-analysis/crystalserver/data-global/world/**"
+      - "vendor/map-analysis/crystalserver/data-global/npc/**"
+      - "vendor/map-analysis/crystalserver/data-global/monster/**"
+      - "vendor/map-analysis/crystalserver/data-global/scripts/**"
       - "vendor/map-analysis/tibia-client/**"
       - ".github/workflows/otbm-atlas-incremental.yml"
   workflow_dispatch:
@@ -41,27 +37,32 @@ jobs:
           python3 -m py_compile \
             tools/otbm_atlas/incremental.py \
             tools/otbm_atlas/incremental_core.py \
+            tools/otbm_atlas/domain_probe.py \
             tools/otbm_atlas/chunk_benchmark.py
       - name: Run focused incremental tests
         run: |
           python3 -m unittest \
             tools.otbm_atlas.tests.test_incremental \
+            tools.otbm_atlas.tests.test_domain_probe \
             tools.otbm_atlas.tests.test_chunk_benchmark -v
 
   impact-plan:
-    name: Real canonical change-impact plan and dirty render
-    if: github.event_name == 'pull_request'
+    name: Real change-impact plan and dirty build
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      render_validation: ${{ steps.flags.outputs.render_validation }}
+      benchmark_validation: ${{ steps.flags.outputs.benchmark_validation }}
     steps:
       - name: Checkout exact target head
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           path: target
           persist-credentials: false
-      - name: Checkout exact base
+      - name: Checkout exact PR base
+        if: github.event_name == 'pull_request'
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
         with:
           ref: ${{ github.event.pull_request.base.sha }}
@@ -69,16 +70,28 @@ jobs:
           persist-credentials: false
       - name: Record exact changed paths
         env:
+          EVENT_NAME: ${{ github.event_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          git -C target diff --name-only "$BASE_SHA" "$HEAD_SHA" > /tmp/atlas-changed-paths.txt
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            git -C target diff --name-only "$BASE_SHA" "$HEAD_SHA" > /tmp/atlas-changed-paths.txt
+          else
+            printf '%s\n' 'tools/otbm_atlas/incremental_core.py' > /tmp/atlas-changed-paths.txt
+          fi
           cat /tmp/atlas-changed-paths.txt
-      - name: Build canonical impact plan without rendering the world
+      - name: Build canonical impact plan without implicit world rendering
         working-directory: target
+        env:
+          EVENT_NAME: ${{ github.event_name }}
         run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base_root=../base
+          else
+            base_root=.
+          fi
           python3 -m tools.otbm_atlas.incremental plan \
-            --base-root ../base \
+            --base-root "$base_root" \
             --target-root . \
             --work /tmp/atlas-impact \
             --changed-paths /tmp/atlas-changed-paths.txt \
@@ -86,20 +99,30 @@ jobs:
       - name: Block accidental implicit full-world work
         working-directory: target
         run: python3 -m tools.otbm_atlas.incremental guard /tmp/atlas-impact-plan.json
+      - name: Validate only changed non-render domains
+        working-directory: target
+        run: |
+          python3 -m tools.otbm_atlas.domain_probe \
+            /tmp/atlas-impact-plan.json \
+            --repository . \
+            --output /tmp/atlas-domain-probe.json
       - name: Emit compact impact evidence
         run: |
           python3 - <<'PY'
           import json
           from pathlib import Path
           plan = json.loads(Path('/tmp/atlas-impact-plan.json').read_text(encoding='utf-8'))
+          probe = json.loads(Path('/tmp/atlas-domain-probe.json').read_text(encoding='utf-8'))
           print(json.dumps({
               'planDigest': plan['planDigest'],
               'fullBuildRequired': plan['fullBuildRequired'],
               'fullBuildReasons': plan['fullBuildReasons'],
+              'renderScanSkipped': plan['renderScanSkipped'],
               'dirtyDetailChunks': len(plan['detail']['dirtyChunks']),
               'dirtyOverviewChunks': len(plan['overview']['dirtyChunks']),
               'deletedDetailChunks': len(plan['detail']['deletedChunks']),
               'domains': plan['classification']['domains'],
+              'validatedNonRenderDomains': sorted(probe['validated']),
           }, indent=2, sort_keys=True))
           PY
       - name: Execute exactly the planned dirty detail work
@@ -140,12 +163,48 @@ jobs:
           else
             echo 'No detail chunks are dirty; rendered 0 chunks as planned.'
           fi
+      - name: Select proportional validation
+        id: flags
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          plan = json.loads(Path('/tmp/atlas-impact-plan.json').read_text(encoding='utf-8'))
+          paths = set(plan['classification']['changedPaths'])
+          render_sources = {
+              'tools/otbm_atlas/render.py',
+              'tools/otbm_atlas/assets.py',
+              'tools/otbm_atlas/semantic.py',
+              'tools/otbm_atlas/overview.py',
+          }
+          render_validation = (
+              any(path.endswith('world.otbm') for path in paths)
+              or any(path.startswith('vendor/map-analysis/tibia-client/') for path in paths)
+              or bool(paths & render_sources)
+              or any(path in {
+                  'tools/otbm_atlas/incremental.py',
+                  'tools/otbm_atlas/incremental_core.py',
+                  'tools/otbm_atlas/tests/test_incremental.py',
+                  '.github/workflows/otbm-atlas-incremental.yml',
+              } for path in paths)
+          )
+          benchmark_validation = any(path in {
+              'tools/otbm_atlas/incremental_core.py',
+              'tools/otbm_atlas/chunk_benchmark.py',
+              'tools/otbm_atlas/tests/test_chunk_benchmark.py',
+              '.github/workflows/otbm-atlas-incremental.yml',
+          } for path in paths)
+          print(f'render_validation={str(render_validation).lower()}')
+          print(f'benchmark_validation={str(benchmark_validation).lower()}')
+          PY
       - name: Remove generated dirty-render data
         if: always()
-        run: rm -rf /tmp/atlas-impact /tmp/atlas-dirty-render /tmp/atlas-impact-plan.json /tmp/atlas-dirty-count /tmp/atlas-changed-paths.txt
+        run: rm -rf /tmp/atlas-impact /tmp/atlas-dirty-render /tmp/atlas-impact-plan.json /tmp/atlas-domain-probe.json /tmp/atlas-dirty-count /tmp/atlas-changed-paths.txt
 
   representative-e2e:
     name: Incremental pixel-equivalence E2E
+    needs: impact-plan
+    if: needs.impact-plan.outputs.render_validation == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -212,6 +271,8 @@ jobs:
 
   chunk-size-benchmark:
     name: Bounded 32/64/128 chunk benchmark
+    needs: impact-plan
+    if: needs.impact-plan.outputs.benchmark_validation == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
