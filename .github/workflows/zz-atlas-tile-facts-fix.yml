@@ -1,0 +1,70 @@
+name: Temporary Atlas Tile Facts Fix
+on:
+  push:
+    branches: [blakinio/atlas-product-completion]
+    paths:
+      - .github/workflows/zz-atlas-tile-facts-fix.yml
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          ref: blakinio/atlas-product-completion
+      - name: Add exact per-chunk tile fact sidecars
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('tools/otbm_atlas/atlas.py')
+          text = p.read_text(encoding='utf-8')
+
+          old = 'SPOOL_VERSION = 1\nATLAS_VERSION = 3\n'
+          new = 'SPOOL_VERSION = 1\nTILE_FACTS_VERSION = 1\nATLAS_VERSION = 3\n'
+          if old not in text:
+              raise SystemExit('version marker missing')
+          text = text.replace(old, new, 1)
+
+          marker = '\n\ndef chunk_render_bounds(tiles: list[Tile], renderer: AssetRenderer) -> tuple[int, int, int, int, int]:\n'
+          insert = '''\n\ndef _tile_fact_item(item: Item) -> dict[str, int]:\n\tvalue = {"serverId": int(item.server_id)}\n\tif item.action_id is not None: value["actionId"] = int(item.action_id)\n\tif item.unique_id is not None: value["uniqueId"] = int(item.unique_id)\n\treturn value\n\n\nclass _TileFactWriterPool:\n\tdef __init__(self, directory: Path, limit: int = 64) -> None:\n\t\tself.directory, self.limit = directory, limit\n\t\tself.handles: OrderedDict[tuple[int, int, int], BinaryIO] = OrderedDict()\n\n\tdef write(self, key: tuple[int, int, int], record: dict[str, object]) -> None:\n\t\thandle = self.handles.pop(key, None)\n\t\tif handle is None:\n\t\t\tpath = self.directory / f"z{key[0]}" / f"{key[1]}_{key[2]}.jsonl"\n\t\t\tpath.parent.mkdir(parents=True, exist_ok=True)\n\t\t\thandle = path.open("a", encoding="utf-8", newline="\\n")\n\t\tself.handles[key] = handle\n\t\thandle.write(json.dumps(record, sort_keys=True, separators=(",", ":")) + "\\n")\n\t\tif len(self.handles) > self.limit:\n\t\t\t_unused, old = self.handles.popitem(last=False)\n\t\t\told.close()\n\n\tdef close(self) -> None:\n\t\tfor handle in self.handles.values(): handle.close()\n\t\tself.handles.clear()\n'''
+          if marker not in text:
+              raise SystemExit('chunk bounds marker missing')
+          text = text.replace(marker, insert + marker, 1)
+
+          old = '\tpool = _WriterPool(spool_dir); tiles = 0\n'
+          new = '\tpool = _WriterPool(spool_dir); tile_fact_pool = _TileFactWriterPool(spool_dir / "tile-facts"); tiles = 0\n'
+          if old not in text:
+              raise SystemExit('writer pool marker missing')
+          text = text.replace(old, new, 1)
+
+          old = '\t\t\tpool.write((record.position.z, record.position.x // chunk_size, record.position.y // chunk_size), encode_tile(record)); tiles += 1\n\t\t\tposition = asdict(record.position)\n'
+          new = '''\t\t\tchunk_key = (record.position.z, record.position.x // chunk_size, record.position.y // chunk_size)\n\t\t\tpool.write(chunk_key, encode_tile(record))\n\t\t\ttile_fact_pool.write(chunk_key, {\n\t\t\t\t"x": int(record.position.x), "y": int(record.position.y), "z": int(record.position.z),\n\t\t\t\t"ground": None if record.ground is None else _tile_fact_item(record.ground),\n\t\t\t\t"items": [_tile_fact_item(item) for item in record.items],\n\t\t\t})\n\t\t\ttiles += 1\n\t\t\tposition = asdict(record.position)\n'''
+          if old not in text:
+              raise SystemExit('tile write marker missing')
+          text = text.replace(old, new, 1)
+
+          old = '\tfinally: pool.close()\n\tmetadata = {"version": SPOOL_VERSION, "chunkSize": chunk_size, "tiles": tiles}\n'
+          new = '\tfinally: pool.close(); tile_fact_pool.close()\n\tmetadata = {"version": SPOOL_VERSION, "tileFactsVersion": TILE_FACTS_VERSION, "chunkSize": chunk_size, "tiles": tiles}\n'
+          if old not in text:
+              raise SystemExit('spool metadata marker missing')
+          text = text.replace(old, new, 1)
+
+          old = '\texpected = {"mapSha256": map_sha, "assetsSha256": assets_sha, "chunkSize": chunk_size, "atlasVersion": ATLAS_VERSION}\n'
+          new = '\texpected = {"mapSha256": map_sha, "assetsSha256": assets_sha, "chunkSize": chunk_size, "atlasVersion": ATLAS_VERSION, "tileFactsVersion": TILE_FACTS_VERSION}\n'
+          if old not in text:
+              raise SystemExit('source state marker missing')
+          text = text.replace(old, new, 1)
+
+          p.write_text(text, encoding='utf-8', newline='\n')
+          PY
+          rm .github/workflows/zz-atlas-tile-facts-fix.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tools/otbm_atlas/atlas.py .github/workflows/zz-atlas-tile-facts-fix.yml
+          git diff --cached --check
+          git commit -m 'fix(atlas): emit exact per-chunk tile facts'
+          git push origin HEAD:blakinio/atlas-product-completion
