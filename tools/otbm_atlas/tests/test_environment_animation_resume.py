@@ -149,6 +149,23 @@ class EnvironmentAnimationResumeTests(unittest.TestCase):
         self.assertNotEqual(old, new)
         self.assertEqual(report["instances"], 1)
 
+    def test_changed_chunk_removes_stale_shard_and_orphan_payloads(self) -> None:
+        output, assets = self.make_fixture()
+        spool_path = output / ".spool/z7/1_1.bin"
+        with patch("tools.otbm_atlas.environment_animation_resume.AssetRenderer", _FakeRenderer):
+            enrich_environment_animations_resumable(assets, output)
+            environment = output / "data/environment-animations"
+            shard = environment / "chunks/z7/1_1.json"
+            old_payloads = {path for path in environment.rglob("*.png")}
+            self.assertTrue(shard.is_file())
+            self.assertTrue(old_payloads)
+            spool_path.write_bytes(encode_tile(Tile(Position(150, 150, 7), None, 0, Item(999), ())))
+            report = enrich_environment_animations_resumable(assets, output)
+        self.assertEqual(report["instances"], 0)
+        self.assertEqual(report["chunks"], 0)
+        self.assertFalse(shard.exists())
+        self.assertFalse(any(path.exists() for path in old_payloads))
+
     def test_clean_rebuild_is_byte_deterministic(self) -> None:
         output, assets = self.make_fixture()
         with patch("tools.otbm_atlas.environment_animation_resume.AssetRenderer", _FakeRenderer):

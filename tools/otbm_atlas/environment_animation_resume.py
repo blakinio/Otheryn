@@ -180,6 +180,7 @@ def enrich_environment_animations_resumable(asset_dir: Path, output: Path) -> di
     renderer = AssetRenderer(asset_dir)
     radius = _overlap_radius(renderer)
     animation_keys: set[str] = set()
+    live_assets: set[str] = set()
     instances = chunks_with_records = fallbacks = reused = 0
     total = len(manifest_chunks)
 
@@ -205,6 +206,7 @@ def enrich_environment_animations_resumable(asset_dir: Path, output: Path) -> di
             fallbacks += int(checkpoint["staticFallbacks"])
             chunks_with_records += 1 if int(checkpoint["instances"]) else 0
             animation_keys.update(str(key) for key in checkpoint.get("animationKeys", []))
+            live_assets.update(str(path) for path in checkpoint.get("assets", []))
             print(f"ENV_ANIM_PROGRESS completed={ordinal}/{total} reused={reused} chunk=z{z}/{chunk_x}_{chunk_y} status=reused", flush=True)
             continue
 
@@ -297,13 +299,16 @@ def enrich_environment_animations_resumable(asset_dir: Path, output: Path) -> di
             records.append(record)
 
         shard_relative: str | None = None
+        canonical_shard_relative = f"data/environment-animations/chunks/z{z}/{chunk_x}_{chunk_y}.json"
+        canonical_shard_path = output / canonical_shard_relative
         if records:
-            shard_relative = f"data/environment-animations/chunks/z{z}/{chunk_x}_{chunk_y}.json"
-            shard_path = output / shard_relative
-            shard_path.parent.mkdir(parents=True, exist_ok=True)
-            temporary = shard_path.with_suffix(shard_path.suffix + ".tmp")
+            shard_relative = canonical_shard_relative
+            canonical_shard_path.parent.mkdir(parents=True, exist_ok=True)
+            temporary = canonical_shard_path.with_suffix(canonical_shard_path.suffix + ".tmp")
             temporary.write_text(json.dumps({"schemaVersion": 2, "records": records}, separators=(",", ":"), sort_keys=True) + "\n", encoding="utf-8")
-            temporary.replace(shard_path)
+            temporary.replace(canonical_shard_path)
+        elif canonical_shard_path.exists():
+            canonical_shard_path.unlink()
 
         checkpoint = {
             "schemaVersion": 1,
@@ -320,7 +325,25 @@ def enrich_environment_animations_resumable(asset_dir: Path, output: Path) -> di
         fallbacks += chunk_fallbacks
         chunks_with_records += 1 if records else 0
         animation_keys.update(chunk_keys)
+        live_assets.update(chunk_assets)
         print(f"ENV_ANIM_PROGRESS completed={ordinal}/{total} reused={reused} chunk=z{z}/{chunk_x}_{chunk_y} instances={len(records)} fallbacks={chunk_fallbacks}", flush=True)
+
+    # Per-chunk invalidation can make old assets unreachable. Remove only payload
+    # files that no surviving checkpoint/record references; checkpoints and shards
+    # are managed separately and are never inferred from directory contents.
+    for kind in ("frames", "underlays", "overdraws"):
+        payload_root = root / kind
+        if not payload_root.exists():
+            continue
+        for path in sorted((candidate for candidate in payload_root.rglob("*") if candidate.is_file())):
+            relative = path.relative_to(output).as_posix()
+            if relative not in live_assets:
+                path.unlink()
+        for directory in sorted((candidate for candidate in payload_root.rglob("*") if candidate.is_dir()), reverse=True):
+            try:
+                directory.rmdir()
+            except OSError:
+                pass
 
     data_files = [path for path in root.rglob("*") if path.is_file() and path.name not in {"export-state.json", "index.json"}]
     output_bytes = sum(path.stat().st_size for path in data_files)
