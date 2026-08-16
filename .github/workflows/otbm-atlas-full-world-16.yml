@@ -55,14 +55,13 @@ jobs:
             --floor "$ATLAS_FLOOR" \
             --workers 4
 
-      - name: Independently verify one-floor Atlas product
+      - name: Independently verify one-floor generated corpus
         env:
           ATLAS_FLOOR: ${{ matrix.floor }}
         run: |
           set -Eeuo pipefail
           root="build/full-map-atlas-v3-z${ATLAS_FLOOR}"
           python3 -m tools.otbm_atlas.verify "$root" --output "$root/verification.json"
-          python3 -m tools.otbm_atlas.deploy_preflight "$root" --require-environment-animations > "$root/preflight.json"
 
       - name: Emit compact floor evidence
         env:
@@ -157,6 +156,7 @@ jobs:
               'workerCpuTotal': 64,
               'sources': sources,
               'verification': 'PASS',
+              'deploymentPreflightBoundary': 'assembled full Z0..Z15 corpus only',
           }
           print(json.dumps(evidence, sort_keys=True))
           PY
