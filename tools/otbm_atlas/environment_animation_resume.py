@@ -14,7 +14,8 @@ import shutil
 import struct
 from typing import Any
 
-from .assets import AssetRenderer, encode_png
+from .assets import encode_png
+from .render import AssetRenderer
 from .environment_animation import (
     ANIMATION_ZOOM,
     _candidate_details,
