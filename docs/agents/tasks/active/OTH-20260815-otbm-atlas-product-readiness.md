@@ -5,7 +5,7 @@ owner: atlas-preview-coordinator
 branch: blakinio/atlas-synology-browser-preview
 base_branch: main
 created: "2026-08-15T14:09:00+02:00"
-updated: "2026-08-16T08:49:00+02:00"
+updated: "2026-08-16T08:51:00+02:00"
 project_lane: otheryn-content
 execution_mode: chat-github
 related_pr: "415"
@@ -62,7 +62,7 @@ PR #415 adds only the preview/deployment layer and validation tooling; no genera
 - `deploy/otbm-atlas-synology/nginx.conf`: static HTML/JS/CSS/JSON/PNG/WebP, `/healthz`, deterministic 404 behavior, favicon 204 to avoid browser-noise 404s, private-preview security/cache headers.
 - `deploy/otbm-atlas-synology/README.md`: non-SSH DSM Container Manager Project/import, transfer, reverse-proxy, validation and rollback contract.
 - `tools/otbm_atlas/deploy_preflight.py`: current viewer-byte identity; canonical v3 manifest identity; independent chunk/overview verification; spatial shard/search consistency; creature sprite/animation descriptor/frame references; complete environment-animation shard/index/reference consistency.
-- `tools/otbm_atlas/deployed_browser_probe.py`: public deployed-URL Chromium coordinator. Environment-animation acceptance now performs a bounded exhaustive discovery across the complete 3494-entry manifest when the fast core journey cannot locate a record, eliminating the prior arbitrary-prefix false-PARTIAL risk.
+- `tools/otbm_atlas/deployed_browser_probe.py`: public deployed-URL Chromium coordinator. Environment-animation acceptance performs bounded exhaustive discovery across the complete 3494-entry manifest when the fast core journey cannot locate a record, eliminating arbitrary-prefix false-PARTIAL risk.
 - `tools/otbm_atlas/_deployed_browser_probe_core.py`: preserved core browser journey used by the public coordinator; its quick environment probe is diagnostic-only and cannot decide final environment acceptance.
 - `.github/workflows/otbm-atlas-synology-preview.yml`: Compose and real container-contract test without `docker exec`, including MIME/404/health, non-root/read-only/capability/loopback checks, logs and source-data immutability.
 
@@ -97,9 +97,9 @@ A fresh exact-diff/security audit used the acceptance contract rather than the i
 - `ATLAS-AUDIT-415-001` — MEDIUM — deployed-browser probe could false-fail zoom and manual corpus probes polluted page-network evidence. Fixed in `d3c14389991ea9637fad5ae1a9e75a8a708fd514`.
 - `ATLAS-AUDIT-415-002` — MEDIUM — preflight did not initially prove complete spatial/creature/environment payload presence. Fixed in `9f5d3b3d6e5a71f5251ffc088011efe79b7a1890` with tests in `6f76daf82286a41dc16ac9e72648681354ef192e`.
 - `ATLAS-AUDIT-415-003` — LOW — normal browser favicon could create irrelevant network 404 evidence. Fixed in `e00da2e27dfc57a9f5b7185e37e3a17b2641d9ee`.
-- `ATLAS-AUDIT-415-004` — MEDIUM review-hygiene finding (reviewer labelled P2) — environment-animation acceptance previously searched only a 512-chunk prefix and could false-report `PARTIAL` for a valid animation record later in the manifest. Fixed in implementation commit `1d9bd8b0cdb157c4e2e8e92661b2f16ee4ce1b4a`: public probe exhaustively scans at most the fixed 3494 manifest chunks and recomputes final acceptance; the legacy fast scan is core diagnostic evidence only.
+- `ATLAS-AUDIT-415-004` — review-hygiene finding (reviewer labelled P2) — environment-animation acceptance searched only a 512-chunk prefix and could false-report `PARTIAL` for a valid later record. Fixed in `2548fa491e790ec26ae5c5dd5fb6b02c06f8ab05`: the public probe performs a full-manifest bounded search and recomputes final acceptance; the legacy fast scan is diagnostic only.
 
-Open material audit findings: `0`, pending exact-head CI and thread-resolution verification.
+All three live PR review threads are now resolved after the corresponding fixes were verified. Open material audit findings: `0`.
 
 ## Explicit unknowns
 
@@ -114,9 +114,9 @@ Open material audit findings: `0`, pending exact-head CI and thread-resolution v
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-08-16T08:49:00+02:00
-head: 1d9bd8b0cdb157c4e2e8e92661b2f16ee4ce1b4a
-head_scope: review-hygiene remediation before this documentation checkpoint
+updated_at: 2026-08-16T08:51:00+02:00
+head: 2548fa491e790ec26ae5c5dd5fb6b02c06f8ab05
+head_scope: final implementation and review-hygiene head before this documentation-only checkpoint
 branch: blakinio/atlas-synology-browser-preview
 pr: 415
 status: validating
@@ -142,9 +142,10 @@ proven:
   - PR 415 contains the static Synology project plus deterministic desktop/deployed-browser validation tooling
   - generated Atlas data is neither committed nor baked into the image
   - deployment defaults are clearly separated from unknown live NAS state
-  - fresh audit findings 001 through 004 have implementation remediations
+  - fresh audit findings 001 through 004 are remediated
+  - all three live PR review threads are resolved
 unknown:
-  - final exact-head CI result after this checkpoint commit
+  - final exact-head CI result after this documentation checkpoint
   - actual desktop deployment-preflight result
   - final environment-animation artifact presence
   - live NAS path/port and private browser URL
@@ -174,9 +175,9 @@ validation:
     evidence: unit, py_compile and real pinned-container contract passed before later review remediation
   - command: fresh exact-diff and live review-thread audit
     result: PASS_AFTER_REMEDIATION
-    evidence: zero open material implementation findings; final thread cleanup awaits exact-head verification
+    evidence: zero open material findings and all review threads resolved
 blockers: []
-next_action: move the branch to the review-hygiene remediation head, resolve all three outdated review threads after verifying their fixes, then require exact-head repository checks and merge before the minimal owner DSM action
+next_action: verify all required repository checks on the exact final PR 415 documentation head, merge the PR, then request only the minimal DSM UI action needed to deploy the verified corpus and obtain the private browser URL
 ```
 
 ## Recovery checkpoint
@@ -184,24 +185,24 @@ next_action: move the branch to the review-hygiene remediation head, resolve all
 ```yaml
 recovery:
   policy_version: 1
-  generation: 3
+  generation: 4
   session_id: atlas-preview-20260816T0818+0200
   session_started_at: 2026-08-16T08:18:00+02:00
-  checkpointed_at: 2026-08-16T08:49:00+02:00
-  last_progress_at: 2026-08-16T08:49:00+02:00
+  checkpointed_at: 2026-08-16T08:51:00+02:00
+  last_progress_at: 2026-08-16T08:51:00+02:00
   phase: exact-head-ci
-  exact_head: 1d9bd8b0cdb157c4e2e8e92661b2f16ee4ce1b4a
+  exact_head: 2548fa491e790ec26ae5c5dd5fb6b02c06f8ab05
   pull_request: 415
-  active_operation: publish final review-hygiene remediation and validate exact head
+  active_operation: final exact-head CI after review-hygiene remediation
   external_run_ids: []
-  operation_started_at: 2026-08-16T08:49:00+02:00
+  operation_started_at: 2026-08-16T08:51:00+02:00
   wait_deadline_at: 2026-08-16T09:18:00+02:00
-  check_generation: pr-415-review-clean
+  check_generation: pr-415-review-clean-final
   checks_used: 0
   status: active
   safe_to_resume: true
-  resume_condition: branch head is published and exact-head checks/review hygiene are observable
-  next_action: publish exact head, resolve verified outdated threads, then inspect one aggregate CI snapshot
+  resume_condition: final PR 415 checks are terminal on the unchanged documentation-only head
+  next_action: inspect the aggregate required-check state once; merge only if every required gate passes and review threads remain resolved
 ```
 
 ## Closeout rule
