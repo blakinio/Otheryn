@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Mapping
 
-from tools.otbm_atlas_facts.mechanics import resolve_mechanics
+from tools.otbm_atlas_facts.build import compile_facts
 
 from . import composition as composition_module
 from . import creature_sprites as creature_sprites_module
@@ -19,7 +19,7 @@ from . import tile_inspector as tile_inspector_module
 from . import viewer as viewer_module
 from .composition import classify_maps
 from .environment_animation_resume import enrich_environment_animations_resumable
-from .factual_layers import enrich_existing_atlas
+from .factual_layers import build_factual_layers
 from .houses import parse_houses
 from .incremental_core import sha256_file
 from .monster_sprites import enrich_monster_spawns
@@ -64,6 +64,21 @@ def _unknown_report(chunks: list[dict[str, object]]) -> dict[str, object]:
     }
 
 
+def _factual_groups(factual: Mapping[str, object]) -> dict[str, list[dict[str, object]]]:
+    result: dict[str, list[dict[str, object]]] = {}
+    raw_groups = factual.get("groups", {})
+    if isinstance(raw_groups, Mapping):
+        for kind, records in raw_groups.items():
+            if isinstance(records, list):
+                result[str(kind)] = [{**record, "kind": str(kind)} for record in records if isinstance(record, dict)]
+    action = [{**record, "kind": "actionIds"} for record in factual.get("actionIds", []) if isinstance(record, dict)]
+    unique = [{**record, "kind": "uniqueIds"} for record in factual.get("uniqueIds", []) if isinstance(record, dict)]
+    result["actionIds"] = action
+    result["uniqueIds"] = unique
+    result["mechanics"] = [{**record, "kind": "mechanics"} for record in action + unique]
+    return result
+
+
 def _spatial_result_from_cache(cache: ProductionPhaseCache) -> tuple[dict[str, object], dict[str, object]]:
     result = cache.result("spatial-factual") or {}
     spatial = result.get("spatialData", {})
@@ -89,7 +104,6 @@ def build_incremental_production_data(
     spool_dir = output / ".spool"
     cache = ProductionPhaseCache(output)
 
-    # Unknown item aggregation depends only on detail reports, not other Atlas domains.
     unknown_fingerprint = payload_digest({
         "schema": 1,
         "chunks": [
@@ -104,12 +118,9 @@ def build_incremental_production_data(
         write_json_if_changed(data_dir / "unknown-items.json", unknown_report)
         cache.commit("unknown-items", unknown_fingerprint, ("data/unknown-items.json",), {"statistics": unknown_report["statistics"]})
 
-    # Mechanics facts are canonical spool output; byte-identical facts are not rewritten.
     copy_if_changed(spool_dir / "facts.json", data_dir / "mechanics.json")
     mechanics = _load_json(data_dir / "mechanics.json")
 
-    # Spawns + creature sprites form one independent domain. Asset changes rerun only
-    # this domain (and downstream spatial publication), never detail rendering.
     spawn_source_digest = tree_digest(canonical["worldRoot"], ("**/*-monster.xml", "**/*-npc.xml"))
     npc_definition_digest = tree_digest(canonical["npcDefinitionRoot"], ("**/*",))
     monster_definition_digest = tree_digest(canonical["monsterDefinitionRoot"], ("**/*",))
@@ -169,65 +180,75 @@ def build_incremental_production_data(
         write_json_if_changed(data_dir / "composition.json", composition)
         cache.commit("composition", composition_fingerprint, ("data/composition.json",))
 
-    # Base spatial data and factual overlays share browser shards/search. Treat them
-    # as one phase so a cache hit skips both, while the writers themselves compare
-    # final shard bytes and only replace changed chunks.
-    factual_sources = tree_digest(canonical["crystalDataRoot"], (
-        "scripts/**/*", "npc/**/*", "monster/**/*", "raids/**/*", "lib/**/*",
+    crystal_root = repository_root / "vendor/map-analysis/crystalserver"
+    source_manifest_path = crystal_root / "supplemental-sources-manifest.json"
+    factual_sources = tree_digest(crystal_root, (
+        "data-global/scripts/**/*", "data-global/npc/**/*", "data-global/monster/**/*", "data-global/raids/**/*", "data/npclib/npc_system/**/*",
     ))
     facts_tool_sources = tree_digest(repository_root / "tools/otbm_atlas_facts", ("**/*.py",))
-    supplemental_manifest = repository_root / "docs/maps/otbm-atlas-supplemental-sources-manifest.json"
     spatial_fingerprint = payload_digest({
-        "schema": 1,
+        "schema": 2,
         "chunkSize": chunk_size,
         "mechanics": sha256_file(data_dir / "mechanics.json"),
         "spawns": sha256_file(data_dir / "spawns.json"),
         "houses": sha256_file(data_dir / "houses.json"),
         "factualSources": factual_sources,
         "factsToolSources": facts_tool_sources,
-        "supplementalManifest": _optional_sha(supplemental_manifest),
+        "sourceManifest": _optional_sha(source_manifest_path),
         "semantics": semantics_digest((Path(spatial_module.__file__), Path(factual_layers_module.__file__))),
     })
     spatial_patterns = (
         "data/chunks/**/*.json", "data/search-index.json", "data/mechanics-resolution.json",
-        "data/npc-services.json", "data/raids-events.json", "data/monster-metadata.json", "data/factual-layers.json",
+        "data/npc-services.json", "data/raids-events.json", "data/monster-metadata.json", "data/summary.json", "data/factual-layers.json",
     )
     if cache.current("spatial-factual", spatial_fingerprint, spatial_patterns):
         resolutions = _load_json(data_dir / "mechanics-resolution.json")
         spatial_statistics, factual_summary = _spatial_result_from_cache(cache)
     else:
-        resolutions = resolve_mechanics(mechanics, canonical["crystalDataRoot"] / "scripts")
-        write_json_if_changed(data_dir / "mechanics-resolution.json", resolutions)
-        resolution_by_key = {(entry["kind"], int(entry["value"])): entry for entry in resolutions["resolutions"]}
-        action_records = [{**entry, "mechanics": resolution_by_key.get(("ActionID", int(entry["actionId"])), {"status": "UNKNOWN", "candidates": []})} for entry in mechanics["actionIds"]]
-        unique_records = [{**entry, "mechanics": resolution_by_key.get(("UniqueID", int(entry["uniqueId"])), {"status": "UNKNOWN", "candidates": []})} for entry in mechanics["uniqueIds"]]
-        spatial_statistics = write_spatial_data(output, chunk_size, {
+        compile_facts(crystal_root, data_dir, mechanics)
+        resolutions = _load_json(data_dir / "mechanics-resolution.json")
+        npc_report = _load_json(data_dir / "npc-services.json")
+        raid_report = _load_json(data_dir / "raids-events.json")
+        monster_report = _load_json(data_dir / "monster-metadata.json")
+        factual = build_factual_layers(mechanics, resolutions, spawns, npc_report, raid_report, monster_report)
+        factual_groups = _factual_groups(factual)
+        combined_groups: dict[str, list[dict[str, object]]] = {
             **{key: mechanics[key] for key in ("teleports", "houseTiles", "houseDoors", "towns", "waypoints")},
-            "actionIds": action_records,
-            "uniqueIds": unique_records,
-            "mechanics": action_records + unique_records,
             "monsterSpawns": spawns["monsterSpawns"],
             "npcSpawns": spawns["npcSpawns"],
             "houses": houses["houses"],
-        })
-        factual_report = enrich_existing_atlas(output, repository_root)
-        if factual_report.get("status") == "RESOLVED":
-            resolutions = _load_json(data_dir / "mechanics-resolution.json")
-            factual_summary = {
-                "status": "RESOLVED",
-                "statistics": factual_report.get("statistics", {}),
-                "spatial": factual_report.get("spatial", {}),
-            }
-        else:
-            factual_summary = {"status": factual_report.get("status", "UNKNOWN"), "reason": factual_report.get("reason")}
+            **factual_groups,
+        }
+        spatial_statistics = write_spatial_data(output, chunk_size, combined_groups)
+        source_manifest = _load_json(source_manifest_path) if source_manifest_path.is_file() else {}
+        factual_report = {
+            "schemaVersion": 1,
+            "status": "RESOLVED",
+            "source": {
+                "repository": source_manifest.get("repository"),
+                "commit": source_manifest.get("commit"),
+                "trees": source_manifest.get("trees"),
+                "contentManifestSha256": source_manifest.get("contentManifestSha256"),
+            },
+            "statistics": factual["statistics"],
+            "renderPolicy": factual["renderPolicy"],
+            "spatial": {
+                "records": sum(len(values) for values in factual_groups.values()),
+                "chunks": spatial_statistics.get("chunks", 0),
+                "searchRecords": sum(1 for values in factual_groups.values() for record in values if isinstance(record.get("position"), dict)),
+            },
+        }
+        write_json_if_changed(data_dir / "factual-layers.json", factual_report)
+        factual_summary = {
+            "status": "RESOLVED",
+            "statistics": factual["statistics"],
+            "spatial": factual_report["spatial"],
+        }
         cache.commit("spatial-factual", spatial_fingerprint, spatial_patterns, {
             "spatialData": spatial_statistics,
             "factual": factual_summary,
         })
 
-    # Tile inspector depends on canonical tile-facts. The phase fingerprint skips it
-    # entirely when the OTBM is unchanged. On map changes the writer receives exact
-    # changed/deleted factual shard paths and preserves untouched browser shards.
     tile_fingerprint = payload_digest({
         "schema": 1,
         "mapSha256": sha256_file(map_path),
@@ -302,13 +323,10 @@ def build_incremental_production_data(
             "spool": render_plan.get("spool", {}),
         },
     }
-    if factual_summary.get("status") == "RESOLVED":
-        factual_stats = factual_summary.get("statistics", {})
-        statistics["mechanicsResolution"] = factual_stats.get("mechanicsResolution", final_resolution_stats) if isinstance(factual_stats, Mapping) else final_resolution_stats
-        statistics["factualLayers"] = factual_stats
-        statistics["factualSpatial"] = factual_summary.get("spatial", {})
-    else:
-        statistics["factualLayers"] = {"status": factual_summary.get("status", "UNKNOWN"), "reason": factual_summary.get("reason")}
+    factual_stats = factual_summary.get("statistics", {})
+    statistics["mechanicsResolution"] = factual_stats.get("mechanicsResolution", final_resolution_stats) if isinstance(factual_stats, Mapping) else final_resolution_stats
+    statistics["factualLayers"] = factual_stats
+    statistics["factualSpatial"] = factual_summary.get("spatial", {})
 
     write_json_if_changed(data_dir / "statistics.json", statistics)
     return statistics
