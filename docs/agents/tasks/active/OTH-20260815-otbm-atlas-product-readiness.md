@@ -5,7 +5,7 @@ owner: atlas-preview-coordinator
 branch: blakinio/atlas-synology-browser-preview
 base_branch: main
 created: "2026-08-15T14:09:00+02:00"
-updated: "2026-08-16T08:45:00+02:00"
+updated: "2026-08-16T08:49:00+02:00"
 project_lane: otheryn-content
 execution_mode: chat-github
 related_pr: "415"
@@ -14,6 +14,7 @@ owned_paths:
   - deploy/otbm-atlas-synology/**
   - tools/otbm_atlas/deploy_preflight.py
   - tools/otbm_atlas/deployed_browser_probe.py
+  - tools/otbm_atlas/_deployed_browser_probe_core.py
   - tools/otbm_atlas/tests/test_deploy_preflight.py
   - .github/workflows/otbm-atlas-synology-preview.yml
   - docs/agents/tasks/active/OTH-20260815-otbm-atlas-product-readiness.md
@@ -61,7 +62,8 @@ PR #415 adds only the preview/deployment layer and validation tooling; no genera
 - `deploy/otbm-atlas-synology/nginx.conf`: static HTML/JS/CSS/JSON/PNG/WebP, `/healthz`, deterministic 404 behavior, favicon 204 to avoid browser-noise 404s, private-preview security/cache headers.
 - `deploy/otbm-atlas-synology/README.md`: non-SSH DSM Container Manager Project/import, transfer, reverse-proxy, validation and rollback contract.
 - `tools/otbm_atlas/deploy_preflight.py`: current viewer-byte identity; canonical v3 manifest identity; independent chunk/overview verification; spatial shard/search consistency; creature sprite/animation descriptor/frame references; complete environment-animation shard/index/reference consistency.
-- `tools/otbm_atlas/deployed_browser_probe.py`: real DSM-URL Chromium journey and cold/warm/navigation evidence with manual probe traffic separated from page-network evidence; exact animation canvases and representative screenshots.
+- `tools/otbm_atlas/deployed_browser_probe.py`: public deployed-URL Chromium coordinator. Environment-animation acceptance now performs a bounded exhaustive discovery across the complete 3494-entry manifest when the fast core journey cannot locate a record, eliminating the prior arbitrary-prefix false-PARTIAL risk.
+- `tools/otbm_atlas/_deployed_browser_probe_core.py`: preserved core browser journey used by the public coordinator; its quick environment probe is diagnostic-only and cannot decide final environment acceptance.
 - `.github/workflows/otbm-atlas-synology-preview.yml`: Compose and real container-contract test without `docker exec`, including MIME/404/health, non-root/read-only/capability/loopback checks, logs and source-data immutability.
 
 Recommended values remain recommendations, not fabricated NAS facts:
@@ -92,41 +94,29 @@ Repository port inventory contains 7171–7175, 8080, 8088 and 9090 and no repos
 
 A fresh exact-diff/security audit used the acceptance contract rather than the implementer narrative.
 
-- `ATLAS-AUDIT-415-001` — MEDIUM — the first deployed-browser probe could false-fail zoom after zoom-in/zoom-out returned to the starting URL and manual environment probes polluted page-network error evidence. Fixed by commit `d3c14389991ea9637fad5ae1a9e75a8a708fd514`: zoom evidence captures the changed intermediate state and manual corpus probes use Playwright APIRequestContext, leaving page-network evidence independent.
-- `ATLAS-AUDIT-415-002` — MEDIUM — initial preflight only proved environment index presence and creature descriptor existence, not all referenced runtime assets/spatial shards. Fixed by `9f5d3b3d6e5a71f5251ffc088011efe79b7a1890` plus tests in `6f76daf82286a41dc16ac9e72648681354ef192e`: spatial shard/search totals and JSON, creature descriptor frames, and environment shard/index/frame/underlay/overdraw consistency are now checked.
-- `ATLAS-AUDIT-415-003` — LOW — normal browsers could request a missing favicon and add irrelevant 404 noise to E2E evidence. Fixed by `e00da2e27dfc57a9f5b7185e37e3a17b2641d9ee` with a 204 favicon response.
+- `ATLAS-AUDIT-415-001` — MEDIUM — deployed-browser probe could false-fail zoom and manual corpus probes polluted page-network evidence. Fixed in `d3c14389991ea9637fad5ae1a9e75a8a708fd514`.
+- `ATLAS-AUDIT-415-002` — MEDIUM — preflight did not initially prove complete spatial/creature/environment payload presence. Fixed in `9f5d3b3d6e5a71f5251ffc088011efe79b7a1890` with tests in `6f76daf82286a41dc16ac9e72648681354ef192e`.
+- `ATLAS-AUDIT-415-003` — LOW — normal browser favicon could create irrelevant network 404 evidence. Fixed in `e00da2e27dfc57a9f5b7185e37e3a17b2641d9ee`.
+- `ATLAS-AUDIT-415-004` — MEDIUM review-hygiene finding (reviewer labelled P2) — environment-animation acceptance previously searched only a 512-chunk prefix and could false-report `PARTIAL` for a valid animation record later in the manifest. Fixed in implementation commit `1d9bd8b0cdb157c4e2e8e92661b2f16ee4ce1b4a`: public probe exhaustively scans at most the fixed 3494 manifest chunks and recomputes final acceptance; the legacy fast scan is core diagnostic evidence only.
 
-Open material audit findings: `0` pending exact-head CI confirmation.
-
-## Feature scope
-
-```yaml
-feature_scope:
-  type: infrastructure
-  user_facing: true
-  backend_required: false
-  frontend_required: true
-  integration_required: true
-  e2e_required: true
-  completion_claim: complete_feature
-```
+Open material audit findings: `0`, pending exact-head CI and thread-resolution verification.
 
 ## Explicit unknowns
 
-- Exact current desktop `build/full-map-atlas` deployment-preflight result, including whether final current viewer bytes and `data/environment-animations/index.json` are present.
+- Exact current desktop `build/full-map-atlas` deployment-preflight result, including final current viewer bytes and final environment-animation artifact presence.
 - Actual Synology volume/path and whether TCP 8095 is free on the NAS.
 - Final private DSM reverse-proxy source URL.
 - Real deployed browser E2E and cold/warm/navigation measurements.
 
-`deploy_preflight.py` resolves the desktop-corpus unknowns without another full-world render. Runtime unknowns require the owner DSM action and the resulting private URL.
+`deploy_preflight.py` resolves desktop-corpus unknowns without another full-world render. Runtime unknowns require the owner DSM action and resulting private URL.
 
 ## Context checkpoint
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-08-16T08:45:00+02:00
-head: 6f76daf82286a41dc16ac9e72648681354ef192e
-head_scope: implementation and fresh-audit remediation before this documentation-only checkpoint
+updated_at: 2026-08-16T08:49:00+02:00
+head: 1d9bd8b0cdb157c4e2e8e92661b2f16ee4ce1b4a
+head_scope: review-hygiene remediation before this documentation checkpoint
 branch: blakinio/atlas-synology-browser-preview
 pr: 415
 status: validating
@@ -142,6 +132,7 @@ owned_paths:
   - deploy/otbm-atlas-synology/**
   - tools/otbm_atlas/deploy_preflight.py
   - tools/otbm_atlas/deployed_browser_probe.py
+  - tools/otbm_atlas/_deployed_browser_probe_core.py
   - tools/otbm_atlas/tests/test_deploy_preflight.py
   - .github/workflows/otbm-atlas-synology-preview.yml
   - docs/agents/tasks/active/OTH-20260815-otbm-atlas-product-readiness.md
@@ -151,7 +142,7 @@ proven:
   - PR 415 contains the static Synology project plus deterministic desktop/deployed-browser validation tooling
   - generated Atlas data is neither committed nor baked into the image
   - deployment defaults are clearly separated from unknown live NAS state
-  - fresh audit material findings 001 and 002 were remediated; low finding 003 was also remediated
+  - fresh audit findings 001 through 004 have implementation remediations
 unknown:
   - final exact-head CI result after this checkpoint commit
   - actual desktop deployment-preflight result
@@ -160,11 +151,12 @@ unknown:
   - deployed Chromium E2E and performance
 conflicts: []
 first_failure:
-  marker: fresh-audit findings ATLAS-AUDIT-415-001 and ATLAS-AUDIT-415-002
-  evidence: exact changed-file inspection
+  marker: audit/review findings ATLAS-AUDIT-415-001 through 004
+  evidence: exact changed-file and live review-thread inspection
 rejected_hypotheses:
   - config commit alone can verify ATLAS-PR-002
   - final environment animations can be inferred from interrupted exporter runs
+  - an arbitrary environment-shard prefix is sufficient for real deployed acceptance
 changed_paths:
   - deploy/otbm-atlas-synology/compose.yaml
   - deploy/otbm-atlas-synology/nginx.conf
@@ -172,15 +164,19 @@ changed_paths:
   - deploy/otbm-atlas-synology/README.md
   - tools/otbm_atlas/deploy_preflight.py
   - tools/otbm_atlas/deployed_browser_probe.py
+  - tools/otbm_atlas/_deployed_browser_probe_core.py
   - tools/otbm_atlas/tests/test_deploy_preflight.py
   - .github/workflows/otbm-atlas-synology-preview.yml
   - docs/agents/tasks/active/OTH-20260815-otbm-atlas-product-readiness.md
 validation:
-  - command: connector exact-diff audit
+  - command: earlier focused Synology preview workflow generation
+    result: PASS
+    evidence: unit, py_compile and real pinned-container contract passed before later review remediation
+  - command: fresh exact-diff and live review-thread audit
     result: PASS_AFTER_REMEDIATION
-    evidence: zero open material findings before exact-head CI
+    evidence: zero open material implementation findings; final thread cleanup awaits exact-head verification
 blockers: []
-next_action: verify all required repository checks on the exact PR 415 head, then merge PR 415 and move immediately to the minimal owner DSM deployment action
+next_action: move the branch to the review-hygiene remediation head, resolve all three outdated review threads after verifying their fixes, then require exact-head repository checks and merge before the minimal owner DSM action
 ```
 
 ## Recovery checkpoint
@@ -188,24 +184,24 @@ next_action: verify all required repository checks on the exact PR 415 head, the
 ```yaml
 recovery:
   policy_version: 1
-  generation: 2
+  generation: 3
   session_id: atlas-preview-20260816T0818+0200
   session_started_at: 2026-08-16T08:18:00+02:00
-  checkpointed_at: 2026-08-16T08:45:00+02:00
-  last_progress_at: 2026-08-16T08:45:00+02:00
+  checkpointed_at: 2026-08-16T08:49:00+02:00
+  last_progress_at: 2026-08-16T08:49:00+02:00
   phase: exact-head-ci
-  exact_head: 6f76daf82286a41dc16ac9e72648681354ef192e
+  exact_head: 1d9bd8b0cdb157c4e2e8e92661b2f16ee4ce1b4a
   pull_request: 415
-  active_operation: exact-head PR validation after audit remediation
+  active_operation: publish final review-hygiene remediation and validate exact head
   external_run_ids: []
-  operation_started_at: 2026-08-16T08:45:00+02:00
+  operation_started_at: 2026-08-16T08:49:00+02:00
   wait_deadline_at: 2026-08-16T09:18:00+02:00
-  check_generation: pr-415-final
+  check_generation: pr-415-review-clean
   checks_used: 0
   status: active
   safe_to_resume: true
-  resume_condition: PR 415 exact-head checks provide terminal evidence
-  next_action: inspect one aggregate PR/head snapshot for required checks; merge only if the unchanged final head is green and review hygiene remains clean
+  resume_condition: branch head is published and exact-head checks/review hygiene are observable
+  next_action: publish exact head, resolve verified outdated threads, then inspect one aggregate CI snapshot
 ```
 
 ## Closeout rule
