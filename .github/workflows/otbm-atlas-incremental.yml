@@ -54,9 +54,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Checkout target branch implementation
+      - name: Checkout exact target head
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
           path: target
           persist-credentials: false
       - name: Checkout exact base
@@ -83,8 +85,7 @@ jobs:
             --output /tmp/atlas-impact-plan.json
       - name: Block accidental implicit full-world work
         working-directory: target
-        run: |
-          python3 -m tools.otbm_atlas.incremental guard /tmp/atlas-impact-plan.json
+        run: python3 -m tools.otbm_atlas.incremental guard /tmp/atlas-impact-plan.json
       - name: Emit compact impact evidence
         run: |
           python3 - <<'PY'
