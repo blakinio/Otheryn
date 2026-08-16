@@ -1,10 +1,8 @@
 """Persistent local change-impact planning for the canonical Atlas entry point.
 
-This module is deliberately separate from the PR base-vs-head planner.  The
-production builder has one immutable target snapshot plus an existing output
-publication, so its authority is the last successfully committed local render
-state.  A changed monolithic map may still require one parse, but unchanged
-spatial shards and detail images remain reusable.
+This is deliberately separate from the PR base-vs-head planner. Production has
+one canonical target snapshot plus an existing local publication, so the
+previous successfully committed local state is the comparison authority.
 """
 from __future__ import annotations
 
@@ -28,7 +26,10 @@ from .incremental_core import (
 )
 from .incremental_state import prepare_dependency_index
 
-PRODUCTION_STATE_VERSION = 1
+# v2 additionally binds every reused detail image to cheap stat metadata plus
+# the renderer-provided checksum. Ordinary runs do not hash the complete image
+# corpus; only a file whose stat changed is hashed against the stored checksum.
+PRODUCTION_STATE_VERSION = 2
 
 SpoolBuilder = Callable[[Path, Path, int], Mapping[str, object]]
 
@@ -212,10 +213,43 @@ def _manifest_chunk_keys(manifest: Mapping[str, object] | None) -> set[str]:
     return result
 
 
-def _detail_files_exist(output: Path, chunk_text: str) -> bool:
+def _detail_paths(output: Path, chunk_text: str) -> tuple[Path, Path]:
     key = ChunkKey.parse(chunk_text)
     tile = output / "tiles" / f"z{key.z}" / f"{key.x}_{key.y}.png"
-    return tile.is_file() and tile.with_suffix(".json").is_file()
+    return tile, tile.with_suffix(".json")
+
+
+def _detail_output_identity(output: Path, chunk_text: str) -> dict[str, object] | None:
+    tile, report_path = _detail_paths(output, chunk_text)
+    if not tile.is_file() or not report_path.is_file():
+        return None
+    try:
+        report = _read_json(report_path)
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return None
+    checksum = report.get("checksum") if report else None
+    if not isinstance(checksum, str):
+        checksum = sha256_file(tile)
+    stat = tile.stat()
+    return {"size": stat.st_size, "mtimeNs": stat.st_mtime_ns, "checksum": checksum}
+
+
+def _detail_output_reusable(output: Path, chunk_text: str, previous_detail_files: Mapping[str, object] | None) -> bool:
+    tile, report_path = _detail_paths(output, chunk_text)
+    if not tile.is_file() or not report_path.is_file():
+        return False
+    if previous_detail_files is None:
+        return True
+    previous = previous_detail_files.get(chunk_text)
+    if not isinstance(previous, Mapping):
+        return False
+    expected_size = previous.get("size")
+    expected_mtime = previous.get("mtimeNs")
+    expected_checksum = previous.get("checksum")
+    stat = tile.stat()
+    if expected_size == stat.st_size and expected_mtime == stat.st_mtime_ns:
+        return True
+    return isinstance(expected_checksum, str) and sha256_file(tile) == expected_checksum
 
 
 def remove_deleted_chunk_outputs(output: Path, chunk_keys: list[str]) -> None:
@@ -242,13 +276,7 @@ def prepare_production_render_plan(
     *,
     allow_full_build: bool = False,
 ) -> dict[str, object]:
-    """Return local fingerprints and the exact set of detail chunks to render.
-
-    A pre-incremental Atlas can be adopted without rewriting its image corpus
-    when its published source identity exactly matches the current canonical
-    source.  The first successful run records local fingerprints; subsequent
-    runs compare those fingerprints instead of a whole-map/tree SHA.
-    """
+    """Return local fingerprints and the exact set of detail chunks to render."""
     state_root = output / ".incremental-state"
     state_root.mkdir(parents=True, exist_ok=True)
     state_path = state_root / "production-render-state.json"
@@ -308,6 +336,7 @@ def prepare_production_render_plan(
     }
 
     previous_fingerprints = previous.get("chunkFingerprints", {}) if previous and isinstance(previous.get("chunkFingerprints"), Mapping) else {}
+    previous_detail_files = previous.get("detailFiles") if previous and isinstance(previous.get("detailFiles"), Mapping) else None
     old_keys = set(str(key) for key in previous_fingerprints) if previous is not None else _manifest_chunk_keys(manifest)
     current_keys = set(fingerprints)
     deleted = sorted(old_keys - current_keys, key=lambda text: (ChunkKey.parse(text).z, ChunkKey.parse(text).y, ChunkKey.parse(text).x))
@@ -315,12 +344,12 @@ def prepare_production_render_plan(
     dirty: list[str] = []
     reused: list[str] = []
     for text in sorted(current_keys, key=lambda value: (ChunkKey.parse(value).z, ChunkKey.parse(value).y, ChunkKey.parse(value).x)):
-        exists = _detail_files_exist(output, text)
+        output_reusable = _detail_output_reusable(output, text, previous_detail_files if previous is not None else None)
         if full_reasons and allow_full_build:
             dirty.append(text)
-        elif previous is not None and previous_fingerprints.get(text) == fingerprints[text] and exists:
+        elif previous is not None and previous_fingerprints.get(text) == fingerprints[text] and output_reusable:
             reused.append(text)
-        elif legacy_adoption and exists:
+        elif legacy_adoption and output_reusable:
             reused.append(text)
         else:
             dirty.append(text)
@@ -357,4 +386,15 @@ def commit_production_render_state(output: Path, plan: Mapping[str, object]) -> 
     state = plan.get("nextState")
     if not isinstance(state, Mapping):
         raise ValueError("production render plan has no nextState")
-    write_json_atomic(output / ".incremental-state" / "production-render-state.json", dict(state))
+    committed = dict(state)
+    fingerprints = committed.get("chunkFingerprints")
+    if not isinstance(fingerprints, Mapping):
+        raise ValueError("production render state has no chunkFingerprints")
+    detail_files: dict[str, dict[str, object]] = {}
+    for text in sorted(str(key) for key in fingerprints):
+        identity = _detail_output_identity(output, text)
+        if identity is None:
+            raise RuntimeError(f"cannot commit production state without detail output {text}")
+        detail_files[text] = identity
+    committed["detailFiles"] = detail_files
+    write_json_atomic(output / ".incremental-state" / "production-render-state.json", committed)
