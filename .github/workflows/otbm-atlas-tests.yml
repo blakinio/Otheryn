@@ -6,11 +6,19 @@ on:
     types: [opened, synchronize, reopened, labeled]
     paths:
       - "tools/otbm_atlas/**"
+      - "!tools/otbm_atlas/_deployed_browser_probe_core.py"
+      - "!tools/otbm_atlas/deploy_preflight.py"
+      - "!tools/otbm_atlas/deployed_browser_probe.py"
+      - "!tools/otbm_atlas/tests/test_deploy_preflight.py"
       - ".github/workflows/otbm-atlas-tests.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   unit:
