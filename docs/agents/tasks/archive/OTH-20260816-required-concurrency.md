@@ -4,7 +4,7 @@ status: completed
 owner: none
 created: "2026-08-16T09:50:00+02:00"
 completed: "2026-08-16T11:10:00+02:00"
-updated: "2026-08-16T11:10:00+02:00"
+updated: "2026-08-16T11:12:00+02:00"
 project_lane: infrastructure
 related_pr: "420"
 ownership_released: true
@@ -30,7 +30,7 @@ The final ready-for-review validation on head `12b3a229af143b45206ebd659a847d812
 
 ## Closeout
 
-This file is created by the documentation-only closeout PR. The same PR must remain free of heavy Atlas/creature/environment fanout before merge.
+Documentation-only closeout PR #423 initially ran on head `55f07b2be64682abfcc2969a209d6e12a572da91`. GitHub emitted only `Required` run `31938361840`, which completed `success`; no OTBM Atlas/creature/environment specialized workflow was emitted. This validates both the task-only routing fix and the final archival path.
 
 ```yaml
 closeout:
@@ -40,7 +40,11 @@ closeout:
   exact_head_ci: PASS
   exact_head_required: PASS
   specialized_otbm_fanout: NONE
-  docs_only_trigger_proof: PENDING_CLOSEOUT_PR
+  closeout_pr: 423
+  closeout_proof_head: 55f07b2be64682abfcc2969a209d6e12a572da91
+  closeout_required_run: 31938361840
+  docs_only_trigger_proof: PASS
+  heavy_otbm_workflows_emitted: 0
   task_status: completed
   task_archived: true
   ownership_released: true
