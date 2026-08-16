@@ -8,7 +8,10 @@ from pathlib import Path
 import sys
 from typing import Iterable, Mapping
 
+from . import assets as assets_module
 from . import environment_animation as environment_animation_module
+from . import environment_spool as environment_spool_module
+from . import render as render_module
 from .environment_animation import ANIMATION_ZOOM, _items
 from .environment_spool import decode_spool_tiles
 from .incremental_core import canonical_json, sha256_bytes, sha256_file
@@ -64,7 +67,16 @@ def python_semantics_digest(paths: Iterable[Path]) -> str:
 
 
 def _automatic_semantics_digest() -> str:
-    paths = [Path(__file__), Path(environment_animation_module.__file__)]
+    # Bind every direct code dependency that can change emitted environment bytes
+    # or the local spool interpretation. Monolithic source/asset identities remain
+    # deliberately excluded; exact per-chunk content is fingerprinted separately.
+    paths = [
+        Path(__file__),
+        Path(environment_animation_module.__file__),
+        Path(environment_spool_module.__file__),
+        Path(render_module.__file__),
+        Path(assets_module.__file__),
+    ]
     resume = sys.modules.get(f"{__package__}.environment_animation_resume")
     resume_file = getattr(resume, "__file__", None) if resume is not None else None
     if resume_file: paths.append(Path(resume_file))
