@@ -1,0 +1,188 @@
+---
+name: OTBM Atlas Incremental
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "tools/otbm_atlas/incremental.py"
+      - "tools/otbm_atlas/incremental_core.py"
+      - "tools/otbm_atlas/chunk_benchmark.py"
+      - "tools/otbm_atlas/tests/test_incremental.py"
+      - "tools/otbm_atlas/tests/test_chunk_benchmark.py"
+      - "tools/otbm_atlas/render.py"
+      - "tools/otbm_atlas/assets.py"
+      - "tools/otbm_atlas/semantic.py"
+      - "tools/otbm_atlas/overview.py"
+      - "vendor/map-analysis/crystalserver/data-global/world/world.otbm"
+      - "vendor/map-analysis/tibia-client/**"
+      - ".github/workflows/otbm-atlas-incremental.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: otbm-atlas-incremental-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  focused-tests:
+    name: Incremental planner unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          persist-credentials: false
+      - name: Compile incremental modules
+        run: |
+          python3 -m py_compile \
+            tools/otbm_atlas/incremental.py \
+            tools/otbm_atlas/incremental_core.py \
+            tools/otbm_atlas/chunk_benchmark.py
+      - name: Run focused incremental tests
+        run: |
+          python3 -m unittest \
+            tools.otbm_atlas.tests.test_incremental \
+            tools.otbm_atlas.tests.test_chunk_benchmark -v
+
+  impact-plan:
+    name: Real canonical change-impact plan
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout target branch implementation
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          path: target
+          persist-credentials: false
+      - name: Checkout exact base
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          persist-credentials: false
+      - name: Record exact changed paths
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git -C target diff --name-only "$BASE_SHA" "$HEAD_SHA" > /tmp/atlas-changed-paths.txt
+          cat /tmp/atlas-changed-paths.txt
+      - name: Build canonical impact plan without rendering the world
+        working-directory: target
+        run: |
+          python3 -m tools.otbm_atlas.incremental plan \
+            --base-root ../base \
+            --target-root . \
+            --work /tmp/atlas-impact \
+            --changed-paths /tmp/atlas-changed-paths.txt \
+            --output /tmp/atlas-impact-plan.json
+      - name: Block accidental implicit full-world work
+        working-directory: target
+        run: |
+          python3 -m tools.otbm_atlas.incremental guard /tmp/atlas-impact-plan.json
+      - name: Emit compact impact evidence
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          plan = json.loads(Path('/tmp/atlas-impact-plan.json').read_text(encoding='utf-8'))
+          print(json.dumps({
+              'planDigest': plan['planDigest'],
+              'fullBuildRequired': plan['fullBuildRequired'],
+              'fullBuildReasons': plan['fullBuildReasons'],
+              'dirtyDetailChunks': len(plan['detail']['dirtyChunks']),
+              'dirtyOverviewChunks': len(plan['overview']['dirtyChunks']),
+              'deletedDetailChunks': len(plan['detail']['deletedChunks']),
+              'domains': plan['classification']['domains'],
+          }, indent=2, sort_keys=True))
+          PY
+
+  representative-e2e:
+    name: Incremental pixel-equivalence E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          persist-credentials: false
+      - name: Build one real canonical chunk through the incremental path
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from tools.otbm_atlas.incremental import ASSET_REL, WORLD_REL
+          from tools.otbm_atlas.incremental_core import (
+              AssetRenderer,
+              build_dependency_index,
+              collect_asset_state,
+              render_contract_digest,
+              render_selected_chunks,
+              spool_map,
+          )
+          from tools.otbm_atlas.atlas import _write_rendered_chunk
+
+          root = Path('.')
+          spool = Path('/tmp/atlas-e2e-spool')
+          output = Path('/tmp/atlas-e2e-incremental')
+          legacy = Path('/tmp/atlas-e2e-legacy')
+          spool_map(root / WORLD_REL, spool, 128)
+          dependencies = build_dependency_index(spool, root / ASSET_REL)
+          assets = collect_asset_state(root / ASSET_REL)
+          chunk = 'z7/252_251'
+          assert chunk in dependencies['chunks'], chunk
+          result = render_selected_chunks(
+              spool,
+              root / ASSET_REL,
+              output,
+              [chunk],
+              dependencies,
+              assets,
+              render_contract_digest(root),
+              include_overviews=True,
+          )
+          source_spool = spool / 'z7/252_251.bin'
+          legacy_png = legacy / 'tiles/z7/252_251.png'
+          legacy_report = legacy_png.with_suffix('.json')
+          renderer = AssetRenderer(root / ASSET_REL)
+          _write_rendered_chunk(legacy_png, legacy_report, source_spool, 'equivalence-only', renderer)
+          incremental_png = output / 'tiles/z7/252_251.png'
+          assert incremental_png.read_bytes() == legacy_png.read_bytes()
+          assert result['chunks'][0]['checksum'] == json.loads(legacy_report.read_text(encoding='utf-8'))['checksum']
+          assert (output / 'overview/z7/252_251.png').is_file()
+          assert (output / 'overview-low/z7/252_251.png').is_file()
+          print(json.dumps({
+              'chunk': chunk,
+              'detailBytes': incremental_png.stat().st_size,
+              'pixelEquivalence': 'PASS',
+              'overviews': 'PASS',
+          }, sort_keys=True))
+          PY
+      - name: Prove no generated render corpus is retained
+        run: |
+          rm -rf /tmp/atlas-e2e-spool /tmp/atlas-e2e-incremental /tmp/atlas-e2e-legacy
+          test ! -e /tmp/atlas-e2e-incremental
+
+  chunk-size-benchmark:
+    name: Bounded 32/64/128 chunk benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          persist-credentials: false
+      - name: Benchmark representative Thais region
+        run: |
+          python3 -m tools.otbm_atlas.chunk_benchmark \
+            --bounds 32280 32440 32155 32305 7 \
+            --sizes 32 64 128 \
+            --output /tmp/atlas-chunk-benchmark.json
+          cat /tmp/atlas-chunk-benchmark.json
+      - name: Remove bounded generated data
+        run: rm -f /tmp/atlas-chunk-benchmark.json
