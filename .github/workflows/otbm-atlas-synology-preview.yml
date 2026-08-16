@@ -1,0 +1,109 @@
+---
+name: OTBM Atlas Synology Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "deploy/otbm-atlas-synology/**"
+      - "tools/otbm_atlas/deploy_preflight.py"
+      - "tools/otbm_atlas/deployed_browser_probe.py"
+      - "tools/otbm_atlas/tests/test_deploy_preflight.py"
+      - ".github/workflows/otbm-atlas-synology-preview.yml"
+      - "docs/agents/tasks/active/OTH-20260815-otbm-atlas-product-readiness.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Static preview container contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          persist-credentials: false
+
+      - name: Run deployment preflight tests
+        run: python3 -m unittest tools.otbm_atlas.tests.test_deploy_preflight -v
+
+      - name: Compile deployment browser tooling
+        run: python3 -m py_compile tools/otbm_atlas/deploy_preflight.py tools/otbm_atlas/deployed_browser_probe.py
+
+      - name: Validate immutable static-serving container
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture="${RUNNER_TEMP}/atlas-container-fixture"
+          mkdir -p "${fixture}/data"
+          printf '<!doctype html><title>Atlas fixture</title><script src="app.js"></script><link rel="stylesheet" href="style.css">fixture\n' > "${fixture}/index.html"
+          printf 'console.log("fixture")\n' > "${fixture}/app.js"
+          printf 'body{}\n' > "${fixture}/style.css"
+          printf '{"fixture":true}\n' > "${fixture}/data/fixture.json"
+          cp build/otbm-codec-benchmark/samples/05/original.png "${fixture}/sample.png"
+          cp build/otbm-codec-benchmark/samples/05/lossless.webp "${fixture}/sample.webp"
+          (cd "${fixture}" && find . -type f -print0 | sort -z | xargs -0 sha256sum) > "${RUNNER_TEMP}/fixture-before.sha256"
+
+          export ATLAS_DATA_DIR="${fixture}"
+          export ATLAS_BIND_ADDRESS=127.0.0.1
+          export ATLAS_HTTP_PORT=18095
+          compose=(docker compose -f deploy/otbm-atlas-synology/compose.yaml)
+          "${compose[@]}" config >/dev/null
+          "${compose[@]}" up -d --pull always
+          trap '"${compose[@]}" logs --no-color || true; "${compose[@]}" down || true' EXIT
+
+          cid="$("${compose[@]}" ps -q atlas)"
+          test -n "${cid}"
+          for _ in $(seq 1 35); do
+            health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "${cid}")"
+            if [ "${health}" = healthy ]; then break; fi
+            if [ "${health}" = unhealthy ]; then
+              docker inspect "${cid}"
+              exit 1
+            fi
+            sleep 2
+          done
+          test "$(docker inspect -f '{{.State.Health.Status}}' "${cid}")" = healthy
+
+          test "$(curl --fail --silent http://127.0.0.1:18095/healthz)" = ok
+          curl --fail --silent http://127.0.0.1:18095/index.html >/dev/null
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18095/does-not-exist.json)" = 404
+
+          header() { curl --fail --silent --head "$1" | tr -d '\r' | grep -i "^Content-Type:"; }
+          header http://127.0.0.1:18095/index.html | grep -qi 'text/html'
+          header http://127.0.0.1:18095/app.js | grep -qi 'application/javascript'
+          header http://127.0.0.1:18095/style.css | grep -qi 'text/css'
+          header http://127.0.0.1:18095/data/fixture.json | grep -qi 'application/json'
+          header http://127.0.0.1:18095/sample.png | grep -qi 'image/png'
+          header http://127.0.0.1:18095/sample.webp | grep -qi 'image/webp'
+          curl --fail --silent --head http://127.0.0.1:18095/index.html | tr -d '\r' | grep -qi '^X-Content-Type-Options: nosniff$'
+          curl --fail --silent --head http://127.0.0.1:18095/index.html | tr -d '\r' | grep -qi '^Content-Security-Policy:'
+
+          docker inspect "${cid}" > "${RUNNER_TEMP}/atlas-inspect.json"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          inspect = json.loads((Path(os.environ['RUNNER_TEMP']) / 'atlas-inspect.json').read_text())[0]
+          user = str(inspect['Config'].get('User') or '').strip().lower()
+          assert user and user not in {'0', 'root'}, user
+          host = inspect['HostConfig']
+          assert host['ReadonlyRootfs'] is True
+          assert 'ALL' in (host.get('CapDrop') or [])
+          assert any(option.startswith('no-new-privileges') for option in (host.get('SecurityOpt') or []))
+          assert host['RestartPolicy']['Name'] == 'unless-stopped'
+          assert host.get('PidsLimit') == 100
+          mounts = {mount['Destination']: mount for mount in inspect['Mounts']}
+          assert mounts['/usr/share/nginx/html']['RW'] is False
+          assert mounts['/etc/nginx/conf.d/default.conf']['RW'] is False
+          binding = host['PortBindings']['8080/tcp'][0]
+          assert binding['HostIp'] == '127.0.0.1', binding
+          assert binding['HostPort'] == '18095', binding
+          PY
+
+          "${compose[@]}" logs --no-color > "${RUNNER_TEMP}/atlas-container.log"
+          test -s "${RUNNER_TEMP}/atlas-container.log"
+          (cd "${fixture}" && find . -type f -print0 | sort -z | xargs -0 sha256sum) > "${RUNNER_TEMP}/fixture-after.sha256"
+          diff -u "${RUNNER_TEMP}/fixture-before.sha256" "${RUNNER_TEMP}/fixture-after.sha256"

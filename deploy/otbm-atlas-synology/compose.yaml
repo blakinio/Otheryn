@@ -1,0 +1,31 @@
+---
+name: otheryn-atlas-preview
+
+services:
+  atlas:
+    image: "ghcr.io/nginx/nginx-unprivileged:1.31.3-alpine3.24-slim@sha256:22f839c5fb4007dc24d203a170a9e03fc185d660bfefc34ac6823a7aef085cbc"
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 100
+    ports:
+      - "${ATLAS_BIND_ADDRESS:-127.0.0.1}:${ATLAS_HTTP_PORT:-8095}:8080"
+    volumes:
+      - "${ATLAS_DATA_DIR:-/volume1/docker/otheryn/atlas/current}:/usr/share/nginx/html:ro"
+      - "./nginx.conf:/etc/nginx/conf.d/default.conf:ro"
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/index.html"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
