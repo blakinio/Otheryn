@@ -44,8 +44,8 @@ class DeployPreflightTests(unittest.TestCase):
             },
         }
         (root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-        (root / "data/search-index.json").write_text(json.dumps({"records": []}), encoding="utf-8")
-        (root / "data/statistics.json").write_text(json.dumps({"chunks": 3494}), encoding="utf-8")
+        (root / "data/search-index.json").write_text(json.dumps({"schemaVersion": 1, "records": []}), encoding="utf-8")
+        (root / "data/statistics.json").write_text(json.dumps({"chunks": 3494, "spatialData": {"shards": 0, "searchRecords": 0}}), encoding="utf-8")
         (root / "data/spawns.json").write_text(
             json.dumps({"npcSpawns": [], "monsterSpawns": [], "statistics": {}}),
             encoding="utf-8",
@@ -54,7 +54,7 @@ class DeployPreflightTests(unittest.TestCase):
             directory = root / "data/environment-animations"
             directory.mkdir(parents=True)
             (directory / "index.json").write_text(
-                json.dumps({"schemaVersion": 2, "statistics": {"instances": 1, "uniqueAnimations": 1, "chunks": 1, "staticFallbacks": 0}}),
+                json.dumps({"schemaVersion": 2, "statistics": {"instances": 0, "uniqueAnimations": 0, "chunks": 0, "staticFallbacks": 0}}),
                 encoding="utf-8",
             )
         return root
@@ -67,6 +67,8 @@ class DeployPreflightTests(unittest.TestCase):
         self.assertEqual([], report["errors"])
         self.assertEqual([], report["requirementErrors"])
         self.assertEqual("CURRENT", report["viewer"]["status"])
+        self.assertEqual("READY", report["spatial"]["status"])
+        self.assertEqual("READY", report["environmentAnimations"]["status"])
 
     def test_missing_environment_is_explicit_partial_state(self) -> None:
         root = self.make_fixture(environment=False)
@@ -98,6 +100,18 @@ class DeployPreflightTests(unittest.TestCase):
         self.assertEqual("NOT_READY", report["status"])
         self.assertEqual("NOT_CURRENT", report["viewer"]["status"])
         self.assertTrue(any("viewer-app.js" in error for error in report["errors"]))
+
+    def test_invalid_environment_index_stays_core_preview_only(self) -> None:
+        root = self.make_fixture()
+        (root / "data/environment-animations/index.json").write_text(
+            json.dumps({"schemaVersion": 2, "statistics": {"instances": 1, "uniqueAnimations": 1, "chunks": 1}}),
+            encoding="utf-8",
+        )
+        report = deployment_preflight(root, verify_chunks=False)
+        self.assertEqual("CORE_PREVIEW_READY", report["status"])
+        self.assertTrue(report["corePreviewReady"])
+        self.assertEqual("INVALID", report["environmentAnimations"]["status"])
+        self.assertTrue(report["warnings"])
 
 
 if __name__ == "__main__":
