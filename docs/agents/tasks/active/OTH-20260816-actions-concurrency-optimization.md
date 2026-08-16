@@ -5,7 +5,7 @@ owner: current-agent
 branch: ci/OTH-20260816-actions-concurrency-optimization
 base_branch: main
 created: "2026-08-16T09:16:00+02:00"
-updated: "2026-08-16T09:36:00+02:00"
+updated: "2026-08-16T09:42:00+02:00"
 project_lane: infrastructure
 execution_mode: chat-github
 related_pr: "417"
@@ -38,6 +38,7 @@ Reduce avoidable GitHub-hosted runner occupancy in OTBM Atlas validation without
 - Merged PR #415 changed preview/deployment paths plus four deployment-specific files under `tools/otbm_atlas/`: `_deployed_browser_probe_core.py`, `deploy_preflight.py`, `deployed_browser_probe.py`, and `tests/test_deploy_preflight.py`.
 - Those four files matched broad `tools/otbm_atlas/**` triggers in unrelated Atlas/creature/environment workflows and therefore caused heavy general E2E/audit fanout in addition to the dedicated Synology preview validation.
 - The dedicated Synology preview workflow now owns all four deployment-tool paths and directly compiles the probe core and public wrappers, while retaining the deployment preflight tests and immutable container contract.
+- On exact head `1d7993156b07a0af83dafd96725d2c4f1974d6b2`, an unrelated `programme:infrastructure` label caused `OTBM Atlas Tests` run #160 to replace #159 and re-run unit, canonical Thais, and browser E2E solely because the workflow listened to every `pull_request:labeled` event.
 
 ## Implemented change
 
@@ -46,6 +47,7 @@ Reduce avoidable GitHub-hosted runner occupancy in OTBM Atlas validation without
 - Added `_deployed_browser_probe_core.py` to the dedicated preview trigger and compile check.
 - Added exact negative filters for the four deployment-only tool paths to the broad Atlas suite, canonical creature showcase, creature animation E2E, independent creature animation audit, and environment animation E2E.
 - Added per-PR/ref `concurrency` with `cancel-in-progress: true` to every broad workflow changed by this task.
+- Standard Atlas unit, canonical Thais and browser E2E jobs now skip `labeled` events; the workflow retains `labeled` only so the existing `ci:final-gate` label can launch the full-world shard/aggregate jobs. Unrelated labels therefore allocate no standard Atlas runners.
 - Preserved other `tools/otbm_atlas/**`, vendor, workflow-file and manual-dispatch triggers; a mixed deployment + functional change still emits the applicable heavy workflow.
 - Preserved every real factual source/vendor path in the facts workflow.
 - Core Otheryn CI and required semantics remain untouched.
@@ -53,14 +55,15 @@ Reduce avoidable GitHub-hosted runner occupancy in OTBM Atlas validation without
 ## Acceptance inventory
 
 - [x] Remove task/checkpoint Markdown paths from heavy Atlas workflow path triggers; real deploy/tool/vendor/workflow inputs remain covered.
-- [x] Add per-PR/ref concurrency with `cancel-in-progress: true` to the factual-source and Synology-preview workflows.
+- [x] Add per-PR/ref `concurrency` with `cancel-in-progress: true` to the factual-source and Synology-preview workflows.
 - [x] Dedicated Synology preview covers all four deployment-only tool files and compiles the probe core plus wrappers.
 - [x] Deployment-only changes are excluded from unrelated Atlas/creature/environment heavy workflows while mixed relevant changes still match their positive paths.
 - [x] Every broad heavy workflow changed by this task cancels superseded runs for the same PR/ref.
+- [x] Unrelated PR label events do not re-run standard Atlas unit/canonical/browser jobs; `ci:final-gate` still retains its full-world launch path.
 - [x] Do not route required validation to self-hosted runners while live runner availability remains unproven.
 - [x] Do not change core Otheryn CI scope or required semantics.
-- [ ] Validate workflow syntax and exact changed-file diff.
-- [ ] Observe the implementation PR's emitted checks and require repository-required checks on the exact final head.
+- [ ] Validate exact final workflow syntax and changed-file diff.
+- [ ] Observe implementation PR emitted checks and require repository-required checks on the exact final head.
 - [ ] After merge, archive this task via a docs-only closeout PR and verify heavy Atlas workflows are not emitted solely because this task record moves to archive.
 - [x] No owner-funded AI/Codex/OpenAI quota is used.
 
@@ -73,7 +76,7 @@ Reduce avoidable GitHub-hosted runner occupancy in OTBM Atlas validation without
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-08-16T09:36:00+02:00
+updated_at: 2026-08-16T09:42:00+02:00
 branch: ci/OTH-20260816-actions-concurrency-optimization
 pr: 417
 status: active
@@ -92,6 +95,7 @@ proven:
   - deployment-only trigger waste independently observed from merged PR #415
   - five unrelated broad workflows exclude only those four exact deployment-tool paths
   - all seven changed specialized workflows cancel superseded same-PR/ref runs
+  - unrelated label event duplicate fanout observed and suppressed for standard Atlas jobs
   - core CI untouched
-next_action: inspect PR #417 exact diff and exact-head emitted checks; remediate any validation failure before ready-for-review
+next_action: validate final exact head, including that a non-final label event produces no standard Atlas runner jobs; remediate any failure before ready-for-review
 ```
