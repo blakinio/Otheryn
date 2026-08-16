@@ -131,6 +131,15 @@ def _write_text_atomic(path: Path, payload: str) -> None:
     temporary.replace(path)
 
 
+def _overview_report(chunk: dict[str, object], payload: bytes, factor: int, fingerprint: str) -> dict[str, object]:
+    return {
+        "fingerprint": fingerprint,
+        "checksum": hashlib.sha256(payload).hexdigest(),
+        "imageWidth": int(chunk["imageWidth"]) // factor,
+        "imageHeight": int(chunk["imageHeight"]) // factor,
+    }
+
+
 def _tree_sha256(directory: Path) -> str:
     digest = hashlib.sha256()
     for path in sorted((path for path in directory.rglob("*") if path.is_file()), key=lambda value: value.relative_to(directory).as_posix()):
@@ -245,7 +254,7 @@ def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int =
             report = _read_report(report_path)
             reusable = report is not None and overview_output_reusable(output, directory, chunk_text, fingerprint, previous_overviews)
             if not reusable:
-                payload = make_overview(detailed_path.read_bytes(), factor); overview_path.parent.mkdir(parents=True, exist_ok=True); temporary = overview_path.with_suffix(".png.tmp"); temporary.write_bytes(payload); temporary.replace(overview_path); report = {"fingerprint": fingerprint, "checksum": hashlib.sha256(payload).hexdigest(), "imageWidth": int(chunk["imageWidth"]) // factor, "imageHeight": int(chunk["imageHeight"]) // factor}; _write_text_atomic(report_path, json.dumps(report, sort_keys=True) + "\n")
+                payload = make_overview(detailed_path.read_bytes(), factor); overview_path.parent.mkdir(parents=True, exist_ok=True); temporary = overview_path.with_suffix(".png.tmp"); temporary.write_bytes(payload); temporary.replace(overview_path); report = _overview_report(chunk, payload, factor, fingerprint); _write_text_atomic(report_path, json.dumps(report, sort_keys=True) + "\n")
             assert report is not None
             chunk.update({f"{prefix}Path": overview_path.relative_to(output).as_posix(), f"{prefix}Checksum": report["checksum"], f"{prefix}ImageWidth": report["imageWidth"], f"{prefix}ImageHeight": report["imageHeight"]})
     provenance = {"map": CANONICAL_WORLD_ROOT.joinpath("world.otbm").as_posix(), "worldRoot": CANONICAL_WORLD_ROOT.as_posix(), "npcDefinitionRoot": CANONICAL_NPC_ROOT.as_posix(), "monsterDefinitionRoot": CANONICAL_MONSTER_ROOT.as_posix(), "appearanceAssetRoot": CANONICAL_ASSET_ROOT.as_posix()}
