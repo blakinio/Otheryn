@@ -1,0 +1,35 @@
+name: Atlas Runner Path Probe One Shot
+
+on:
+  push:
+    branches:
+      - ops/atlas-runtime-after-copy-20260816
+    paths:
+      - .github/workflows/atlas-runner-path-probe-one-shot.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: [ots, synology]
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+      - name: Inspect runner-visible paths without mutation
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "${RUNNER_NAME:-}" == "synology-ots-01" ]]
+          echo "WORKSPACE=$GITHUB_WORKSPACE"
+          echo "WORKSPACE_EXISTS=$(test -d "$GITHUB_WORKSPACE" && echo true || echo false)"
+          echo "VOLUME1_DIRECT=$(test -d /volume1/docker && echo true || echo false)"
+          echo "OTERYN_CURRENT_DIRECT=$(test -f /volume1/docker/oteryn/atlas/current/manifest.json && echo true || echo false)"
+          echo "CANONICAL_ASSETS_IN_CHECKOUT=$(test -d vendor/map-analysis/tibia-client/15.25.bd5a04/assets && echo true || echo false)"
+          echo "CANONICAL_MAP_IN_CHECKOUT=$(test -f vendor/map-analysis/crystalserver/data-global/world/world.otbm && echo true || echo false)"
+          if [[ -d /volume1/docker ]]; then
+            stat -c 'VOLUME1_MODE=%A VOLUME1_OWNER=%u:%g' /volume1/docker
+          fi
