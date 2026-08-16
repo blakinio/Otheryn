@@ -302,6 +302,8 @@ def prepare_production_render_plan(
         invalid_state = True
 
     manifest = _read_json(output / "manifest.json")
+    manifest_sources = manifest.get("sources") if manifest and isinstance(manifest.get("sources"), Mapping) else None
+    source_matches = _same_source(manifest_sources, expected_sources)
     asset_state = collect_asset_state(asset_dir)
     render_digest = render_contract_digest(repository_root)
     full_reasons: set[str] = set()
@@ -320,15 +322,17 @@ def prepare_production_render_plan(
             full_reasons.add("GLOBAL_GUTTER_PROFILE_CHANGED")
         if int(previous.get("stateVersion", -1)) == PRODUCTION_STATE_VERSION and not isinstance(previous.get("detailFiles"), Mapping):
             full_reasons.add("PRODUCTION_DETAIL_STATE_INVALID")
-    elif manifest is not None and int(manifest.get("chunkSize", chunk_size)) != chunk_size:
-        full_reasons.add("CHUNK_SIZE_CHANGED")
+    elif manifest is not None:
+        if int(manifest.get("chunkSize", chunk_size)) != chunk_size:
+            full_reasons.add("CHUNK_SIZE_CHANGED")
+        if not source_matches:
+            full_reasons.add("UNBOUND_PUBLICATION_SOURCE_MISMATCH")
 
     if full_reasons and not allow_full_build:
         reasons = ", ".join(sorted(full_reasons))
         raise RuntimeError(f"full Atlas detail rebuild is required but not authorized: {reasons}; rerun explicitly with --allow-full-build")
 
-    manifest_sources = manifest.get("sources") if manifest and isinstance(manifest.get("sources"), Mapping) else None
-    legacy_adoption = previous is None and _same_source(manifest_sources, expected_sources)
+    legacy_adoption = previous is None and source_matches
     previous_spool_hashes = previous.get("spoolChunkHashes") if previous and isinstance(previous.get("spoolChunkHashes"), Mapping) else None
     stable_spool, spool_report = _prepare_spool(
         map_path,
