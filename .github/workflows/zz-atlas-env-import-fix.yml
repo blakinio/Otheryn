@@ -1,0 +1,31 @@
+name: Temporary Atlas Resume Import Fix
+on:
+  push:
+    branches: [blakinio/atlas-environment-animation-resume]
+    paths: [.github/workflows/zz-atlas-env-import-fix.yml]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          ref: blakinio/atlas-environment-animation-resume
+      - name: Fix renderer import and remove temporary workflow
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('tools/otbm_atlas/environment_animation_resume.py')
+          text=p.read_text(encoding='utf-8')
+          old='from .assets import AssetRenderer, encode_png'
+          new='from .assets import encode_png\nfrom .render import AssetRenderer'
+          if old not in text: raise SystemExit('expected import missing')
+          p.write_text(text.replace(old,new,1),encoding='utf-8',newline='\n')
+          PY
+          rm .github/workflows/zz-atlas-env-import-fix.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tools/otbm_atlas/environment_animation_resume.py .github/workflows/zz-atlas-env-import-fix.yml
+          git commit -m 'fix(atlas): import renderer from render module'
+          git push origin HEAD:blakinio/atlas-environment-animation-resume
