@@ -141,12 +141,18 @@ def render_selected_chunks_sharded(
     if shards <= 0:
         raise ValueError("shard count must be positive")
 
+    output.mkdir(parents=True, exist_ok=True)
+    final_manifest = output / "incremental-render.json"
+    shard_plan_path = output / "incremental-shard-plan.json"
+    final_manifest.unlink(missing_ok=True)
+    shard_plan_path.unlink(missing_ok=True)
+
     chunks = _ordered_chunks(chunk_keys)
     plan = build_shard_plan(spool_dir, chunks, shards)
-    write_json_atomic(output / "incremental-shard-plan.json", plan)
+    write_json_atomic(shard_plan_path, plan)
     if not chunks:
         manifest = {"schemaVersion": 1, "chunks": []}
-        write_json_atomic(output / "incremental-render.json", manifest)
+        write_json_atomic(final_manifest, manifest)
         return manifest
 
     scratch = output / ".shards"
@@ -216,7 +222,7 @@ def render_selected_chunks_sharded(
                 "executedShards": len(shard_records),
             },
         }
-        write_json_atomic(output / "incremental-render.json", manifest)
+        write_json_atomic(final_manifest, manifest)
         return manifest
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
