@@ -27,6 +27,8 @@ from .npc_sprites import enrich_npc_spawns
 from .monster_sprites import enrich_monster_spawns
 from .environment_animation_resume import enrich_environment_animations_resumable as enrich_environment_animations
 from .factual_layers import enrich_existing_atlas
+from .incremental_core import chunk_render_bounds as incremental_chunk_render_bounds, decode_tiles as incremental_decode_tiles
+from .production_incremental import commit_production_render_state, prepare_production_render_plan, remove_deleted_chunk_outputs
 
 SPOOL_VERSION = 1
 TILE_FACTS_VERSION = 1
@@ -187,7 +189,7 @@ def chunk_render_bounds(tiles: list[Tile], renderer: AssetRenderer) -> tuple[int
 
 
 def _write_rendered_chunk(path: Path, report_path: Path, spool_path: Path, fingerprint: str, renderer: AssetRenderer) -> dict[str, object]:
-	tiles = list(decode_tiles(spool_path)); bounds = chunk_render_bounds(tiles, renderer)
+	tiles = list(incremental_decode_tiles(spool_path)); bounds = incremental_chunk_render_bounds(tiles, renderer)
 	png, report = render_tiles(iter(tiles), renderer, bounds); path.parent.mkdir(parents=True, exist_ok=True)
 	temporary_png = path.with_suffix(path.suffix + ".tmp"); temporary_png.write_bytes(png); temporary_png.replace(path)
 	report["fingerprint"] = fingerprint; report["checksum"] = hashlib.sha256(png).hexdigest()
@@ -238,13 +240,13 @@ def spool_map(map_path: Path, spool_dir: Path, chunk_size: int) -> dict[str, int
 				if item.teleport_destination is not None: facts["teleports"].append({**base, "destination": asdict(item.teleport_destination)})
 				if item.house_door_id is not None: facts["houseDoors"].append({**base, "doorId": item.house_door_id, "houseId": record.house_id})
 	finally: pool.close(); tile_fact_pool.close()
-	metadata = {"version": SPOOL_VERSION, "tileFactsVersion": TILE_FACTS_VERSION, "chunkSize": chunk_size, "tiles": tiles}
+	metadata = {"schemaVersion": 1, "version": SPOOL_VERSION, "tileFactsVersion": TILE_FACTS_VERSION, "chunkSize": chunk_size, "tiles": tiles, "sourceSha256": _sha256(map_path)}
 	(spool_dir / "spool.json").write_text(json.dumps(metadata, sort_keys=True) + "\n", encoding="utf-8")
 	(spool_dir / "facts.json").write_text(json.dumps({"schemaVersion": 1, **facts}, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	return metadata
 
 
-def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int = 128, scripts_dir: Path | None = None, repository_root: Path = Path("."), workers: int = 1) -> dict[str, object]:
+def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int = 128, scripts_dir: Path | None = None, repository_root: Path = Path("."), workers: int = 1, allow_full_build: bool = False) -> dict[str, object]:
 	if chunk_size <= 0: raise ValueError("chunk size must be positive")
 	if workers <= 0: raise ValueError("workers must be positive")
 	canonical = canonical_source_paths(repository_root)
@@ -252,27 +254,31 @@ def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int =
 	_require_canonical_source(asset_dir, canonical["appearanceAssetRoot"], "appearance assets")
 	if scripts_dir is not None:
 		_require_canonical_source(scripts_dir, canonical["crystalDataRoot"], "CrystalServer data root")
-	spool_dir = output / ".spool"
 	map_sha, assets_sha = _sha256(map_path), _tree_sha256(asset_dir)
-	state_path = spool_dir / "source.json"
 	expected = {"mapSha256": map_sha, "assetsSha256": assets_sha, "chunkSize": chunk_size, "atlasVersion": ATLAS_VERSION, "tileFactsVersion": TILE_FACTS_VERSION}
-	if not state_path.exists() or json.loads(state_path.read_text()) != expected:
-		spool_map(map_path, spool_dir, chunk_size)
-		state_path.write_text(json.dumps(expected, sort_keys=True) + "\n", encoding="utf-8")
+	render_plan = prepare_production_render_plan(
+		map_path, asset_dir, output, repository_root, chunk_size, expected,
+		{"version": SPOOL_VERSION, "tileFactsVersion": TILE_FACTS_VERSION}, spool_map,
+		allow_full_build=allow_full_build,
+	)
+	spool_dir = Path(str(render_plan["spoolDir"]))
+	dirty_chunks = {str(value) for value in render_plan["dirtyDetailChunks"]}
+	fingerprints = {str(key): str(value) for key, value in dict(render_plan["chunkFingerprints"]).items()}
+	remove_deleted_chunk_outputs(output, [str(value) for value in render_plan["deletedDetailChunks"]])
 	renderer = AssetRenderer(asset_dir) if workers == 1 else None; chunks = []
 	entries: list[tuple[dict[str, object], tuple[str, str, str, str] | None]] = []
 	def chunk_order(value: Path) -> tuple[int, int, int]:
 		chunk_x, chunk_y = map(int, value.stem.split("_")); return int(value.parent.name[1:]), chunk_y, chunk_x
 	for path in sorted(spool_dir.glob("z*/*.bin"), key=chunk_order):
-		z = int(path.parent.name[1:]); chunk_x, chunk_y = map(int, path.stem.split("_"))
+		z = int(path.parent.name[1:]); chunk_x, chunk_y = map(int, path.stem.split("_")); chunk_text = f"z{z}/{chunk_x}_{chunk_y}"
 		logical_bounds = (chunk_x * chunk_size, chunk_x * chunk_size + chunk_size - 1, chunk_y * chunk_size, chunk_y * chunk_size + chunk_size - 1, z)
 		tile_path = output / "tiles" / f"z{z}" / f"{chunk_x}_{chunk_y}.png"
 		report_path = tile_path.with_suffix(".json")
-		fingerprint = hashlib.sha256((expected["mapSha256"] + expected["assetsSha256"] + str(ATLAS_VERSION) + _sha256(path)).encode()).hexdigest()
+		fingerprint = fingerprints[chunk_text]
 		cached_report = json.loads(report_path.read_text()) if report_path.exists() else {}
-		cache_valid = tile_path.exists() and cached_report.get("fingerprint") == fingerprint and cached_report.get("checksum") == _sha256(tile_path)
+		cache_valid = chunk_text not in dirty_chunks and tile_path.exists() and report_path.exists()
 		if cache_valid:
-			report = cached_report
+			report = {**cached_report, "fingerprint": fingerprint}
 			entries.append(({"z": z, "chunkX": chunk_x, "chunkY": chunk_y, "logicalBounds": list(logical_bounds), "path": tile_path.relative_to(output).as_posix(), **report}, None))
 		else:
 			metadata = {"z": z, "chunkX": chunk_x, "chunkY": chunk_y, "logicalBounds": list(logical_bounds), "path": tile_path.relative_to(output).as_posix()}
@@ -291,7 +297,7 @@ def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int =
 		for prefix, directory, factor in (("overview", "overview", OVERVIEW_FACTOR), ("lowOverview", "overview-low", LOW_OVERVIEW_FACTOR)):
 			overview_path = output / directory / f"z{chunk['z']}" / f"{chunk['chunkX']}_{chunk['chunkY']}.png"; fingerprint = hashlib.sha256(f"{OVERVIEW_VERSION}:{factor}:{chunk['checksum']}".encode()).hexdigest(); report_path = overview_path.with_suffix(".json")
 			report = json.loads(report_path.read_text()) if report_path.exists() else {}
-			if not (overview_path.exists() and report.get("fingerprint") == fingerprint and report.get("checksum") == _sha256(overview_path)):
+			if not (overview_path.exists() and report.get("fingerprint") == fingerprint and isinstance(report.get("checksum"), str)):
 				payload = make_overview(detailed_path.read_bytes(), factor); overview_path.parent.mkdir(parents=True, exist_ok=True); temporary = overview_path.with_suffix(".png.tmp"); temporary.write_bytes(payload); temporary.replace(overview_path)
 				report = {"fingerprint": fingerprint, "checksum": hashlib.sha256(payload).hexdigest(), "imageWidth": int(chunk["imageWidth"]) // factor, "imageHeight": int(chunk["imageHeight"]) // factor}; report_path.write_text(json.dumps(report, sort_keys=True) + "\n", encoding="utf-8")
 			chunk.update({f"{prefix}Path": overview_path.relative_to(output).as_posix(), f"{prefix}Checksum": report["checksum"], f"{prefix}ImageWidth": report["imageWidth"], f"{prefix}ImageHeight": report["imageHeight"]})
@@ -304,6 +310,8 @@ def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int =
 	}
 	manifest = {"schemaVersion": ATLAS_VERSION, "chunkSize": chunk_size, "tilePixels": 32, "overviewFactor": OVERVIEW_FACTOR, "lowOverviewFactor": LOW_OVERVIEW_FACTOR, "overviewVersion": OVERVIEW_VERSION, "chunks": chunks, "sources": expected, "provenance": provenance}
 	(output / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+	commit_production_render_state(output, render_plan)
+	(spool_dir / "source.json").write_text(json.dumps(expected, sort_keys=True) + "\n", encoding="utf-8")
 	data_dir = output / "data"; data_dir.mkdir(parents=True, exist_ok=True)
 	unknown_items: dict[int, dict[str, object]] = {}
 	for chunk in chunks:
@@ -333,6 +341,15 @@ def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int =
 		"teleports": len(mechanics["teleports"]), "houseTiles": len(mechanics["houseTiles"]), "houseDoors": len(mechanics["houseDoors"]),
 		"houses": houses["statistics"]["houses"], "towns": len(mechanics["towns"]), "waypoints": len(mechanics["waypoints"]),
 		**spawns["statistics"], "npcSprites": npc_sprite_statistics, "monsterSprites": monster_sprite_statistics, "mechanicsResolution": resolutions["statistics"], "unknownItems": unknown_report["statistics"], "provenance": provenance,
+	}
+	statistics["incrementalBuild"] = {
+		"dirtyDetailChunks": len(render_plan["dirtyDetailChunks"]),
+		"reusedDetailChunks": len(render_plan["reusedDetailChunks"]),
+		"deletedDetailChunks": len(render_plan["deletedDetailChunks"]),
+		"fullBuildRequired": render_plan["fullBuildRequired"],
+		"fullBuildReasons": render_plan["fullBuildReasons"],
+		"legacyPublicationAdopted": render_plan["legacyPublicationAdopted"],
+		"spool": render_plan["spool"],
 	}
 	(data_dir / "statistics.json").write_text(json.dumps(statistics, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	resolution_by_key = {(entry["kind"], int(entry["value"])): entry for entry in resolutions["resolutions"]}
@@ -367,8 +384,9 @@ def main() -> int:
 	parser.add_argument("--scripts", type=Path, default=None, help=argparse.SUPPRESS)
 	parser.add_argument("--repository", type=Path, default=Path("."))
 	parser.add_argument("--workers", type=int, default=1)
+	parser.add_argument("--allow-full-build", action="store_true", help="explicitly authorize a detail-wide rebuild when the incremental planner reports a global render transition")
 	args = parser.parse_args()
-	build_atlas(args.map, args.assets, args.output, args.chunk_size, args.scripts, args.repository, args.workers)
+	build_atlas(args.map, args.assets, args.output, args.chunk_size, args.scripts, args.repository, args.workers, args.allow_full_build)
 	return 0
 
 
