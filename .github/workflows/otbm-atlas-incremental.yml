@@ -40,6 +40,8 @@ jobs:
             tools/otbm_atlas/incremental_core.py \
             tools/otbm_atlas/incremental_state.py \
             tools/otbm_atlas/incremental_cached.py \
+            tools/otbm_atlas/incremental_shards.py \
+            tools/otbm_atlas/incremental_sharded.py \
             tools/otbm_atlas/domain_probe.py \
             tools/otbm_atlas/chunk_benchmark.py
       - name: Run focused incremental tests
@@ -47,6 +49,7 @@ jobs:
           python3 -m unittest \
             tools.otbm_atlas.tests.test_incremental \
             tools.otbm_atlas.tests.test_incremental_state \
+            tools.otbm_atlas.tests.test_incremental_shards \
             tools.otbm_atlas.tests.test_domain_probe \
             tools.otbm_atlas.tests.test_chunk_benchmark -v
 
@@ -160,16 +163,21 @@ jobs:
           Path('/tmp/atlas-dirty-count').write_text(str(len(detail)), encoding='utf-8')
           print(json.dumps({'dirtyDetailChunks': len(detail), 'overviewOnlyChunks': 0}, sort_keys=True))
           PY
-      - name: Execute exactly the planned dirty detail work
+      - name: Execute planned dirty detail work in process shards
         working-directory: target
         run: |
           dirty_count="$(cat /tmp/atlas-dirty-count)"
           if [ "$dirty_count" -gt 0 ]; then
-            python3 -m tools.otbm_atlas.incremental render \
+            workers="$(nproc)"
+            shards="$((workers * 4))"
+            echo "Atlas dirty render: chunks=${dirty_count} workers=${workers} shards=${shards}"
+            python3 -m tools.otbm_atlas.incremental_sharded \
               /tmp/atlas-impact-plan.json \
               --work /tmp/atlas-impact \
               --target-root . \
-              --output /tmp/atlas-dirty-render
+              --output /tmp/atlas-dirty-render \
+              --workers "$workers" \
+              --shards "$shards"
           else
             echo 'No detail chunks are dirty; rendered 0 chunks as planned.'
           fi
@@ -181,9 +189,13 @@ jobs:
           plan = json.loads(Path('/tmp/atlas-impact-plan.json').read_text(encoding='utf-8'))
           expected = sorted(plan['detail']['dirtyChunks'])
           render_manifest = Path('/tmp/atlas-dirty-render/incremental-render.json')
+          shard_plan = Path('/tmp/atlas-dirty-render/incremental-shard-plan.json')
           if expected:
               rendered = json.loads(render_manifest.read_text(encoding='utf-8'))
               actual = sorted(chunk['chunk'] for chunk in rendered['chunks'])
+              sharding = rendered.get('sharding', {})
+              assert int(sharding.get('workers', 0)) >= 1, sharding
+              assert shard_plan.is_file(), shard_plan
           else:
               if render_manifest.exists():
                   raise AssertionError('render manifest exists despite zero dirty detail chunks')
@@ -214,8 +226,11 @@ jobs:
                   'tools/otbm_atlas/incremental_core.py',
                   'tools/otbm_atlas/incremental_state.py',
                   'tools/otbm_atlas/incremental_cached.py',
+                  'tools/otbm_atlas/incremental_shards.py',
+                  'tools/otbm_atlas/incremental_sharded.py',
                   'tools/otbm_atlas/tests/test_incremental.py',
                   'tools/otbm_atlas/tests/test_incremental_state.py',
+                  'tools/otbm_atlas/tests/test_incremental_shards.py',
                   '.github/workflows/otbm-atlas-incremental.yml',
               } for path in paths)
           )
@@ -233,7 +248,7 @@ jobs:
         run: rm -rf /tmp/atlas-impact /tmp/atlas-dirty-render /tmp/atlas-impact-plan.json /tmp/atlas-domain-probe.json /tmp/atlas-dirty-count /tmp/atlas-changed-paths.txt
 
   representative-e2e:
-    name: Incremental pixel-equivalence E2E
+    name: Sharded incremental pixel-equivalence E2E
     needs: impact-plan
     if: needs.impact-plan.outputs.render_validation == 'true'
     runs-on: ubuntu-latest
@@ -244,7 +259,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-      - name: Build one real canonical chunk through the incremental path
+      - name: Build two real canonical chunks through the sharded path
         run: |
           python3 - <<'PY'
           import json
@@ -255,9 +270,9 @@ jobs:
               build_dependency_index,
               collect_asset_state,
               render_contract_digest,
-              render_selected_chunks,
               spool_map,
           )
+          from tools.otbm_atlas.incremental_shards import render_selected_chunks_sharded
           from tools.otbm_atlas.atlas import _write_rendered_chunk
 
           root = Path('.')
@@ -267,33 +282,41 @@ jobs:
           spool_map(root / WORLD_REL, spool, 128)
           dependencies = build_dependency_index(spool, root / ASSET_REL)
           assets = collect_asset_state(root / ASSET_REL)
-          chunk = 'z7/252_251'
-          assert chunk in dependencies['chunks'], chunk
-          result = render_selected_chunks(
+          chunks = [key for key in sorted(dependencies['chunks']) if key.startswith('z7/')][:2]
+          assert len(chunks) == 2, chunks
+          result = render_selected_chunks_sharded(
               spool,
               root / ASSET_REL,
               output,
-              [chunk],
+              chunks,
               dependencies,
               assets,
               render_contract_digest(root),
-              include_overviews=True,
+              workers=2,
+              shards=4,
           )
-          source_spool = spool / 'z7/252_251.bin'
-          legacy_png = legacy / 'tiles/z7/252_251.png'
-          legacy_report = legacy_png.with_suffix('.json')
           renderer = AssetRenderer(root / ASSET_REL)
-          _write_rendered_chunk(legacy_png, legacy_report, source_spool, 'equivalence-only', renderer)
-          incremental_png = output / 'tiles/z7/252_251.png'
-          assert incremental_png.read_bytes() == legacy_png.read_bytes()
-          assert result['chunks'][0]['checksum'] == json.loads(legacy_report.read_text(encoding='utf-8'))['checksum']
-          assert (output / 'overview/z7/252_251.png').is_file()
-          assert (output / 'overview-low/z7/252_251.png').is_file()
+          for chunk in chunks:
+              floor, stem = chunk.split('/', 1)
+              source_spool = spool / floor / f'{stem}.bin'
+              legacy_png = legacy / 'tiles' / floor / f'{stem}.png'
+              legacy_report = legacy_png.with_suffix('.json')
+              _write_rendered_chunk(legacy_png, legacy_report, source_spool, 'equivalence-only', renderer)
+              incremental_png = output / 'tiles' / floor / f'{stem}.png'
+              assert incremental_png.read_bytes() == legacy_png.read_bytes(), chunk
+              assert (output / 'overview' / floor / f'{stem}.png').is_file(), chunk
+              assert (output / 'overview-low' / floor / f'{stem}.png').is_file(), chunk
+          assert [row['chunk'] for row in result['chunks']] == chunks
+          assert result['sharding']['workers'] == 2
+          shard_plan = json.loads((output / 'incremental-shard-plan.json').read_text(encoding='utf-8'))
+          assert shard_plan['chunks'] == 2
+          assert len(shard_plan['shards']) == 2
           print(json.dumps({
-              'chunk': chunk,
-              'detailBytes': incremental_png.stat().st_size,
+              'chunks': chunks,
               'pixelEquivalence': 'PASS',
               'overviews': 'PASS',
+              'workers': result['sharding']['workers'],
+              'executedShards': result['sharding']['executedShards'],
           }, sort_keys=True))
           PY
       - name: Prove no generated render corpus is retained
