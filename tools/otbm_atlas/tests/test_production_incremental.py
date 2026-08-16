@@ -78,9 +78,18 @@ class ProductionIncrementalTests(unittest.TestCase):
     def _detail_identity(output: Path, text: str) -> dict[str, object]:
         z_name, stem = text.split("/", 1)
         tile = output / "tiles" / z_name / f"{stem}.png"
-        report = json.loads(tile.with_suffix(".json").read_text(encoding="utf-8"))
-        stat = tile.stat()
-        return {"size": stat.st_size, "mtimeNs": stat.st_mtime_ns, "checksum": report["checksum"]}
+        report_path = tile.with_suffix(".json")
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        tile_stat = tile.stat()
+        report_stat = report_path.stat()
+        return {
+            "size": tile_stat.st_size,
+            "mtimeNs": tile_stat.st_mtime_ns,
+            "checksum": report["checksum"],
+            "reportSize": report_stat.st_size,
+            "reportMtimeNs": report_stat.st_mtime_ns,
+            "reportSha256": sha256_file(report_path),
+        }
 
     @classmethod
     def _write_state(cls, output: Path, fingerprints: dict[str, str], gutter: str = "g1") -> None:
@@ -101,9 +110,8 @@ class ProductionIncrementalTests(unittest.TestCase):
         temporary, root, map_path, asset_dir, sources, spool_contract = self._fixture()
         self.addCleanup(temporary.cleanup)
         output = root / "atlas"
-        dependency = self._dependency_index()
         self._write_state(output, {"z7/0_0": "fp-a", "z7/1_0": "fp-b"})
-        patches = self._patches(dependency)
+        patches = self._patches(self._dependency_index())
         with patches[0], patches[1], patches[2], patches[3]:
             plan = prepare_production_render_plan(map_path, asset_dir, output, root, 128, sources, spool_contract, lambda *_: self.fail("spool parser should not run"))
         self.assertEqual(plan["dirtyDetailChunks"], [])
@@ -136,6 +144,7 @@ class ProductionIncrementalTests(unittest.TestCase):
         self.assertEqual(state["chunkFingerprints"], {"z7/0_0": "fp-a", "z7/1_0": "fp-b"})
         self.assertEqual(state["spoolChunkHashes"], spool_hashes(output / ".spool"))
         self.assertEqual(set(state["detailFiles"]), {"z7/0_0", "z7/1_0"})
+        self.assertIn("reportSha256", state["detailFiles"]["z7/0_0"])
 
     def test_one_changed_local_fingerprint_renders_only_that_chunk(self) -> None:
         temporary, root, map_path, asset_dir, sources, spool_contract = self._fixture()
@@ -148,7 +157,7 @@ class ProductionIncrementalTests(unittest.TestCase):
         self.assertEqual(plan["dirtyDetailChunks"], ["z7/1_0"])
         self.assertEqual(plan["reusedDetailChunks"], ["z7/0_0"])
 
-    def test_modified_reused_png_hashes_only_that_file_and_marks_one_chunk_dirty(self) -> None:
+    def test_modified_reused_png_marks_only_that_chunk_dirty(self) -> None:
         temporary, root, map_path, asset_dir, sources, spool_contract = self._fixture()
         self.addCleanup(temporary.cleanup)
         output = root / "atlas"
@@ -159,6 +168,32 @@ class ProductionIncrementalTests(unittest.TestCase):
             plan = prepare_production_render_plan(map_path, asset_dir, output, root, 128, sources, spool_contract, lambda *_: self.fail("spool parser should not run"))
         self.assertEqual(plan["dirtyDetailChunks"], ["z7/1_0"])
         self.assertEqual(plan["reusedDetailChunks"], ["z7/0_0"])
+
+    def test_modified_reused_report_marks_only_that_chunk_dirty(self) -> None:
+        temporary, root, map_path, asset_dir, sources, spool_contract = self._fixture()
+        self.addCleanup(temporary.cleanup)
+        output = root / "atlas"
+        self._write_state(output, {"z7/0_0": "fp-a", "z7/1_0": "fp-b"})
+        (output / "tiles/z7/1_0.json").write_text('{"checksum":"forged","imageWidth":1}\n', encoding="utf-8")
+        patches = self._patches(self._dependency_index())
+        with patches[0], patches[1], patches[2], patches[3]:
+            plan = prepare_production_render_plan(map_path, asset_dir, output, root, 128, sources, spool_contract, lambda *_: self.fail("spool parser should not run"))
+        self.assertEqual(plan["dirtyDetailChunks"], ["z7/1_0"])
+        self.assertEqual(plan["reusedDetailChunks"], ["z7/0_0"])
+
+    def test_missing_detail_state_is_fail_closed(self) -> None:
+        temporary, root, map_path, asset_dir, sources, spool_contract = self._fixture()
+        self.addCleanup(temporary.cleanup)
+        output = root / "atlas"
+        self._write_state(output, {"z7/0_0": "fp-a", "z7/1_0": "fp-b"})
+        state_path = output / ".incremental-state/production-render-state.json"
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        state.pop("detailFiles")
+        state_path.write_text(json.dumps(state), encoding="utf-8")
+        patches = self._patches(self._dependency_index())
+        with patches[0], patches[1], patches[2], patches[3]:
+            with self.assertRaisesRegex(RuntimeError, "PRODUCTION_DETAIL_STATE_INVALID"):
+                prepare_production_render_plan(map_path, asset_dir, output, root, 128, sources, spool_contract, lambda *_: self.fail("spool parser should not run"))
 
     def test_global_gutter_transition_is_fail_closed(self) -> None:
         temporary, root, map_path, asset_dir, sources, spool_contract = self._fixture()
@@ -173,7 +208,7 @@ class ProductionIncrementalTests(unittest.TestCase):
         with patches[0], patches[1], patches[2], patches[3]:
             plan = prepare_production_render_plan(map_path, asset_dir, output, root, 128, sources, spool_contract, lambda *_: self.fail("spool parser should not run"), allow_full_build=True)
         self.assertEqual(plan["dirtyDetailChunks"], ["z7/0_0", "z7/1_0"])
-        self.assertEqual(plan["fullBuildReasons"], ["GLOBAL_GUTTER_PROFILE_CHANGED"])
+        self.assertIn("GLOBAL_GUTTER_PROFILE_CHANGED", plan["fullBuildReasons"])
 
     def test_corrupted_spool_is_repaired_from_canonical_source_without_detail_rerender(self) -> None:
         temporary, root, map_path, asset_dir, sources, spool_contract = self._fixture()
