@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
+from tools.otbm_atlas.incremental_sharded import execute
 from tools.otbm_atlas.incremental_shards import build_shard_plan, render_selected_chunks_sharded
 
 
@@ -108,6 +110,37 @@ class IncrementalShardPlanTests(unittest.TestCase):
                 )
             self.assertFalse(success.exists())
             self.assertFalse((output / "incremental-shard-plan.json").exists())
+
+    def test_command_caps_requested_shards_to_worker_count(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            work = root / "work"
+            work.mkdir()
+            (work / "dependency-index.json").write_text("{}\n", encoding="utf-8")
+            (work / "asset-state.json").write_text("{}\n", encoding="utf-8")
+            plan = root / "plan.json"
+            plan.write_text(
+                json.dumps(
+                    {
+                        "fullBuildRequired": False,
+                        "fullBuildReasons": [],
+                        "detail": {"dirtyChunks": []},
+                        "overview": {"dirtyChunks": []},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            result = execute(
+                plan,
+                work,
+                root,
+                root / "output",
+                workers=4,
+                shards=64,
+            )
+            self.assertEqual(result["requestedShards"], 64)
+            self.assertEqual(result["effectiveShards"], 4)
 
 
 if __name__ == "__main__":
