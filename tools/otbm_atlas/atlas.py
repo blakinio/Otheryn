@@ -25,7 +25,7 @@ from .spatial import write_spatial_data
 from .tile_inspector import write_tile_inspector_data
 from .npc_sprites import enrich_npc_spawns
 from .monster_sprites import enrich_monster_spawns
-from .environment_animation import enrich_environment_animations
+from .environment_animation_resume import enrich_environment_animations_resumable as enrich_environment_animations
 from .factual_layers import enrich_existing_atlas
 
 SPOOL_VERSION = 1

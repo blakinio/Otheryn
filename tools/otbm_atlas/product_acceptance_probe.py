@@ -206,6 +206,8 @@ def run(base_url: str, output: Path, *, ignore_https_errors: bool = False) -> di
         mpage.goto(center_url, wait_until="networkidle")
         mpage.wait_for_function("document.querySelector('#status')?.textContent.includes('Drag to pan')")
         responsive = mpage.locator(".top").is_visible() and mpage.locator(".controls").is_visible() and mpage.locator("#tileInspector").is_visible()
+        mobile_no_overflow = mpage.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+        mobile_layer_controls = mpage.locator('[data-overlay="npcSpawns"]').is_visible()
         session = mobile.new_cdp_session(mpage)
         touch_before = mpage.url
         _touch_event(session, "touchStart", [(195, 420)])
@@ -231,8 +233,10 @@ def run(base_url: str, output: Path, *, ignore_https_errors: bool = False) -> di
         touch_ids_ok = all(expected in touch_text for expected in _expected_inspector_lines(record))
         touch_non_mutating = mpage.url == tap_before_url and mpage.locator("#details").is_hidden()
         results["mobile_touch"] = {
-            "status": "PASS" if responsive and pan_url != touch_before and pinch_url != pinch_before and touch_ids_ok and touch_non_mutating else "FAIL",
+            "status": "PASS" if responsive and mobile_no_overflow and mobile_layer_controls and pan_url != touch_before and pinch_url != pinch_before and touch_ids_ok and touch_non_mutating else "FAIL",
             "responsive": responsive,
+            "noHorizontalOverflow": mobile_no_overflow,
+            "layerControlsVisible": mobile_layer_controls,
             "panChanged": pan_url != touch_before,
             "pinchChanged": pinch_url != pinch_before,
             "tapInspector": touch_ids_ok,
