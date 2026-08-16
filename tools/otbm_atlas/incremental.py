@@ -8,11 +8,14 @@ back to a canonical full-world render.
 from __future__ import annotations
 
 import argparse
+import ast
 from collections.abc import Iterable, Mapping
+import hashlib
 import json
 from pathlib import Path
 
 from .incremental_core import (
+    RENDER_CORE_VERSION,
     ChunkKey,
     asset_impact,
     build_content_addressed_manifest,
@@ -36,6 +39,23 @@ WORLD_REL = Path("vendor/map-analysis/crystalserver/data-global/world/world.otbm
 ASSET_REL = Path("vendor/map-analysis/tibia-client/15.25.bd5a04/assets")
 PLAN_VERSION = 1
 DEFAULT_CHUNK_SIZE = 128
+_RENDER_SOURCE_PATHS = {
+    "tools/otbm_atlas/render.py",
+    "tools/otbm_atlas/assets.py",
+    "tools/otbm_atlas/semantic.py",
+    "tools/otbm_atlas/overview.py",
+}
+_RENDER_CORE_FUNCTIONS = {
+    "encode_tile",
+    "decode_tiles",
+    "_dependency_ids_for_tile",
+    "build_dependency_index",
+    "collect_asset_state",
+    "asset_impact",
+    "detail_fingerprint",
+    "chunk_render_bounds",
+    "render_selected_chunks",
+}
 
 
 def _sorted_chunks(values: Iterable[str]) -> list[str]:
@@ -52,6 +72,8 @@ def classify_changed_paths(paths: Iterable[str]) -> dict[str, object]:
             domains.add("renderAssets")
         if path.startswith("vendor/map-analysis/crystalserver/data-global/world/") and (path.endswith("-monster.xml") or path.endswith("-npc.xml")):
             domains.add("spawns")
+        if path.endswith("world-house.xml") or "/houses" in path:
+            domains.add("houses")
         if path.startswith("vendor/map-analysis/crystalserver/data-global/npc/"):
             domains.add("npcDefinitions")
         if path.startswith("vendor/map-analysis/crystalserver/data-global/monster/"):
@@ -62,6 +84,12 @@ def classify_changed_paths(paths: Iterable[str]) -> dict[str, object]:
             domains.add("factualData")
         if path.startswith("tools/otbm_atlas/") and ("viewer" in path or path.endswith("_runtime.js") or path.endswith(".css")):
             domains.add("frontend")
+        if path in {
+            "tools/otbm_atlas/incremental.py",
+            "tools/otbm_atlas/incremental_core.py",
+            "tools/otbm_atlas/chunk_benchmark.py",
+        }:
+            domains.add("incrementalInfra")
         if path.startswith(".github/workflows/"):
             domains.add("ci")
         if path.startswith("docs/") or path.endswith(".md"):
@@ -69,6 +97,71 @@ def classify_changed_paths(paths: Iterable[str]) -> dict[str, object]:
     if not domains:
         domains.add("unclassified")
     return {"changedPaths": normalized, "domains": sorted(domains)}
+
+
+def _render_core_contract(repository_root: Path) -> dict[str, object]:
+    """Return the version and AST digest of render-sensitive incremental functions.
+
+    A missing file is expected only for the one-time bootstrap from the legacy
+    Atlas. Once the incremental core exists on both refs, semantic edits to the
+    selected functions must bump ``RENDER_CORE_VERSION`` or CI fails closed.
+    """
+    path = repository_root / "tools/otbm_atlas/incremental_core.py"
+    if not path.is_file():
+        return {"present": False, "version": RENDER_CORE_VERSION, "semanticDigest": None}
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=path.as_posix())
+    version: int | None = None
+    selected: list[ast.AST] = []
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id == "RENDER_CORE_VERSION":
+                    if not isinstance(node.value, ast.Constant) or not isinstance(node.value.value, int):
+                        raise ValueError("RENDER_CORE_VERSION must be an integer literal")
+                    version = int(node.value.value)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in _RENDER_CORE_FUNCTIONS:
+            selected.append(node)
+    missing = sorted(_RENDER_CORE_FUNCTIONS - {node.name for node in selected if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))})
+    if missing:
+        raise ValueError(f"incremental render-core contract functions missing: {missing}")
+    if version is None:
+        raise ValueError("incremental core does not declare RENDER_CORE_VERSION")
+    digest = hashlib.sha256(ast.dump(ast.Module(body=selected, type_ignores=[]), include_attributes=False).encode("utf-8")).hexdigest()
+    return {"present": True, "version": version, "semanticDigest": digest}
+
+
+def _render_core_transition_reasons(base_root: Path, target_root: Path) -> list[str]:
+    base = _render_core_contract(base_root)
+    target = _render_core_contract(target_root)
+    if not base["present"] and target["present"]:
+        return []  # one-time bootstrap; legacy renderer equivalence is proven separately
+    if base["present"] and not target["present"]:
+        return ["RENDER_CORE_REMOVED"]
+    if not base["present"] and not target["present"]:
+        return []
+    if base["semanticDigest"] == target["semanticDigest"]:
+        return []
+    if base["version"] == target["version"]:
+        return ["RENDER_CORE_SEMANTICS_CHANGED_WITHOUT_VERSION_BUMP"]
+    return ["RENDER_CORE_VERSION_CHANGED"]
+
+
+def _paths_require_render_scan(paths: Iterable[str], additional_full_reasons: Iterable[str]) -> bool:
+    normalized = {path.replace("\\", "/") for path in paths}
+    if not normalized:
+        return True
+    if any(additional_full_reasons):
+        return True
+    for path in normalized:
+        if path.endswith("world.otbm") or path.startswith("vendor/map-analysis/tibia-client/") or path in _RENDER_SOURCE_PATHS:
+            return True
+    return False
+
+
+def _rehash_plan(plan: dict[str, object]) -> dict[str, object]:
+    plan.pop("planDigest", None)
+    plan["planDigest"] = sha256_bytes(canonical_json(plan))
+    return plan
 
 
 def plan_from_states(
@@ -83,13 +176,14 @@ def plan_from_states(
     target_overview_digest: str,
     *,
     changed_paths: Iterable[str] = (),
+    additional_full_reasons: Iterable[str] = (),
 ) -> dict[str, object]:
     added = set(target_spool) - set(base_spool)
     deleted = set(base_spool) - set(target_spool)
     map_changed = {key for key in set(base_spool) & set(target_spool) if base_spool[key] != target_spool[key]}
     assets = asset_impact(base_assets, target_assets, dependency_index)
     all_target = set(target_spool)
-    full_reasons = list(assets.get("globalReasons", []))
+    full_reasons = list(assets.get("globalReasons", [])) + list(additional_full_reasons)
     if base_render_digest != target_render_digest:
         full_reasons.append("RENDER_CONTRACT_CHANGED")
 
@@ -107,6 +201,7 @@ def plan_from_states(
         "classification": classification,
         "fullBuildRequired": bool(full_reasons),
         "fullBuildReasons": sorted(set(full_reasons)),
+        "renderScanSkipped": False,
         "map": {
             "addedChunks": _sorted_chunks(added),
             "changedChunks": _sorted_chunks(map_changed),
@@ -124,13 +219,13 @@ def plan_from_states(
         },
         "dataDomains": {
             "spawns": any(value in classification["domains"] for value in ("spawns", "npcDefinitions", "monsterDefinitions")),
+            "houses": "houses" in classification["domains"],
             "mechanics": "mechanics" in classification["domains"],
             "factualData": "factualData" in classification["domains"],
             "frontend": "frontend" in classification["domains"],
         },
     }
-    result["planDigest"] = sha256_bytes(canonical_json(result))
-    return result
+    return _rehash_plan(result)
 
 
 def _prepare_spools(base_root: Path, target_root: Path, work: Path, chunk_size: int) -> tuple[dict[str, str], dict[str, str], Path]:
@@ -149,23 +244,51 @@ def _prepare_spools(base_root: Path, target_root: Path, work: Path, chunk_size: 
 def build_plan(base_root: Path, target_root: Path, work: Path, *, chunk_size: int = DEFAULT_CHUNK_SIZE, changed_paths: Iterable[str] = ()) -> tuple[dict[str, object], dict[str, object], dict[str, object], Path]:
     base_root = base_root.resolve()
     target_root = target_root.resolve()
+    changed = list(changed_paths)
     work.mkdir(parents=True, exist_ok=True)
-    base_hashes, target_hashes, target_spool_dir = _prepare_spools(base_root, target_root, work, chunk_size)
-    dependency_index = build_dependency_index(target_spool_dir, target_root / ASSET_REL)
-    base_assets = collect_asset_state(base_root / ASSET_REL)
-    target_assets = collect_asset_state(target_root / ASSET_REL)
-    plan = plan_from_states(
-        base_hashes,
-        target_hashes,
-        dependency_index,
-        base_assets,
-        target_assets,
-        render_contract_digest(base_root),
-        render_contract_digest(target_root),
-        overview_contract_digest(base_root),
-        overview_contract_digest(target_root),
-        changed_paths=changed_paths,
-    )
+    core_reasons = _render_core_transition_reasons(base_root, target_root)
+    render_scan = _paths_require_render_scan(changed, core_reasons)
+    target_spool_dir = work / "target-spool"
+
+    if render_scan:
+        base_hashes, target_hashes, target_spool_dir = _prepare_spools(base_root, target_root, work, chunk_size)
+        dependency_index = build_dependency_index(target_spool_dir, target_root / ASSET_REL)
+        base_assets = collect_asset_state(base_root / ASSET_REL)
+        target_assets = collect_asset_state(target_root / ASSET_REL)
+        plan = plan_from_states(
+            base_hashes,
+            target_hashes,
+            dependency_index,
+            base_assets,
+            target_assets,
+            render_contract_digest(base_root),
+            render_contract_digest(target_root),
+            overview_contract_digest(base_root),
+            overview_contract_digest(target_root),
+            changed_paths=changed,
+            additional_full_reasons=core_reasons,
+        )
+    else:
+        dependency_index = {"schemaVersion": 1, "chunkSize": chunk_size, "chunks": {}, "appearanceToChunks": {}, "spriteToChunks": {}}
+        target_assets = {"schemaVersion": 1, "appearanceDigests": {}, "sheets": [], "gutterProfile": {}}
+        plan = plan_from_states(
+            {},
+            {},
+            dependency_index,
+            target_assets,
+            target_assets,
+            render_contract_digest(base_root),
+            render_contract_digest(target_root),
+            overview_contract_digest(base_root),
+            overview_contract_digest(target_root),
+            changed_paths=changed,
+            additional_full_reasons=core_reasons,
+        )
+        plan["renderScanSkipped"] = True
+        plan["renderScanReason"] = "NO_RENDER_INPUT_CHANGE"
+        plan["detail"]["totalTargetChunks"] = None
+        _rehash_plan(plan)
+
     write_json_atomic(work / "dependency-index.json", dependency_index)
     write_json_atomic(work / "asset-state.json", target_assets)
     write_json_atomic(work / "impact-plan.json", plan)
@@ -327,7 +450,8 @@ def main() -> int:
         overview = plan.get("overview", {})
         dirty_detail = {str(value) for value in detail.get("dirtyChunks", [])} if isinstance(detail, Mapping) else set()
         dirty_overview = {str(value) for value in overview.get("dirtyChunks", [])} if isinstance(overview, Mapping) else set()
-        render_selected_chunks(args.work / "target-spool", args.target_root / ASSET_REL, args.output, dirty_detail, deps, assets, render_contract_digest(args.target_root))
+        if dirty_detail:
+            render_selected_chunks(args.work / "target-spool", args.target_root / ASSET_REL, args.output, dirty_detail, deps, assets, render_contract_digest(args.target_root))
         overview_only = dirty_overview - dirty_detail
         if overview_only:
             if args.detail_source is None:
