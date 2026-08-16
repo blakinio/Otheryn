@@ -26,9 +26,9 @@ from .incremental_core import (
 )
 from .incremental_state import prepare_dependency_index
 
-# v2 additionally binds every reused detail image to cheap stat metadata plus
-# the renderer-provided checksum. Ordinary runs do not hash the complete image
-# corpus; only a file whose stat changed is hashed against the stored checksum.
+# v2 binds every reused detail image and its small render report to cheap stat
+# metadata plus known checksums. Ordinary runs do not hash the complete image
+# corpus; a large PNG is hashed only when its stat metadata changed.
 PRODUCTION_STATE_VERSION = 2
 
 SpoolBuilder = Callable[[Path, Path, int], Mapping[str, object]]
@@ -230,8 +230,16 @@ def _detail_output_identity(output: Path, chunk_text: str) -> dict[str, object] 
     checksum = report.get("checksum") if report else None
     if not isinstance(checksum, str):
         checksum = sha256_file(tile)
-    stat = tile.stat()
-    return {"size": stat.st_size, "mtimeNs": stat.st_mtime_ns, "checksum": checksum}
+    tile_stat = tile.stat()
+    report_stat = report_path.stat()
+    return {
+        "size": tile_stat.st_size,
+        "mtimeNs": tile_stat.st_mtime_ns,
+        "checksum": checksum,
+        "reportSize": report_stat.st_size,
+        "reportMtimeNs": report_stat.st_mtime_ns,
+        "reportSha256": sha256_file(report_path),
+    }
 
 
 def _detail_output_reusable(output: Path, chunk_text: str, previous_detail_files: Mapping[str, object] | None) -> bool:
@@ -243,13 +251,19 @@ def _detail_output_reusable(output: Path, chunk_text: str, previous_detail_files
     previous = previous_detail_files.get(chunk_text)
     if not isinstance(previous, Mapping):
         return False
-    expected_size = previous.get("size")
-    expected_mtime = previous.get("mtimeNs")
-    expected_checksum = previous.get("checksum")
-    stat = tile.stat()
-    if expected_size == stat.st_size and expected_mtime == stat.st_mtime_ns:
-        return True
-    return isinstance(expected_checksum, str) and sha256_file(tile) == expected_checksum
+
+    tile_stat = tile.stat()
+    tile_unchanged = previous.get("size") == tile_stat.st_size and previous.get("mtimeNs") == tile_stat.st_mtime_ns
+    if not tile_unchanged:
+        expected_checksum = previous.get("checksum")
+        tile_unchanged = isinstance(expected_checksum, str) and sha256_file(tile) == expected_checksum
+
+    report_stat = report_path.stat()
+    report_unchanged = previous.get("reportSize") == report_stat.st_size and previous.get("reportMtimeNs") == report_stat.st_mtime_ns
+    if not report_unchanged:
+        expected_report = previous.get("reportSha256")
+        report_unchanged = isinstance(expected_report, str) and sha256_file(report_path) == expected_report
+    return tile_unchanged and report_unchanged
 
 
 def remove_deleted_chunk_outputs(output: Path, chunk_keys: list[str]) -> None:
@@ -304,6 +318,8 @@ def prepare_production_render_plan(
             full_reasons.add("RENDER_CONTRACT_CHANGED")
         if previous.get("gutterProfile") != asset_state.get("gutterProfile"):
             full_reasons.add("GLOBAL_GUTTER_PROFILE_CHANGED")
+        if int(previous.get("stateVersion", -1)) == PRODUCTION_STATE_VERSION and not isinstance(previous.get("detailFiles"), Mapping):
+            full_reasons.add("PRODUCTION_DETAIL_STATE_INVALID")
     elif manifest is not None and int(manifest.get("chunkSize", chunk_size)) != chunk_size:
         full_reasons.add("CHUNK_SIZE_CHANGED")
 
