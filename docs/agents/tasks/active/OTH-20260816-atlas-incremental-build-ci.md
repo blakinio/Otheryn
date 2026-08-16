@@ -5,13 +5,14 @@ owner: chat-github-atlas-incremental
 branch: perf/OTH-20260816-atlas-incremental-build
 base_branch: main
 created: "2026-08-16T10:04:00+02:00"
-updated: "2026-08-16T10:04:00+02:00"
+updated: "2026-08-16T10:09:00+02:00"
 project_lane: otheryn-content
 execution_mode: chat-github
 related_pr: ""
 ownership_released: false
 owned_paths:
   - tools/otbm_atlas/incremental.py
+  - tools/otbm_atlas/incremental_core.py
   - tools/otbm_atlas/chunk_benchmark.py
   - tools/otbm_atlas/tests/test_incremental.py
   - tools/otbm_atlas/tests/test_chunk_benchmark.py
@@ -83,7 +84,7 @@ Do not edit paths currently owned by PRs #417, #418, #419 or #420 while those ta
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-08-16T10:04:00+02:00
+updated_at: 2026-08-16T10:09:00+02:00
 phase: implement
 session_id: chat-github-atlas-incremental-20260816
 session_role: implementer
@@ -96,9 +97,10 @@ validation_level: focused
 branch: perf/OTH-20260816-atlas-incremental-build
 pr: none
 status: implementing
-head: 39cb2ce4ff427e7c3760eb6112b45efc0c1f73b8
+head: 652bd61440ab390110929cdfd627cbfd343fc202
 owned_paths:
   - tools/otbm_atlas/incremental.py
+  - tools/otbm_atlas/incremental_core.py
   - tools/otbm_atlas/chunk_benchmark.py
   - tools/otbm_atlas/tests/test_incremental.py
   - tools/otbm_atlas/tests/test_chunk_benchmark.py
