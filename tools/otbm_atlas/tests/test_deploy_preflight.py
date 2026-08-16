@@ -50,6 +50,9 @@ class DeployPreflightTests(unittest.TestCase):
             json.dumps({"npcSpawns": [], "monsterSpawns": [], "statistics": {}}),
             encoding="utf-8",
         )
+        inspector = root / "data/tile-inspector"
+        inspector.mkdir(parents=True)
+        (inspector / "index.json").write_text(json.dumps({"schemaVersion": 1, "chunkSize": 128, "statistics": {"shards": 0, "tiles": 0, "topLevelStackItems": 0, "attributesResolved": 0, "attributesAmbiguousOmitted": 0, "bytes": 0}}), encoding="utf-8")
         if environment:
             directory = root / "data/environment-animations"
             directory.mkdir(parents=True)
@@ -100,6 +103,23 @@ class DeployPreflightTests(unittest.TestCase):
         self.assertEqual("NOT_READY", report["status"])
         self.assertEqual("NOT_CURRENT", report["viewer"]["status"])
         self.assertTrue(any("viewer-app.js" in error for error in report["errors"]))
+
+    def test_missing_product_runtime_is_rejected(self) -> None:
+        root = self.make_fixture()
+        (root / "tile-inspector-runtime.js").unlink()
+        report = deployment_preflight(root, verify_chunks=False)
+        self.assertEqual("NOT_READY", report["status"])
+        self.assertTrue(any("tile-inspector-runtime.js" in error for error in report["errors"]))
+
+    def test_tile_inspector_statistics_mismatch_is_rejected(self) -> None:
+        root = self.make_fixture()
+        index_path = root / "data/tile-inspector/index.json"
+        value = json.loads(index_path.read_text(encoding="utf-8"))
+        value["statistics"]["tiles"] = 1
+        index_path.write_text(json.dumps(value), encoding="utf-8")
+        report = deployment_preflight(root, verify_chunks=False)
+        self.assertEqual("NOT_READY", report["status"])
+        self.assertEqual("INVALID", report["tileInspector"]["status"])
 
     def test_invalid_environment_index_stays_core_preview_only(self) -> None:
         root = self.make_fixture()

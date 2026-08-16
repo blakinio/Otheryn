@@ -23,10 +23,13 @@ REQUIRED_VIEWER_FILES = (
     "viewer-app.js",
     "viewer-runtime.js",
     "creature-animation-runtime.js",
+    "tile-inspector-runtime.js",
+    "accessibility-runtime.js",
     "manifest.json",
     "data/search-index.json",
     "data/statistics.json",
     "data/spawns.json",
+    "data/tile-inspector/index.json",
 )
 
 
@@ -41,6 +44,8 @@ def _expected_viewer_bytes() -> dict[str, bytes]:
         "viewer-app.js": (source / "viewer_app.js").read_bytes(),
         "viewer-runtime.js": (source / "viewer_runtime.js").read_bytes(),
         "creature-animation-runtime.js": (source / "creature_animation_runtime.js").read_bytes(),
+        "tile-inspector-runtime.js": (source / "tile_inspector_runtime.js").read_bytes(),
+        "accessibility-runtime.js": (source / "accessibility_runtime.js").read_bytes(),
     }
 
 
@@ -113,6 +118,62 @@ def _validate_spatial(root: Path, errors: list[str]) -> dict[str, Any]:
         }
     except (OSError, TypeError, ValueError, json.JSONDecodeError) as error:
         errors.append(f"spatial data cannot be validated: {error}")
+        return {"status": "INVALID", "error": str(error)}
+
+
+def _validate_tile_inspector(root: Path, errors: list[str]) -> dict[str, Any]:
+    index_path = root / "data/tile-inspector/index.json"
+    if not index_path.is_file():
+        return {"status": "MISSING"}
+    try:
+        index = _read_json(index_path)
+        if not isinstance(index, dict) or index.get("schemaVersion") != 1 or index.get("chunkSize") != 128:
+            errors.append("tile-inspector index must be schemaVersion 1 / chunkSize 128")
+            return {"status": "INVALID"}
+        shard_paths = sorted((root / "data/tile-inspector").glob("z*/*.json"))
+        tiles = stack_items = invalid_shards = 0
+        for path in shard_paths:
+            try:
+                shard = _read_json(path)
+                records = shard.get("records", []) if isinstance(shard, dict) else []
+                if shard.get("schemaVersion") != 1 or not isinstance(records, list):
+                    invalid_shards += 1
+                    continue
+                for record in records:
+                    if not isinstance(record, dict) or not all(key in record for key in ("x", "y", "z", "ground", "items")) or not isinstance(record.get("items"), list):
+                        invalid_shards += 1
+                        break
+                    ground = record.get("ground")
+                    if ground is not None and (not isinstance(ground, dict) or "serverId" not in ground):
+                        invalid_shards += 1
+                        break
+                    if any(not isinstance(item, dict) or "serverId" not in item for item in record["items"]):
+                        invalid_shards += 1
+                        break
+                    tiles += 1
+                    stack_items += len(record["items"])
+            except (OSError, TypeError, json.JSONDecodeError):
+                invalid_shards += 1
+        statistics = index.get("statistics", {}) if isinstance(index.get("statistics"), dict) else {}
+        if int(statistics.get("shards", -1)) != len(shard_paths):
+            errors.append(f"tile-inspector shard count differs: disk={len(shard_paths)} index={statistics.get('shards')}")
+        if int(statistics.get("tiles", -1)) != tiles:
+            errors.append(f"tile-inspector tile count differs: disk={tiles} index={statistics.get('tiles')}")
+        if int(statistics.get("topLevelStackItems", -1)) != stack_items:
+            errors.append(f"tile-inspector stack-item count differs: disk={stack_items} index={statistics.get('topLevelStackItems')}")
+        if invalid_shards:
+            errors.append(f"{invalid_shards} tile-inspector shards are invalid")
+        return {
+            "status": "READY" if not invalid_shards and int(statistics.get("shards", -1)) == len(shard_paths) and int(statistics.get("tiles", -1)) == tiles and int(statistics.get("topLevelStackItems", -1)) == stack_items else "INVALID",
+            "shards": len(shard_paths),
+            "tiles": tiles,
+            "topLevelStackItems": stack_items,
+            "invalidShards": invalid_shards,
+            "attributesResolved": statistics.get("attributesResolved", 0),
+            "attributesAmbiguousOmitted": statistics.get("attributesAmbiguousOmitted", 0),
+        }
+    except (OSError, TypeError, ValueError, json.JSONDecodeError) as error:
+        errors.append(f"tile-inspector data cannot be validated: {error}")
         return {"status": "INVALID", "error": str(error)}
 
 
@@ -252,6 +313,7 @@ def deployment_preflight(root: Path, *, verify_chunks: bool = True, require_envi
             errors.append(f"atlas verification failed: {error}")
 
     spatial = _validate_spatial(root, errors)
+    tile_inspector = _validate_tile_inspector(root, errors)
 
     creatures: dict[str, Any] = {"status": "UNKNOWN"}
     spawns_path = root / "data/spawns.json"
@@ -312,6 +374,7 @@ def deployment_preflight(root: Path, *, verify_chunks: bool = True, require_envi
         "identity": identity,
         "viewer": viewer,
         "spatial": spatial,
+        "tileInspector": tile_inspector,
         "creatures": creatures,
         "environmentAnimations": environment,
         "verification": verification,

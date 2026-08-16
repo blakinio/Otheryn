@@ -1,0 +1,58 @@
+name: Temporary Atlas 419 Rebase Fix
+on:
+  push:
+    branches: [blakinio/atlas-product-completion]
+    paths:
+      - .github/workflows/zz-atlas-419-rebase-fix.yml
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          ref: blakinio/atlas-product-completion
+      - name: Reconcile merged Atlas behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('tools/otbm_atlas/atlas.py')
+          text = p.read_text(encoding='utf-8')
+          old = 'from .environment_animation import enrich_environment_animations'
+          new = 'from .environment_animation_resume import enrich_environment_animations_resumable as enrich_environment_animations'
+          if old not in text:
+              raise SystemExit('environment animation import marker missing')
+          p.write_text(text.replace(old, new, 1), encoding='utf-8', newline='\n')
+
+          p = Path('tools/otbm_atlas/viewer.py')
+          text = p.read_text(encoding='utf-8')
+          old = '.controls{top:112px}.controls .layers{display:none}'
+          new = '.controls{top:112px;right:12px;max-width:none}.controls>div:not(.layers){display:flex;gap:4px;flex-wrap:wrap}.controls input[type=number]{width:84px;min-width:0}'
+          if old not in text:
+              raise SystemExit('mobile controls marker missing')
+          p.write_text(text.replace(old, new, 1), encoding='utf-8', newline='\n')
+
+          p = Path('tools/otbm_atlas/product_acceptance_probe.py')
+          text = p.read_text(encoding='utf-8')
+          old = '''        responsive = mpage.locator(".top").is_visible() and mpage.locator(".controls").is_visible() and mpage.locator("#tileInspector").is_visible()\n'''
+          new = '''        responsive = mpage.locator(".top").is_visible() and mpage.locator(".controls").is_visible() and mpage.locator("#tileInspector").is_visible()\n        mobile_no_overflow = mpage.evaluate("document.documentElement.scrollWidth <= window.innerWidth")\n        mobile_layer_controls = mpage.locator('[data-overlay="npcSpawns"]').is_visible()\n'''
+          if old not in text:
+              raise SystemExit('mobile responsive marker missing')
+          text = text.replace(old, new, 1)
+          old = '''            "status": "PASS" if responsive and pan_url != touch_before and pinch_url != pinch_before and touch_ids_ok and touch_non_mutating else "FAIL",\n            "responsive": responsive,\n'''
+          new = '''            "status": "PASS" if responsive and mobile_no_overflow and mobile_layer_controls and pan_url != touch_before and pinch_url != pinch_before and touch_ids_ok and touch_non_mutating else "FAIL",\n            "responsive": responsive,\n            "noHorizontalOverflow": mobile_no_overflow,\n            "layerControlsVisible": mobile_layer_controls,\n'''
+          if old not in text:
+              raise SystemExit('mobile result marker missing')
+          p.write_text(text.replace(old, new, 1), encoding='utf-8', newline='\n')
+          PY
+          rm .github/workflows/zz-atlas-419-rebase-fix.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tools/otbm_atlas .github/workflows/zz-atlas-419-rebase-fix.yml
+          git diff --cached --check
+          git commit -m 'fix(atlas): reconcile product completion with resumable exporter'
+          git push origin HEAD:blakinio/atlas-product-completion

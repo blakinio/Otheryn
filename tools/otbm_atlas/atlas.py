@@ -22,9 +22,10 @@ from .spawns import scan_spawns
 from .viewer import write_viewer
 from .overview import make_overview, OVERVIEW_FACTOR, LOW_OVERVIEW_FACTOR, OVERVIEW_VERSION
 from .spatial import write_spatial_data
+from .tile_inspector import write_tile_inspector_data
 from .npc_sprites import enrich_npc_spawns
 from .monster_sprites import enrich_monster_spawns
-from .environment_animation_resume import enrich_environment_animations_resumable as enrich_environment_animations
+from .environment_animation import enrich_environment_animations
 from .factual_layers import enrich_existing_atlas
 
 SPOOL_VERSION = 1
@@ -306,6 +307,7 @@ def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int =
 		"monsterSpawns": spawns["monsterSpawns"], "npcSpawns": spawns["npcSpawns"], "houses": houses["houses"],
 	})
 	statistics["spatialData"] = spatial_statistics
+	statistics["tileInspector"] = write_tile_inspector_data(output)
 	statistics["environmentAnimations"] = enrich_environment_animations(asset_dir, output)
 	factual_report = enrich_existing_atlas(output, repository_root)
 	if factual_report.get("status") == "RESOLVED":
