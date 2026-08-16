@@ -29,6 +29,7 @@ from .environment_animation_resume import enrich_environment_animations_resumabl
 from .factual_layers import enrich_existing_atlas
 
 SPOOL_VERSION = 1
+TILE_FACTS_VERSION = 1
 ATLAS_VERSION = 3
 _WORKER_RENDERER: AssetRenderer | None = None
 
@@ -137,6 +138,35 @@ def _tree_sha256(directory: Path) -> str:
 	return digest.hexdigest()
 
 
+def _tile_fact_item(item: Item) -> dict[str, int]:
+	value = {"serverId": int(item.server_id)}
+	if item.action_id is not None: value["actionId"] = int(item.action_id)
+	if item.unique_id is not None: value["uniqueId"] = int(item.unique_id)
+	return value
+
+
+class _TileFactWriterPool:
+	def __init__(self, directory: Path, limit: int = 64) -> None:
+		self.directory, self.limit = directory, limit
+		self.handles: OrderedDict[tuple[int, int, int], BinaryIO] = OrderedDict()
+
+	def write(self, key: tuple[int, int, int], record: dict[str, object]) -> None:
+		handle = self.handles.pop(key, None)
+		if handle is None:
+			path = self.directory / f"z{key[0]}" / f"{key[1]}_{key[2]}.jsonl"
+			path.parent.mkdir(parents=True, exist_ok=True)
+			handle = path.open("a", encoding="utf-8", newline="\n")
+		self.handles[key] = handle
+		handle.write(json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n")
+		if len(self.handles) > self.limit:
+			_unused, old = self.handles.popitem(last=False)
+			old.close()
+
+	def close(self) -> None:
+		for handle in self.handles.values(): handle.close()
+		self.handles.clear()
+
+
 def chunk_render_bounds(tiles: list[Tile], renderer: AssetRenderer) -> tuple[int, int, int, int, int]:
 	"""Crop empty chunk margins while retaining a conservative sprite gutter."""
 	if not tiles: raise ValueError("cannot render an empty chunk")
@@ -179,7 +209,7 @@ def _render_worker(job: tuple[str, str, str, str]) -> dict[str, object]:
 def spool_map(map_path: Path, spool_dir: Path, chunk_size: int) -> dict[str, int]:
 	if spool_dir.exists(): shutil.rmtree(spool_dir)
 	spool_dir.mkdir(parents=True)
-	pool = _WriterPool(spool_dir); tiles = 0
+	pool = _WriterPool(spool_dir); tile_fact_pool = _TileFactWriterPool(spool_dir / "tile-facts"); tiles = 0
 	facts: dict[str, list[dict[str, object]]] = {key: [] for key in ("actionIds", "uniqueIds", "teleports", "houseTiles", "houseDoors", "towns", "waypoints")}
 	source = map_path.as_posix()
 	try:
@@ -189,7 +219,14 @@ def spool_map(map_path: Path, spool_dir: Path, chunk_size: int) -> dict[str, int
 			if isinstance(record, Waypoint):
 				facts["waypoints"].append({"name": record.name, "position": asdict(record.position), "source": source, "origin": "base-map"}); continue
 			if not isinstance(record, Tile): continue
-			pool.write((record.position.z, record.position.x // chunk_size, record.position.y // chunk_size), encode_tile(record)); tiles += 1
+			chunk_key = (record.position.z, record.position.x // chunk_size, record.position.y // chunk_size)
+			pool.write(chunk_key, encode_tile(record))
+			tile_fact_pool.write(chunk_key, {
+				"x": int(record.position.x), "y": int(record.position.y), "z": int(record.position.z),
+				"ground": None if record.ground is None else _tile_fact_item(record.ground),
+				"items": [_tile_fact_item(item) for item in record.items],
+			})
+			tiles += 1
 			position = asdict(record.position)
 			if record.house_id is not None:
 				facts["houseTiles"].append({"position": position, "houseId": record.house_id, "source": source, "origin": "base-map"})
@@ -200,8 +237,8 @@ def spool_map(map_path: Path, spool_dir: Path, chunk_size: int) -> dict[str, int
 				if item.unique_id is not None: facts["uniqueIds"].append({**base, "uniqueId": item.unique_id})
 				if item.teleport_destination is not None: facts["teleports"].append({**base, "destination": asdict(item.teleport_destination)})
 				if item.house_door_id is not None: facts["houseDoors"].append({**base, "doorId": item.house_door_id, "houseId": record.house_id})
-	finally: pool.close()
-	metadata = {"version": SPOOL_VERSION, "chunkSize": chunk_size, "tiles": tiles}
+	finally: pool.close(); tile_fact_pool.close()
+	metadata = {"version": SPOOL_VERSION, "tileFactsVersion": TILE_FACTS_VERSION, "chunkSize": chunk_size, "tiles": tiles}
 	(spool_dir / "spool.json").write_text(json.dumps(metadata, sort_keys=True) + "\n", encoding="utf-8")
 	(spool_dir / "facts.json").write_text(json.dumps({"schemaVersion": 1, **facts}, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 	return metadata
@@ -218,7 +255,7 @@ def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int =
 	spool_dir = output / ".spool"
 	map_sha, assets_sha = _sha256(map_path), _tree_sha256(asset_dir)
 	state_path = spool_dir / "source.json"
-	expected = {"mapSha256": map_sha, "assetsSha256": assets_sha, "chunkSize": chunk_size, "atlasVersion": ATLAS_VERSION}
+	expected = {"mapSha256": map_sha, "assetsSha256": assets_sha, "chunkSize": chunk_size, "atlasVersion": ATLAS_VERSION, "tileFactsVersion": TILE_FACTS_VERSION}
 	if not state_path.exists() or json.loads(state_path.read_text()) != expected:
 		spool_map(map_path, spool_dir, chunk_size)
 		state_path.write_text(json.dumps(expected, sort_keys=True) + "\n", encoding="utf-8")
