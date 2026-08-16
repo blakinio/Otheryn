@@ -7,6 +7,8 @@ import unittest
 
 from tools.otbm_atlas.assets import encode_png
 from tools.otbm_atlas.incremental import (
+    _paths_require_render_scan,
+    _render_core_transition_reasons,
     classify_changed_paths,
     compose_publication,
     plan_from_states,
@@ -44,7 +46,7 @@ class IncrementalPlanTests(unittest.TestCase):
             "gutterProfile": {"maxSpriteWidth": 32, "maxSpriteHeight": 32, "minShiftX": 0, "maxShiftX": 0, "minShiftY": 0, "maxShiftY": 0},
         }
 
-    def _plan(self, *, base_spool=None, target_spool=None, assets=None, render="render", overview="overview"):
+    def _plan(self, *, base_spool=None, target_spool=None, assets=None, render="render", overview="overview", reasons=()):
         return plan_from_states(
             base_spool or {"z7/1_1": "a", "z7/2_1": "b"},
             target_spool or {"z7/1_1": "a", "z7/2_1": "b"},
@@ -55,6 +57,7 @@ class IncrementalPlanTests(unittest.TestCase):
             render,
             "overview",
             overview,
+            additional_full_reasons=reasons,
         )
 
     def test_identical_inputs_produce_zero_dirty_chunks(self) -> None:
@@ -107,15 +110,79 @@ class IncrementalPlanTests(unittest.TestCase):
         plan = self._plan(render="render-b")
         self.assertEqual(plan["fullBuildReasons"], ["RENDER_CONTRACT_CHANGED"])
 
+    def test_additional_render_core_reason_is_fail_closed(self) -> None:
+        plan = self._plan(reasons=["RENDER_CORE_VERSION_CHANGED"])
+        self.assertTrue(plan["fullBuildRequired"])
+        self.assertEqual(plan["detail"]["dirtyChunks"], ["z7/1_1", "z7/2_1"])
+        self.assertIn("RENDER_CORE_VERSION_CHANGED", plan["fullBuildReasons"])
+
     def test_change_domains_are_sorted_deterministically_and_docs_do_not_imply_render(self) -> None:
         classified = classify_changed_paths([
             "tools/otbm_atlas/viewer_app.js",
             "docs/maps/example.md",
             "vendor/map-analysis/crystalserver/data-global/world/foo-monster.xml",
+            "vendor/map-analysis/crystalserver/data-global/world/world-house.xml",
+            "tools/otbm_atlas/incremental.py",
             "docs/maps/example.md",
         ])
         self.assertEqual(classified["changedPaths"], sorted(set(classified["changedPaths"])))
-        self.assertEqual(classified["domains"], ["documentation", "frontend", "spawns"])
+        self.assertEqual(classified["domains"], ["documentation", "frontend", "houses", "incrementalInfra", "spawns"])
+
+    def test_unrelated_domain_skips_render_scan(self) -> None:
+        self.assertFalse(_paths_require_render_scan(["docs/maps/example.md"], []))
+        self.assertFalse(_paths_require_render_scan(["vendor/map-analysis/crystalserver/data-global/world/foo-monster.xml"], []))
+        self.assertTrue(_paths_require_render_scan(["vendor/map-analysis/crystalserver/data-global/world/world.otbm"], []))
+        self.assertTrue(_paths_require_render_scan(["docs/maps/example.md"], ["RENDER_CORE_VERSION_CHANGED"]))
+        self.assertTrue(_paths_require_render_scan([], []))
+
+
+class RenderCoreVersionTests(unittest.TestCase):
+    @staticmethod
+    def _core_source(version: int, marker: int) -> str:
+        functions = [
+            "encode_tile",
+            "decode_tiles",
+            "_dependency_ids_for_tile",
+            "build_dependency_index",
+            "collect_asset_state",
+            "asset_impact",
+            "detail_fingerprint",
+            "chunk_render_bounds",
+            "render_selected_chunks",
+        ]
+        lines = [f"RENDER_CORE_VERSION = {version}"]
+        for name in functions:
+            lines.extend(["", f"def {name}():", f"    return {marker if name == 'chunk_render_bounds' else 0}"])
+        return "\n".join(lines) + "\n"
+
+    def _write_core(self, root: Path, version: int, marker: int) -> None:
+        path = root / "tools/otbm_atlas/incremental_core.py"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(self._core_source(version, marker), encoding="utf-8")
+
+    def test_semantic_change_without_version_bump_is_rejected(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            base, target = root / "base", root / "target"
+            self._write_core(base, 1, 0)
+            self._write_core(target, 1, 1)
+            self.assertEqual(_render_core_transition_reasons(base, target), ["RENDER_CORE_SEMANTICS_CHANGED_WITHOUT_VERSION_BUMP"])
+
+    def test_semantic_change_with_version_bump_requires_explicit_full_build(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            base, target = root / "base", root / "target"
+            self._write_core(base, 1, 0)
+            self._write_core(target, 2, 1)
+            self.assertEqual(_render_core_transition_reasons(base, target), ["RENDER_CORE_VERSION_CHANGED"])
+
+    def test_bootstrap_from_legacy_without_incremental_core_is_not_false_full(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            base, target = root / "base", root / "target"
+            base.mkdir()
+            self._write_core(target, 1, 0)
+            self.assertEqual(_render_core_transition_reasons(base, target), [])
 
 
 class IncrementalSpoolTests(unittest.TestCase):
