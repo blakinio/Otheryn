@@ -27,14 +27,19 @@ jobs:
       - name: Checkout exact PR head
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
 
       - name: Assert standard GitHub runner contract
+        env:
+          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         shell: bash
         run: |
           set -Eeuo pipefail
+          echo "head_sha=$(git rev-parse HEAD)"
           echo "nproc=$(nproc)"
           echo "memory_bytes=$(awk '/MemTotal/{print $2*1024}' /proc/meminfo)"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
           test "$(nproc)" -eq 4
 
       - name: Free disk for runner-local generated corpus
@@ -66,6 +71,7 @@ jobs:
       - name: Emit compact floor evidence
         env:
           ATLAS_FLOOR: ${{ matrix.floor }}
+          PRODUCER_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -Eeuo pipefail
           python3 - <<'PY'
@@ -73,6 +79,7 @@ jobs:
           from pathlib import Path
 
           floor = int(os.environ['ATLAS_FLOOR'])
+          producer_sha = os.environ['PRODUCER_SHA']
           root = Path(f'build/full-map-atlas-v3-z{floor}')
           manifest = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
           verification = json.loads((root / 'verification.json').read_text(encoding='utf-8'))
@@ -91,6 +98,7 @@ jobs:
 
           evidence = {
               'schemaVersion': 1,
+              'producerSha': producer_sha,
               'floor': floor,
               'chunks': len(manifest['chunks']),
               'sources': manifest['sources'],
@@ -126,16 +134,20 @@ jobs:
           merge-multiple: true
 
       - name: Assert exact complete world coverage
+        env:
+          EXPECTED_PRODUCER_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -Eeuo pipefail
           python3 - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
 
+          expected_producer_sha = os.environ['EXPECTED_PRODUCER_SHA']
           paths = sorted(Path('build/full-world-evidence').glob('full-world-floor-z*.json'))
           assert len(paths) == 16, paths
           reports = [json.loads(path.read_text(encoding='utf-8')) for path in paths]
           assert sorted(int(report['floor']) for report in reports) == list(range(16))
+          assert all(report['producerSha'] == expected_producer_sha for report in reports)
           assert sum(int(report['chunks']) for report in reports) == 3494
           source_fingerprints = {json.dumps(report['sources'], sort_keys=True) for report in reports}
           assert len(source_fingerprints) == 1
@@ -149,6 +161,7 @@ jobs:
           assert all(int(report['environmentCompletedChunks']) == int(report['chunks']) for report in reports)
           evidence = {
               'schemaVersion': 3,
+              'producerSha': expected_producer_sha,
               'chunks': 3494,
               'floors': list(range(16)),
               'runnerModel': 'one ubuntu-latest runner per floor, four bounded workers per runner',
