@@ -1,10 +1,11 @@
 """Local dependency fingerprints for resumable Atlas environment animations."""
 from __future__ import annotations
 
+import ast
 from dataclasses import asdict
 import hashlib
 from pathlib import Path
-from typing import Mapping
+from typing import Iterable, Mapping
 
 from .environment_animation import ANIMATION_ZOOM, _items
 from .environment_spool import decode_spool_tiles
@@ -13,13 +14,7 @@ from .render import AssetRenderer
 
 
 class EnvironmentAssetFingerprinter:
-    """Memoize exact appearance + decoded-sprite content dependencies.
-
-    Sprite sheets are storage containers. Hashing complete sheets would still
-    invalidate unrelated chunks when one sprite in a shared sheet changes, so
-    the environment path hashes the decoded sprites actually referenced by each
-    visible appearance instead.
-    """
+    """Memoize exact appearance + decoded-sprite content dependencies."""
 
     def __init__(self, renderer: AssetRenderer) -> None:
         self.renderer = renderer
@@ -72,18 +67,30 @@ class EnvironmentAssetFingerprinter:
         return sha256_bytes(canonical_json(payload))
 
 
+def python_semantics_digest(paths: Iterable[Path]) -> str:
+    """Deterministic AST digest, insensitive to whitespace/comments/line endings."""
+    digest = hashlib.sha256()
+    for path in sorted({value.resolve() for value in paths}, key=lambda value: value.as_posix()):
+        label = path.name.encode("utf-8")
+        digest.update(len(label).to_bytes(4, "big"))
+        digest.update(label)
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=path.as_posix())
+        digest.update(ast.dump(tree, include_attributes=False).encode("utf-8"))
+    return digest.hexdigest()
+
+
 def environment_contract_fingerprint(
     manifest: Mapping[str, object],
     *,
     export_version: int,
     overlap_radius: int,
+    semantics_digest: str,
 ) -> str:
     """Hash only genuinely global environment-export semantics.
 
     Monolithic map/asset source SHA values and the complete chunk inventory are
-    intentionally excluded. Added/deleted/changed chunks are handled by their
-    own checkpoints; unrelated source changes therefore cannot clear the whole
-    environment cache.
+    intentionally excluded. Added/deleted/changed chunks are handled by local
+    checkpoints; unrelated source changes therefore cannot clear the tree.
     """
     payload = {
         "exportVersion": int(export_version),
@@ -91,5 +98,6 @@ def environment_contract_fingerprint(
         "chunkSize": manifest.get("chunkSize"),
         "animationZoom": ANIMATION_ZOOM,
         "overlapSafetyRadiusTiles": int(overlap_radius),
+        "semanticsDigest": semantics_digest,
     }
     return sha256_bytes(canonical_json(payload))
