@@ -1,12 +1,12 @@
 """Persistent local change-impact planning for the canonical Atlas entry point.
 
-This is deliberately separate from the PR base-vs-head planner. Production has
-one canonical target snapshot plus an existing local publication, so the
-previous successfully committed local state is the comparison authority.
+Production has one canonical target snapshot plus an existing local publication,
+so the previous successfully committed local state is the comparison authority.
 """
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+import hashlib
 import json
 from pathlib import Path
 import shutil
@@ -15,21 +15,21 @@ from typing import Any
 from .incremental_core import (
     RENDER_CORE_VERSION,
     ChunkKey,
+    canonical_json,
     collect_asset_state,
-    detail_fingerprint,
     reconcile_spool,
     render_contract_digest,
+    sha256_bytes,
     sha256_file,
     spool_hashes,
     write_bytes_atomic,
     write_json_atomic,
 )
 from .incremental_state import prepare_dependency_index
+from .sprite_dependency import prepare_production_sprite_digests
 
-# v2 binds every reused detail image and its small render report to cheap stat
-# metadata plus known checksums. Ordinary runs do not hash the complete image
-# corpus; a large PNG is hashed only when its stat metadata changed.
-PRODUCTION_STATE_VERSION = 2
+# v3 binds exact used-sprite pixels plus detail/overview image+report identities.
+PRODUCTION_STATE_VERSION = 3
 
 SpoolBuilder = Callable[[Path, Path, int], Mapping[str, object]]
 
@@ -117,6 +117,30 @@ def _normalized_hashes(value: Mapping[str, object] | None) -> dict[str, str] | N
     return normalized
 
 
+def _legacy_spool_bound_to_reports(stable: Path, output: Path, expected_sources: Mapping[str, object]) -> bool:
+    """Prove unbound legacy spool bytes are exactly those used by legacy detail reports."""
+    try:
+        map_sha = str(expected_sources["mapSha256"])
+        assets_sha = str(expected_sources["assetsSha256"])
+        atlas_version = str(expected_sources["atlasVersion"])
+    except KeyError:
+        return False
+    hashes = spool_hashes(stable)
+    for text, spool_sha in hashes.items():
+        key = ChunkKey.parse(text)
+        report_path = output / "tiles" / f"z{key.z}" / f"{key.x}_{key.y}.json"
+        try:
+            report = _read_json(report_path)
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            return False
+        if not report or not isinstance(report.get("checksum"), str):
+            return False
+        expected = hashlib.sha256((map_sha + assets_sha + atlas_version + spool_sha).encode("utf-8")).hexdigest()
+        if report.get("fingerprint") != expected:
+            return False
+    return True
+
+
 def _prepare_spool(
     map_path: Path,
     output: Path,
@@ -127,6 +151,7 @@ def _prepare_spool(
     *,
     expected_spool_hashes: Mapping[str, object] | None = None,
     allow_unbound_legacy_reuse: bool = False,
+    expected_sources: Mapping[str, object] | None = None,
 ) -> tuple[Path, dict[str, object]]:
     stable = output / ".spool"
     map_sha = sha256_file(map_path)
@@ -145,10 +170,10 @@ def _prepare_spool(
                 "tileFacts": {"changed": [], "reused": [], "deleted": []},
                 "factsChanged": False,
             }
-        if expected_hashes is None and allow_unbound_legacy_reuse:
+        if expected_hashes is None and allow_unbound_legacy_reuse and expected_sources is not None and _legacy_spool_bound_to_reports(stable, output, expected_sources):
             return stable, {
                 "parsed": False,
-                "integrity": "legacy-adoption-bound-on-commit",
+                "integrity": "legacy-report-bound-on-commit",
                 "renderShards": {"changed": [], "reused": sorted(current_hashes), "deleted": []},
                 "tileFacts": {"changed": [], "reused": [], "deleted": []},
                 "factsChanged": False,
@@ -213,15 +238,14 @@ def _manifest_chunk_keys(manifest: Mapping[str, object] | None) -> set[str]:
     return result
 
 
-def _detail_paths(output: Path, chunk_text: str) -> tuple[Path, Path]:
+def _render_paths(output: Path, directory: str, chunk_text: str) -> tuple[Path, Path]:
     key = ChunkKey.parse(chunk_text)
-    tile = output / "tiles" / f"z{key.z}" / f"{key.x}_{key.y}.png"
-    return tile, tile.with_suffix(".json")
+    image = output / directory / f"z{key.z}" / f"{key.x}_{key.y}.png"
+    return image, image.with_suffix(".json")
 
 
-def _detail_output_identity(output: Path, chunk_text: str) -> dict[str, object] | None:
-    tile, report_path = _detail_paths(output, chunk_text)
-    if not tile.is_file() or not report_path.is_file():
+def _render_output_identity(image: Path, report_path: Path) -> dict[str, object] | None:
+    if not image.is_file() or not report_path.is_file():
         return None
     try:
         report = _read_json(report_path)
@@ -229,12 +253,12 @@ def _detail_output_identity(output: Path, chunk_text: str) -> dict[str, object] 
         return None
     checksum = report.get("checksum") if report else None
     if not isinstance(checksum, str):
-        checksum = sha256_file(tile)
-    tile_stat = tile.stat()
+        checksum = sha256_file(image)
+    image_stat = image.stat()
     report_stat = report_path.stat()
     return {
-        "size": tile_stat.st_size,
-        "mtimeNs": tile_stat.st_mtime_ns,
+        "size": image_stat.st_size,
+        "mtimeNs": image_stat.st_mtime_ns,
         "checksum": checksum,
         "reportSize": report_stat.st_size,
         "reportMtimeNs": report_stat.st_mtime_ns,
@@ -242,38 +266,72 @@ def _detail_output_identity(output: Path, chunk_text: str) -> dict[str, object] 
     }
 
 
-def _detail_output_reusable(output: Path, chunk_text: str, previous_detail_files: Mapping[str, object] | None) -> bool:
-    tile, report_path = _detail_paths(output, chunk_text)
-    if not tile.is_file() or not report_path.is_file():
+def _render_output_matches_identity(image: Path, report_path: Path, identity: Mapping[str, object]) -> bool:
+    if not image.is_file() or not report_path.is_file():
         return False
-    if previous_detail_files is None:
-        return True
-    previous = previous_detail_files.get(chunk_text)
-    if not isinstance(previous, Mapping):
-        return False
-
-    tile_stat = tile.stat()
-    tile_unchanged = previous.get("size") == tile_stat.st_size and previous.get("mtimeNs") == tile_stat.st_mtime_ns
-    if not tile_unchanged:
-        expected_checksum = previous.get("checksum")
-        tile_unchanged = isinstance(expected_checksum, str) and sha256_file(tile) == expected_checksum
-
+    image_stat = image.stat()
+    image_ok = identity.get("size") == image_stat.st_size and identity.get("mtimeNs") == image_stat.st_mtime_ns
+    if not image_ok:
+        expected = identity.get("checksum")
+        image_ok = isinstance(expected, str) and sha256_file(image) == expected
     report_stat = report_path.stat()
-    report_unchanged = previous.get("reportSize") == report_stat.st_size and previous.get("reportMtimeNs") == report_stat.st_mtime_ns
-    if not report_unchanged:
-        expected_report = previous.get("reportSha256")
-        report_unchanged = isinstance(expected_report, str) and sha256_file(report_path) == expected_report
-    return tile_unchanged and report_unchanged
+    report_ok = identity.get("reportSize") == report_stat.st_size and identity.get("reportMtimeNs") == report_stat.st_mtime_ns
+    if not report_ok:
+        expected_report = identity.get("reportSha256")
+        report_ok = isinstance(expected_report, str) and sha256_file(report_path) == expected_report
+    return image_ok and report_ok
+
+
+def _detail_output_reusable(output: Path, chunk_text: str, previous_detail_files: Mapping[str, object] | None) -> bool:
+    image, report_path = _render_paths(output, "tiles", chunk_text)
+    if previous_detail_files is None:
+        return image.is_file() and report_path.is_file()
+    identity = previous_detail_files.get(chunk_text)
+    return isinstance(identity, Mapping) and _render_output_matches_identity(image, report_path, identity)
+
+
+def overview_output_reusable(
+    output: Path,
+    directory: str,
+    chunk_text: str,
+    expected_fingerprint: str,
+    previous_overview_files: Mapping[str, object] | None,
+) -> bool:
+    image, report_path = _render_paths(output, directory, chunk_text)
+    try:
+        report = _read_json(report_path)
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return False
+    if not image.is_file() or not report or report.get("fingerprint") != expected_fingerprint or not isinstance(report.get("checksum"), str):
+        return False
+    if previous_overview_files is None:
+        return True
+    identity = previous_overview_files.get(f"{directory}/{chunk_text}")
+    return isinstance(identity, Mapping) and _render_output_matches_identity(image, report_path, identity)
+
+
+def _production_detail_fingerprint(record: Mapping[str, object], asset_state: Mapping[str, object], render_digest: str) -> str:
+    appearance_map = asset_state.get("appearanceDigests", {})
+    sprite_map = asset_state.get("spriteDigests", {})
+    appearances = [int(value) for value in record.get("appearanceIds", [])]
+    sprites = [int(value) for value in record.get("spriteIds", [])]
+    payload = {
+        "chunkSize": record.get("chunkSize"),
+        "spoolSha256": record.get("spoolSha256"),
+        "appearanceDigests": {str(value): appearance_map.get(str(value), "MISSING") for value in appearances} if isinstance(appearance_map, Mapping) else {},
+        "spriteDigests": {str(value): sprite_map.get(str(value), "MISSING") for value in sprites} if isinstance(sprite_map, Mapping) else {},
+        "gutterProfile": asset_state.get("gutterProfile"),
+        "renderContractDigest": render_digest,
+    }
+    return sha256_bytes(canonical_json(payload))
 
 
 def remove_deleted_chunk_outputs(output: Path, chunk_keys: list[str]) -> None:
     for text in chunk_keys:
-        key = ChunkKey.parse(text)
         for directory in ("tiles", "overview", "overview-low"):
-            path = output / directory / f"z{key.z}" / f"{key.x}_{key.y}.png"
-            report = path.with_suffix(".json")
-            if path.exists():
-                path.unlink()
+            image, report = _render_paths(output, directory, text)
+            if image.exists():
+                image.unlink()
             if report.exists():
                 report.unlink()
 
@@ -290,7 +348,6 @@ def prepare_production_render_plan(
     *,
     allow_full_build: bool = False,
 ) -> dict[str, object]:
-    """Return local fingerprints and the exact set of detail chunks to render."""
     state_root = output / ".incremental-state"
     state_root.mkdir(parents=True, exist_ok=True)
     state_path = state_root / "production-render-state.json"
@@ -320,8 +377,11 @@ def prepare_production_render_plan(
             full_reasons.add("RENDER_CONTRACT_CHANGED")
         if previous.get("gutterProfile") != asset_state.get("gutterProfile"):
             full_reasons.add("GLOBAL_GUTTER_PROFILE_CHANGED")
-        if int(previous.get("stateVersion", -1)) == PRODUCTION_STATE_VERSION and not isinstance(previous.get("detailFiles"), Mapping):
-            full_reasons.add("PRODUCTION_DETAIL_STATE_INVALID")
+        if int(previous.get("stateVersion", -1)) == PRODUCTION_STATE_VERSION:
+            if not isinstance(previous.get("detailFiles"), Mapping) or not isinstance(previous.get("overviewFiles"), Mapping):
+                full_reasons.add("PRODUCTION_OUTPUT_STATE_INVALID")
+            if not isinstance(previous.get("spriteDigests"), Mapping) or not isinstance(previous.get("assetSheets"), list):
+                full_reasons.add("PRODUCTION_ASSET_STATE_INVALID")
     elif manifest is not None:
         if int(manifest.get("chunkSize", chunk_size)) != chunk_size:
             full_reasons.add("CHUNK_SIZE_CHANGED")
@@ -343,20 +403,25 @@ def prepare_production_render_plan(
         spool_builder,
         expected_spool_hashes=previous_spool_hashes,
         allow_unbound_legacy_reuse=legacy_adoption,
+        expected_sources=expected_sources,
     )
     current_spool_hashes = spool_hashes(stable_spool)
     dependency_index, dependency_report = prepare_dependency_index(stable_spool, asset_dir, state_root)
     records = dependency_index.get("chunks", {})
     if not isinstance(records, Mapping):
         raise ValueError("production dependency index has no chunks mapping")
+    exact_sprites = prepare_production_sprite_digests(asset_dir, asset_state, dependency_index, previous)
+    asset_state = dict(asset_state)
+    asset_state["spriteDigests"] = exact_sprites
     fingerprints = {
-        str(text): detail_fingerprint(record, asset_state, render_digest)
+        str(text): _production_detail_fingerprint(record, asset_state, render_digest)
         for text, record in records.items()
         if isinstance(text, str) and isinstance(record, Mapping)
     }
 
     previous_fingerprints = previous.get("chunkFingerprints", {}) if previous and isinstance(previous.get("chunkFingerprints"), Mapping) else {}
     previous_detail_files = previous.get("detailFiles") if previous and isinstance(previous.get("detailFiles"), Mapping) else None
+    previous_overview_files = previous.get("overviewFiles") if previous and isinstance(previous.get("overviewFiles"), Mapping) else None
     old_keys = set(str(key) for key in previous_fingerprints) if previous is not None else _manifest_chunk_keys(manifest)
     current_keys = set(fingerprints)
     deleted = sorted(old_keys - current_keys, key=lambda text: (ChunkKey.parse(text).z, ChunkKey.parse(text).y, ChunkKey.parse(text).x))
@@ -381,6 +446,8 @@ def prepare_production_render_plan(
         "renderContractDigest": render_digest,
         "gutterProfile": asset_state.get("gutterProfile"),
         "assetStateDigest": asset_state.get("stateDigest"),
+        "assetSheets": asset_state.get("sheets", []),
+        "spriteDigests": exact_sprites,
         "mapSha256": sha256_file(map_path),
         "spoolChunkHashes": dict(sorted(current_spool_hashes.items())),
         "chunkFingerprints": dict(sorted(fingerprints.items())),
@@ -398,6 +465,7 @@ def prepare_production_render_plan(
         "legacyPublicationAdopted": legacy_adoption,
         "spool": spool_report,
         "dependencies": dependency_report,
+        "previousOverviewFiles": previous_overview_files,
         "nextState": next_state,
     }
 
@@ -411,10 +479,19 @@ def commit_production_render_state(output: Path, plan: Mapping[str, object]) -> 
     if not isinstance(fingerprints, Mapping):
         raise ValueError("production render state has no chunkFingerprints")
     detail_files: dict[str, dict[str, object]] = {}
+    overview_files: dict[str, dict[str, object]] = {}
     for text in sorted(str(key) for key in fingerprints):
-        identity = _detail_output_identity(output, text)
+        image, report = _render_paths(output, "tiles", text)
+        identity = _render_output_identity(image, report)
         if identity is None:
             raise RuntimeError(f"cannot commit production state without detail output {text}")
         detail_files[text] = identity
+        for directory in ("overview", "overview-low"):
+            image, report = _render_paths(output, directory, text)
+            derived = _render_output_identity(image, report)
+            if derived is None:
+                raise RuntimeError(f"cannot commit production state without {directory} output {text}")
+            overview_files[f"{directory}/{text}"] = derived
     committed["detailFiles"] = detail_files
+    committed["overviewFiles"] = overview_files
     write_json_atomic(output / ".incremental-state" / "production-render-state.json", committed)
