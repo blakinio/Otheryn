@@ -5,7 +5,7 @@ owner: atlas-preview-coordinator
 branch: blakinio/atlas-synology-browser-preview
 base_branch: main
 created: "2026-08-15T14:09:00+02:00"
-updated: "2026-08-16T08:33:00+02:00"
+updated: "2026-08-16T08:45:00+02:00"
 project_lane: otheryn-content
 execution_mode: chat-github
 related_pr: "415"
@@ -28,43 +28,43 @@ Move the technically certified OTBM Atlas to a real private Synology Container M
 Canonical backlog: `docs/maps/otbm-atlas-product-readiness-backlog-20260815.md`.
 Preview/codec handover: `docs/maps/otbm-atlas-preview-codec-handover-20260815.md`.
 
-## Owner architecture — authoritative
+## Authoritative preview architecture
 
 ```text
 generated static Atlas
 → Synology NAS persistent folder
-→ Synology Container Manager container
+→ read-only mount into Synology Container Manager container
 → local container HTTP port
 → DSM Reverse Proxy
 → normal browser
 ```
 
-Hard boundaries remain: no SSH, SSH tunnel, `docker exec`, NAS shell prerequisite, Oteryn Platform integration, Cloudflare/public route, public Internet exposure, privileged container, Docker socket, or full-world build on Synology. Generated Atlas data is copied by DSM File Station, SMB or Synology Drive and mounted read-only.
+No SSH, SSH tunnel, `docker exec`, NAS shell prerequisite, Oteryn Platform integration, Cloudflare/public route, Internet exposure, privileged container, Docker socket, or full-world build on Synology is authorized. File transfer is by DSM File Station, SMB or Synology Drive.
 
 ## Verified baseline
 
-- Entry `main` for this continuation was `475196ddba675e2f7f0dadcdb3fdb445db79bba2`.
+- Continuation entry `main`: `475196ddba675e2f7f0dadcdb3fdb445db79bba2`.
 - Atlas PRs #410, #412, #413 and #414 are merged; no Atlas PR was open at continuation entry.
-- Technical Atlas implementation/full-world certification remains DONE/VERIFIED: schema/Atlas v3, chunk size 128, populated Z0..Z15, exactly 3494 detail chunks, zero certified missing sprites.
-- Canonical map SHA-256 is `3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034`.
-- Canonical Git asset corpus SHA-256 is `4c78aa441bc6eed6a614092423a58dc6275cf2c36ea5d4bde13746c9b4ee7ee7`; the previously generated Windows-v3 corpus records `4d11c5be0438c8fa08d079a558fe99f5f28d3db5df0aa742c5a46d4260c905c2`, whose sole byte difference was proven to be CRLF materialization of one NON_RENDER_INPUT file.
-- The current-v3 benchmark covers 240 deterministic chunks across Z0..Z15: PNG `629930622` bytes, lossless WebP `320113728` bytes, saving `309816894` bytes / `49.18270094829586%`; 240/240 decode RGBA-identically.
-- Complete current-v3 detail PNG storage is `10995096999` bytes. The `5587411323`-byte complete WebP figure remains ESTIMATED rather than measured.
-- ATLAS-PR-010 is VERIFIED. ATLAS-PR-011 remains an owner decision; PNG→WebP migration is NOT_AUTHORIZED.
-- Environment-animation full-world export performance/resume remains the separate READY task `OTH-20260815-atlas-environment-animation-export-performance`; earlier canonical attempts were interrupted after measurable progress and no final artifact may be assumed.
+- Technical Atlas remains DONE/VERIFIED: schema/Atlas v3, chunk size 128, Z0..Z15, exactly 3494 detail chunks, zero certified missing sprites.
+- Canonical map SHA-256: `3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034`.
+- Canonical Git asset SHA-256: `4c78aa441bc6eed6a614092423a58dc6275cf2c36ea5d4bde13746c9b4ee7ee7`; the preserved Windows-v3 corpus records `4d11c5be0438c8fa08d079a558fe99f5f28d3db5df0aa742c5a46d4260c905c2`, whose sole byte delta was proven CRLF materialization of one NON_RENDER_INPUT file.
+- Current-v3 benchmark: 240 deterministic Z0..Z15 chunks, PNG `629930622` bytes vs lossless WebP `320113728`, saving `49.18270094829586%`; 240/240 RGBA exact.
+- Complete current-v3 detail PNG storage: `10995096999` bytes. Complete WebP size remains ESTIMATED, not measured.
+- ATLAS-PR-010 is VERIFIED. ATLAS-PR-011 is an owner decision and PNG→WebP migration remains NOT_AUTHORIZED.
+- Environment-animation export performance/resume remains the separate READY task `OTH-20260815-atlas-environment-animation-export-performance`; no completed final environment artifact may be assumed from the interrupted runs.
 
-## Synology preview implementation
+## PR #415 implementation
 
-PR #415 implements the deployment layer without committing generated Atlas data:
+PR #415 adds only the preview/deployment layer and validation tooling; no generated Atlas corpus is committed.
 
-- `deploy/otbm-atlas-synology/compose.yaml` uses a pinned official unprivileged nginx image, read-only root filesystem, `no-new-privileges`, all capabilities dropped, bounded PID count, loopback-only host bind, read-only Atlas bind mount, restart policy, log rotation and a deterministic health check.
-- `deploy/otbm-atlas-synology/nginx.conf` serves static HTML/JS/CSS/JSON/PNG/WebP, returns deterministic 404s, exposes `/healthz`, keeps generated files immutable and adds conservative private-preview security headers.
-- `deploy/otbm-atlas-synology/README.md` defines non-SSH DSM Container Manager Project/import, file-copy and reverse-proxy steps.
-- `tools/otbm_atlas/deploy_preflight.py` checks current viewer bytes, canonical v3 identity, full independent chunk verification, creature references and final environment-animation readiness without regenerating the world.
-- `tools/otbm_atlas/deployed_browser_probe.py` is the real deployed-URL Chromium harness for ATLAS-PR-003/004; it records screenshots, console/network failures, required interactions, animation evidence and cold/warm/navigation metrics.
-- `.github/workflows/otbm-atlas-synology-preview.yml` independently validates the local container contract, MIME types, health/404 behavior, non-root/read-only/capability constraints, loopback binding, logs and source-data immutability without `docker exec`.
+- `deploy/otbm-atlas-synology/compose.yaml`: pinned official unprivileged nginx image; read-only root filesystem; `no-new-privileges`; all capabilities dropped; PID bound; read-only Atlas mount; loopback-only host bind by default; restart policy; health check; bounded logs.
+- `deploy/otbm-atlas-synology/nginx.conf`: static HTML/JS/CSS/JSON/PNG/WebP, `/healthz`, deterministic 404 behavior, favicon 204 to avoid browser-noise 404s, private-preview security/cache headers.
+- `deploy/otbm-atlas-synology/README.md`: non-SSH DSM Container Manager Project/import, transfer, reverse-proxy, validation and rollback contract.
+- `tools/otbm_atlas/deploy_preflight.py`: current viewer-byte identity; canonical v3 manifest identity; independent chunk/overview verification; spatial shard/search consistency; creature sprite/animation descriptor/frame references; complete environment-animation shard/index/reference consistency.
+- `tools/otbm_atlas/deployed_browser_probe.py`: real DSM-URL Chromium journey and cold/warm/navigation evidence with manual probe traffic separated from page-network evidence; exact animation canvases and representative screenshots.
+- `.github/workflows/otbm-atlas-synology-preview.yml`: Compose and real container-contract test without `docker exec`, including MIME/404/health, non-root/read-only/capability/loopback checks, logs and source-data immutability.
 
-Recommended values are deliberately not presented as live NAS facts:
+Recommended values remain recommendations, not fabricated NAS facts:
 
 ```text
 RECOMMENDED_DATA_PATH: /volume1/docker/otheryn/atlas/current
@@ -76,17 +76,27 @@ VERIFIED_LIVE_NAS_PORT_AVAILABILITY: UNKNOWN
 DSM_PROXY_DESTINATION: HTTP / 127.0.0.1 / 8095 / /
 ```
 
-Repository port inventory found existing allocations at 7171–7175, 8080, 8088 and 9090 and no repository allocation at 8095. This does not prove live NAS availability.
+Repository port inventory contains 7171–7175, 8080, 8088 and 9090 and no repository allocation at 8095. Live NAS availability is still UNKNOWN until Container Manager binds the port.
 
-## Product-readiness status
+## Product-readiness state
 
-| Requirement | State | Evidence / remaining gate |
+| Requirement | State | Remaining gate |
 |---|---|---|
-| ATLAS-PR-002 | PARTIAL | Deployment package exists in PR #415; cannot be VERIFIED until the container actually runs on Synology, the corpus mount is read-only/restart-capable, and the DSM reverse-proxy URL works in a normal browser. |
-| ATLAS-PR-003 | NOT_RUN | Real Chromium must run against the actual owner DSM URL. Environment animation must pass or the requirement remains partial. |
-| ATLAS-PR-004 | NOT_RUN | Cold/warm/navigation measurements must come from the actual deployed browser URL. |
-| ATLAS-PR-011 | WAITING | Owner format decision only after real browser evidence; no migration authorized. |
-| ATLAS-PR-001 | PENDING | Only the owner may accept the real viewer or record exact defects. |
+| ATLAS-PR-002 | PARTIAL | Container must actually run on Synology with read-only generated data and be reachable through DSM Reverse Proxy from a normal browser. |
+| ATLAS-PR-003 | NOT_RUN | Real Chromium must pass against the actual owner DSM URL; required environment animation must pass or remain explicitly partial. |
+| ATLAS-PR-004 | NOT_RUN | Real cold/warm/navigation measurements must be collected from that deployed browser URL. |
+| ATLAS-PR-011 | WAITING | Owner format decision only after browser evidence; no WebP migration authorized. |
+| ATLAS-PR-001 | PENDING | Only owner visual/interaction acceptance can close this requirement. |
+
+## Fresh audit findings and remediation
+
+A fresh exact-diff/security audit used the acceptance contract rather than the implementer narrative.
+
+- `ATLAS-AUDIT-415-001` — MEDIUM — the first deployed-browser probe could false-fail zoom after zoom-in/zoom-out returned to the starting URL and manual environment probes polluted page-network error evidence. Fixed by commit `d3c14389991ea9637fad5ae1a9e75a8a708fd514`: zoom evidence captures the changed intermediate state and manual corpus probes use Playwright APIRequestContext, leaving page-network evidence independent.
+- `ATLAS-AUDIT-415-002` — MEDIUM — initial preflight only proved environment index presence and creature descriptor existence, not all referenced runtime assets/spatial shards. Fixed by `9f5d3b3d6e5a71f5251ffc088011efe79b7a1890` plus tests in `6f76daf82286a41dc16ac9e72648681354ef192e`: spatial shard/search totals and JSON, creature descriptor frames, and environment shard/index/frame/underlay/overdraw consistency are now checked.
+- `ATLAS-AUDIT-415-003` — LOW — normal browsers could request a missing favicon and add irrelevant 404 noise to E2E evidence. Fixed by `e00da2e27dfc57a9f5b7185e37e3a17b2641d9ee` with a 204 favicon response.
+
+Open material audit findings: `0` pending exact-head CI confirmation.
 
 ## Feature scope
 
@@ -101,27 +111,26 @@ feature_scope:
   completion_claim: complete_feature
 ```
 
-## Unknowns that must remain explicit
+## Explicit unknowns
 
-- Whether the preserved desktop `build/full-map-atlas` currently contains the final current viewer files; `build_atlas()` writes them after environment-animation enrichment, so an interrupted final enrichment run cannot be assumed to have refreshed them.
-- Whether `data/environment-animations/index.json` exists and is complete in the deployable desktop corpus.
-- Actual Synology volume/path and whether host TCP 8095 is free.
+- Exact current desktop `build/full-map-atlas` deployment-preflight result, including whether final current viewer bytes and `data/environment-animations/index.json` are present.
+- Actual Synology volume/path and whether TCP 8095 is free on the NAS.
 - Final private DSM reverse-proxy source URL.
-- Real browser cold/warm/navigation measurements.
+- Real deployed browser E2E and cold/warm/navigation measurements.
 
-`deploy_preflight.py` deterministically resolves the first two from the actual generated directory without another full-world render.
+`deploy_preflight.py` resolves the desktop-corpus unknowns without another full-world render. Runtime unknowns require the owner DSM action and the resulting private URL.
 
 ## Context checkpoint
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-08-16T08:33:00+02:00
-head: 6784bd2412102fa4643a357177a633b0e8baadc1
-head_scope: implementation commit before durable task-checkpoint commit
+updated_at: 2026-08-16T08:45:00+02:00
+head: 6f76daf82286a41dc16ac9e72648681354ef192e
+head_scope: implementation and fresh-audit remediation before this documentation-only checkpoint
 branch: blakinio/atlas-synology-browser-preview
 pr: 415
 status: validating
-phase: validate
+phase: exact-head-ci
 execution_mode: chat-github
 project_lane: otheryn-content
 base_main_at_verification: 475196ddba675e2f7f0dadcdb3fdb445db79bba2
@@ -139,19 +148,23 @@ owned_paths:
 proven:
   - technical Atlas and 3494-chunk canonical world remain certified
   - PR 410, 412, 413 and 414 are merged
-  - PR 415 contains the smallest static-serving Synology deployment package and runtime validation tooling
-  - deployment does not bake or commit the Atlas corpus
-  - host path and 8095 are recommendations rather than claimed live NAS facts
+  - PR 415 contains the static Synology project plus deterministic desktop/deployed-browser validation tooling
+  - generated Atlas data is neither committed nor baked into the image
+  - deployment defaults are clearly separated from unknown live NAS state
+  - fresh audit material findings 001 and 002 were remediated; low finding 003 was also remediated
 unknown:
-  - exact current desktop deployment-preflight result
+  - final exact-head CI result after this checkpoint commit
+  - actual desktop deployment-preflight result
   - final environment-animation artifact presence
-  - live NAS port availability
-  - actual private browser URL
-  - deployed browser E2E and performance
+  - live NAS path/port and private browser URL
+  - deployed Chromium E2E and performance
 conflicts: []
 first_failure:
-  marker: none
-  evidence: none
+  marker: fresh-audit findings ATLAS-AUDIT-415-001 and ATLAS-AUDIT-415-002
+  evidence: exact changed-file inspection
+rejected_hypotheses:
+  - config commit alone can verify ATLAS-PR-002
+  - final environment animations can be inferred from interrupted exporter runs
 changed_paths:
   - deploy/otbm-atlas-synology/compose.yaml
   - deploy/otbm-atlas-synology/nginx.conf
@@ -162,8 +175,12 @@ changed_paths:
   - tools/otbm_atlas/tests/test_deploy_preflight.py
   - .github/workflows/otbm-atlas-synology-preview.yml
   - docs/agents/tasks/active/OTH-20260815-otbm-atlas-product-readiness.md
+validation:
+  - command: connector exact-diff audit
+    result: PASS_AFTER_REMEDIATION
+    evidence: zero open material findings before exact-head CI
 blockers: []
-next_action: validate PR 415 exact head with repository CI and a fresh exact-diff/container-security audit, repair material findings, and merge the deployment package before requesting the minimal owner DSM action
+next_action: verify all required repository checks on the exact PR 415 head, then merge PR 415 and move immediately to the minimal owner DSM deployment action
 ```
 
 ## Recovery checkpoint
@@ -171,26 +188,26 @@ next_action: validate PR 415 exact head with repository CI and a fresh exact-dif
 ```yaml
 recovery:
   policy_version: 1
-  generation: 1
-  session_id: atlas-preview-20260816T0833+0200
+  generation: 2
+  session_id: atlas-preview-20260816T0818+0200
   session_started_at: 2026-08-16T08:18:00+02:00
-  checkpointed_at: 2026-08-16T08:33:00+02:00
-  last_progress_at: 2026-08-16T08:33:00+02:00
-  phase: validate
-  exact_head: 6784bd2412102fa4643a357177a633b0e8baadc1
+  checkpointed_at: 2026-08-16T08:45:00+02:00
+  last_progress_at: 2026-08-16T08:45:00+02:00
+  phase: exact-head-ci
+  exact_head: 6f76daf82286a41dc16ac9e72648681354ef192e
   pull_request: 415
-  active_operation: exact-head PR validation
+  active_operation: exact-head PR validation after audit remediation
   external_run_ids: []
-  operation_started_at: 2026-08-16T08:33:00+02:00
+  operation_started_at: 2026-08-16T08:45:00+02:00
   wait_deadline_at: 2026-08-16T09:18:00+02:00
-  check_generation: pr-415-initial
+  check_generation: pr-415-final
   checks_used: 0
   status: active
   safe_to_resume: true
-  resume_condition: PR 415 checks or audit provide new evidence
-  next_action: inspect the aggregate required-check state for PR 415 exact head, then audit the complete changed-file set against ATLAS-PR-002 security and deployment acceptance
+  resume_condition: PR 415 exact-head checks provide terminal evidence
+  next_action: inspect one aggregate PR/head snapshot for required checks; merge only if the unchanged final head is green and review hygiene remains clean
 ```
 
 ## Closeout rule
 
-Do not mark the task completed merely because PR #415 is merged. Runtime completion requires observable Synology/DSM/browser evidence. While incomplete, keep exactly one executable `next_action`.
+Do not mark this task completed when PR #415 merges. ATLAS-PR-002/003/004 are runtime requirements and need observable Synology/DSM/browser evidence. Preserve exactly one executable `next_action` while incomplete.
