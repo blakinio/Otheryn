@@ -32,7 +32,7 @@ from .environment_animation import (
 )
 from .environment_spool import decode_spool_tiles
 
-EXPORT_VERSION = 1
+EXPORT_VERSION = 2
 
 
 def _sha256(path: Path) -> str:
@@ -55,6 +55,17 @@ def _atomic_bytes(path: Path, payload: bytes) -> None:
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_bytes(payload)
     temporary.replace(path)
+
+
+def _payload_sha256(payload: bytes) -> str:
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _ensure_bytes(path: Path, payload: bytes) -> str:
+    expected = _payload_sha256(payload)
+    if not path.is_file() or _sha256(path) != expected:
+        _atomic_bytes(path, payload)
+    return expected
 
 
 def _source_fingerprint(manifest: dict[str, Any]) -> str:
@@ -93,8 +104,7 @@ def _content_png(output: Path, kind: str, width: int, height: int, pixels: bytes
     hexdigest = digest.hexdigest()
     relative = f"data/environment-animations/{kind}/{hexdigest[:2]}/{hexdigest}.png"
     path = output / relative
-    if not path.exists():
-        _atomic_bytes(path, encode_png(width, height, pixels))
+    _ensure_bytes(path, encode_png(width, height, pixels))
     return relative
 
 
@@ -117,6 +127,9 @@ def _valid_checkpoint(output: Path, checkpoint: dict[str, Any], fingerprint: str
     if records:
         if not isinstance(shard, str) or not (output / shard).is_file():
             return False
+        shard_checksum = checkpoint.get("shardChecksum")
+        if not isinstance(shard_checksum, str) or _sha256(output / shard) != shard_checksum:
+            return False
         try:
             payload = json.loads((output / shard).read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
@@ -127,9 +140,18 @@ def _valid_checkpoint(output: Path, checkpoint: dict[str, Any], fingerprint: str
         expected_assets = sorted({path for record in values if isinstance(record, dict) for path in _record_assets(record)})
         if expected_assets != checkpoint.get("assets", []):
             return False
-    elif shard is not None:
+    elif shard is not None or checkpoint.get("shardChecksum") is not None:
         return False
-    return all((output / relative).is_file() for relative in checkpoint.get("assets", []))
+    assets = checkpoint.get("assets", [])
+    checksums = checkpoint.get("assetChecksums")
+    if not isinstance(assets, list) or not isinstance(checksums, dict) or set(checksums) != set(assets):
+        return False
+    for relative in assets:
+        path = output / relative
+        expected = checksums.get(relative)
+        if not path.is_file() or not isinstance(expected, str) or _sha256(path) != expected:
+            return False
+    return True
 
 
 def _prepare_root(root: Path, source_fingerprint: str) -> None:
@@ -259,8 +281,7 @@ def enrich_environment_animations_resumable(asset_dir: Path, output: Path) -> di
             frames = [f"data/environment-animations/frames/{key}/{phase}.png" for phase in range(details.frame.animation_phases)]
             for phase, relative in enumerate(frames):
                 path = output / relative
-                if not path.exists():
-                    _atomic_bytes(path, encode_png(details.width, details.height, phase_pixels[phase]))
+                _ensure_bytes(path, encode_png(details.width, details.height, phase_pixels[phase]))
                 chunk_assets.add(relative)
             chunk_keys.add(key)
 
@@ -310,6 +331,7 @@ def enrich_environment_animations_resumable(asset_dir: Path, output: Path) -> di
         elif canonical_shard_path.exists():
             canonical_shard_path.unlink()
 
+        sorted_assets = sorted(chunk_assets)
         checkpoint = {
             "schemaVersion": 1,
             "exportVersion": EXPORT_VERSION,
@@ -317,8 +339,10 @@ def enrich_environment_animations_resumable(asset_dir: Path, output: Path) -> di
             "instances": len(records),
             "staticFallbacks": chunk_fallbacks,
             "animationKeys": sorted(chunk_keys),
-            "assets": sorted(chunk_assets),
+            "assets": sorted_assets,
+            "assetChecksums": {relative: _sha256(output / relative) for relative in sorted_assets},
             "shard": shard_relative,
+            "shardChecksum": _sha256(canonical_shard_path) if records else None,
         }
         _atomic_json(checkpoint_path, checkpoint)
         instances += len(records)

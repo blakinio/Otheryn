@@ -149,6 +149,32 @@ class EnvironmentAnimationResumeTests(unittest.TestCase):
         self.assertNotEqual(old, new)
         self.assertEqual(report["instances"], 1)
 
+    def test_corrupted_payload_invalidates_checkpoint_and_repairs_bytes(self) -> None:
+        output, assets = self.make_fixture()
+        with patch("tools.otbm_atlas.environment_animation_resume.AssetRenderer", _FakeRenderer):
+            first = enrich_environment_animations_resumable(assets, output)
+            shard = json.loads((output / "data/environment-animations/chunks/z7/1_1.json").read_text(encoding="utf-8"))
+            frame = output / shard["records"][0]["frames"][0]
+            expected = frame.read_bytes()
+            frame.write_bytes(b"corrupt")
+            second = enrich_environment_animations_resumable(assets, output)
+        self.assertEqual(first["instances"], 1)
+        self.assertEqual(second["instances"], 1)
+        self.assertEqual(second["reusedChunks"], 0)
+        self.assertEqual(frame.read_bytes(), expected)
+
+    def test_corrupted_shard_invalidates_checkpoint(self) -> None:
+        output, assets = self.make_fixture()
+        with patch("tools.otbm_atlas.environment_animation_resume.AssetRenderer", _FakeRenderer):
+            enrich_environment_animations_resumable(assets, output)
+            shard = output / "data/environment-animations/chunks/z7/1_1.json"
+            shard.write_text('{"schemaVersion":2,"records":[]}\n', encoding="utf-8")
+            second = enrich_environment_animations_resumable(assets, output)
+        self.assertEqual(second["instances"], 1)
+        self.assertEqual(second["reusedChunks"], 0)
+        repaired = json.loads(shard.read_text(encoding="utf-8"))
+        self.assertEqual(len(repaired["records"]), 1)
+
     def test_changed_chunk_removes_stale_shard_and_orphan_payloads(self) -> None:
         output, assets = self.make_fixture()
         spool_path = output / ".spool/z7/1_1.bin"
