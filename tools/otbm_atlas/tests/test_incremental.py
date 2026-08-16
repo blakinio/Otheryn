@@ -5,10 +5,12 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
+from tools.otbm_atlas.assets import encode_png
 from tools.otbm_atlas.incremental import (
     classify_changed_paths,
     compose_publication,
     plan_from_states,
+    render_overview_chunks,
     require_full_build_authorization,
 )
 from tools.otbm_atlas.incremental_core import (
@@ -37,87 +39,63 @@ class IncrementalPlanTests(unittest.TestCase):
             "sheets": [
                 {"path": "sheet-a.lzma", "firstId": 1, "lastId": 250, "layout": 0, "sha256": "s1"},
                 {"path": "sheet-b.lzma", "firstId": 251, "lastId": 400, "layout": 0, "sha256": "s2"},
+                {"path": "sheet-unused.lzma", "firstId": 401, "lastId": 500, "layout": 0, "sha256": "s3"},
             ],
             "gutterProfile": {"maxSpriteWidth": 32, "maxSpriteHeight": 32, "minShiftX": 0, "maxShiftX": 0, "minShiftY": 0, "maxShiftY": 0},
         }
 
+    def _plan(self, *, base_spool=None, target_spool=None, assets=None, render="render", overview="overview"):
+        return plan_from_states(
+            base_spool or {"z7/1_1": "a", "z7/2_1": "b"},
+            target_spool or {"z7/1_1": "a", "z7/2_1": "b"},
+            self.dependencies,
+            self.base_assets,
+            assets or self.base_assets,
+            "render",
+            render,
+            "overview",
+            overview,
+        )
+
+    def test_identical_inputs_produce_zero_dirty_chunks(self) -> None:
+        plan = self._plan()
+        self.assertFalse(plan["fullBuildRequired"])
+        self.assertEqual(plan["detail"]["dirtyChunks"], [])
+        self.assertEqual(plan["overview"]["dirtyChunks"], [])
+
     def test_appearance_change_invalidates_only_reverse_dependencies(self) -> None:
         target = json.loads(json.dumps(self.base_assets))
         target["appearanceDigests"]["100"] = "changed"
-        plan = plan_from_states(
-            {"z7/1_1": "a", "z7/2_1": "b"},
-            {"z7/1_1": "a", "z7/2_1": "b"},
-            self.dependencies,
-            self.base_assets,
-            target,
-            "render",
-            "render",
-            "overview",
-            "overview",
-        )
+        plan = self._plan(assets=target)
         self.assertFalse(plan["fullBuildRequired"])
         self.assertEqual(plan["detail"]["dirtyChunks"], ["z7/1_1"])
 
     def test_sprite_sheet_change_invalidates_only_chunks_using_its_range(self) -> None:
         target = json.loads(json.dumps(self.base_assets))
         target["sheets"][1]["sha256"] = "changed"
-        plan = plan_from_states(
-            {"z7/1_1": "a", "z7/2_1": "b"},
-            {"z7/1_1": "a", "z7/2_1": "b"},
-            self.dependencies,
-            self.base_assets,
-            target,
-            "render",
-            "render",
-            "overview",
-            "overview",
-        )
+        plan = self._plan(assets=target)
         self.assertEqual(plan["detail"]["dirtyChunks"], ["z7/2_1"])
 
+    def test_unused_sprite_sheet_change_does_not_render_map(self) -> None:
+        target = json.loads(json.dumps(self.base_assets))
+        target["sheets"][2]["sha256"] = "changed"
+        plan = self._plan(assets=target)
+        self.assertEqual(plan["detail"]["dirtyChunks"], [])
+
     def test_one_map_chunk_change_does_not_rebuild_other_chunk(self) -> None:
-        plan = plan_from_states(
-            {"z7/1_1": "a", "z7/2_1": "b"},
-            {"z7/1_1": "changed", "z7/2_1": "b"},
-            self.dependencies,
-            self.base_assets,
-            self.base_assets,
-            "render",
-            "render",
-            "overview",
-            "overview",
-        )
+        plan = self._plan(target_spool={"z7/1_1": "changed", "z7/2_1": "b"})
         self.assertEqual(plan["detail"]["dirtyChunks"], ["z7/1_1"])
         self.assertEqual(plan["overview"]["dirtyChunks"], ["z7/1_1"])
 
     def test_overview_contract_change_does_not_force_detail_render(self) -> None:
-        plan = plan_from_states(
-            {"z7/1_1": "a", "z7/2_1": "b"},
-            {"z7/1_1": "a", "z7/2_1": "b"},
-            self.dependencies,
-            self.base_assets,
-            self.base_assets,
-            "render",
-            "render",
-            "overview-a",
-            "overview-b",
-        )
+        plan = self._plan(overview="overview-b")
         self.assertEqual(plan["detail"]["dirtyChunks"], [])
         self.assertEqual(plan["overview"]["dirtyChunks"], ["z7/1_1", "z7/2_1"])
 
     def test_gutter_change_requires_explicit_full_build(self) -> None:
         target = json.loads(json.dumps(self.base_assets))
         target["gutterProfile"]["maxSpriteWidth"] = 64
-        plan = plan_from_states(
-            {"z7/1_1": "a", "z7/2_1": "b"},
-            {"z7/1_1": "a", "z7/2_1": "b"},
-            self.dependencies,
-            self.base_assets,
-            target,
-            "render",
-            "render",
-            "overview",
-            "overview",
-        )
+        plan = self._plan(assets=target)
         self.assertTrue(plan["fullBuildRequired"])
         self.assertIn("GLOBAL_GUTTER_PROFILE_CHANGED", plan["fullBuildReasons"])
         self.assertEqual(plan["detail"]["dirtyChunks"], ["z7/1_1", "z7/2_1"])
@@ -126,25 +104,17 @@ class IncrementalPlanTests(unittest.TestCase):
         require_full_build_authorization(plan, allow_full_build=True)
 
     def test_render_contract_change_is_fail_closed(self) -> None:
-        plan = plan_from_states(
-            {"z7/1_1": "a", "z7/2_1": "b"},
-            {"z7/1_1": "a", "z7/2_1": "b"},
-            self.dependencies,
-            self.base_assets,
-            self.base_assets,
-            "render-a",
-            "render-b",
-            "overview",
-            "overview",
-        )
+        plan = self._plan(render="render-b")
         self.assertEqual(plan["fullBuildReasons"], ["RENDER_CONTRACT_CHANGED"])
 
-    def test_change_domains_do_not_equate_documentation_with_render(self) -> None:
+    def test_change_domains_are_sorted_deterministically_and_docs_do_not_imply_render(self) -> None:
         classified = classify_changed_paths([
-            "docs/maps/example.md",
             "tools/otbm_atlas/viewer_app.js",
+            "docs/maps/example.md",
             "vendor/map-analysis/crystalserver/data-global/world/foo-monster.xml",
+            "docs/maps/example.md",
         ])
+        self.assertEqual(classified["changedPaths"], sorted(set(classified["changedPaths"])))
         self.assertEqual(classified["domains"], ["documentation", "frontend", "spawns"])
 
 
@@ -189,8 +159,24 @@ class IncrementalSpoolTests(unittest.TestCase):
             self.assertFalse((stable / "z7/3_1.bin").exists())
 
 
+class OverviewExecutionTests(unittest.TestCase):
+    def test_overview_only_rebuild_uses_existing_detail_without_detail_render(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            detail = root / "detail"
+            output = root / "output"
+            path = detail / "tiles/z7/1_1.png"
+            path.parent.mkdir(parents=True)
+            path.write_bytes(encode_png(32, 32, bytes(32 * 32 * 4)))
+            result = render_overview_chunks(detail, output, ["z7/1_1"])
+            self.assertEqual(result["chunks"][0]["chunk"], "z7/1_1")
+            self.assertTrue((output / "overview/z7/1_1.png").is_file())
+            self.assertTrue((output / "overview-low/z7/1_1.png").is_file())
+            self.assertFalse((output / "tiles/z7/1_1.png").exists())
+
+
 class PublicationTests(unittest.TestCase):
-    def test_content_addressed_patch_reuses_unchanged_object(self) -> None:
+    def test_content_addressed_patch_reuses_unchanged_object_and_matches_clean_manifest(self) -> None:
         with TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / "render"
@@ -201,11 +187,13 @@ class PublicationTests(unittest.TestCase):
             base = build_content_addressed_manifest(source, ["a.txt", "b.txt"], objects)
             (source / "b.txt").write_text("after", encoding="utf-8")
             changed = build_content_addressed_manifest(source, ["b.txt"], objects)
-            target = compose_publication(base, changed, [])
-            patch = diff_publication_manifests(base, target)
+            incremental_target = compose_publication(base, changed, [])
+            clean_target = build_content_addressed_manifest(source, ["a.txt", "b.txt"], objects)
+            patch = diff_publication_manifests(base, incremental_target)
             self.assertEqual(patch["changed"], ["b.txt"])
             self.assertEqual(patch["unchanged"], ["a.txt"])
-            self.assertEqual(base["entries"]["a.txt"], target["entries"]["a.txt"])
+            self.assertEqual(base["entries"]["a.txt"], incremental_target["entries"]["a.txt"])
+            self.assertEqual(incremental_target, clean_target)
 
 
 if __name__ == "__main__":
