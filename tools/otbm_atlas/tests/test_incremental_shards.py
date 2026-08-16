@@ -87,6 +87,28 @@ class IncrementalShardPlanTests(unittest.TestCase):
                     shards=1,
                 )
 
+    def test_failed_new_plan_removes_stale_success_manifest(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "output"
+            output.mkdir()
+            success = output / "incremental-render.json"
+            success.write_text('{"schemaVersion":1,"chunks":[{"chunk":"z7/1_1"}]}\n', encoding="utf-8")
+            with self.assertRaises(FileNotFoundError):
+                render_selected_chunks_sharded(
+                    root / "missing-spool",
+                    root / "assets",
+                    output,
+                    ["z7/1_1"],
+                    {},
+                    {},
+                    "digest",
+                    workers=1,
+                    shards=1,
+                )
+            self.assertFalse(success.exists())
+            self.assertFalse((output / "incremental-shard-plan.json").exists())
+
 
 if __name__ == "__main__":
     unittest.main()
