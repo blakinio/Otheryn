@@ -1,0 +1,162 @@
+name: OTBM Atlas Full World 16 Floors
+
+on:
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: otbm-atlas-full-world-16-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  floor:
+    name: Canonical Atlas floor Z${{ matrix.floor }}
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.label.name == 'ci:full-world-16')
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        floor: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          persist-credentials: false
+
+      - name: Assert standard GitHub runner contract
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "nproc=$(nproc)"
+          echo "memory_bytes=$(awk '/MemTotal/{print $2*1024}' /proc/meminfo)"
+          test "$(nproc)" -eq 4
+
+      - name: Free disk for runner-local generated corpus
+        run: |
+          sudo rm -rf /usr/local/lib/android /opt/ghc /usr/share/dotnet || true
+          df -h /
+
+      - name: Build exactly one canonical floor with four bounded workers
+        env:
+          ATLAS_FLOOR: ${{ matrix.floor }}
+        run: |
+          set -Eeuo pipefail
+          root="build/full-map-atlas-v3-z${ATLAS_FLOOR}"
+          python3 -m tools.otbm_atlas.floor_build \
+            vendor/map-analysis/crystalserver/data-global/world/world.otbm \
+            vendor/map-analysis/tibia-client/15.25.bd5a04/assets \
+            "$root" \
+            --floor "$ATLAS_FLOOR" \
+            --workers 4
+
+      - name: Independently verify one-floor Atlas product
+        env:
+          ATLAS_FLOOR: ${{ matrix.floor }}
+        run: |
+          set -Eeuo pipefail
+          root="build/full-map-atlas-v3-z${ATLAS_FLOOR}"
+          python3 -m tools.otbm_atlas.verify "$root" --output "$root/verification.json"
+          python3 -m tools.otbm_atlas.deploy_preflight "$root" --require-environment-animations > "$root/preflight.json"
+
+      - name: Emit compact floor evidence
+        env:
+          ATLAS_FLOOR: ${{ matrix.floor }}
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          floor = int(os.environ['ATLAS_FLOOR'])
+          root = Path(f'build/full-map-atlas-v3-z{floor}')
+          manifest = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
+          verification = json.loads((root / 'verification.json').read_text(encoding='utf-8'))
+          statistics = json.loads((root / 'data/statistics.json').read_text(encoding='utf-8'))
+          environment = json.loads((root / 'data/environment-animations/index.json').read_text(encoding='utf-8'))
+
+          floors = sorted({int(chunk['z']) for chunk in manifest['chunks']})
+          assert floors == [floor], floors
+          assert verification['ok'] is True
+          assert sorted(map(int, verification['floors'].keys())) == [floor]
+          assert verification['missingSprites'] == {}
+          assert statistics['chunks'] == len(manifest['chunks'])
+          assert statistics['populatedFloors'] == [floor]
+          assert environment['schemaVersion'] == 2
+          assert environment['statistics']['completedChunks'] == len(manifest['chunks'])
+
+          evidence = {
+              'schemaVersion': 1,
+              'floor': floor,
+              'chunks': len(manifest['chunks']),
+              'sources': manifest['sources'],
+              'workers': manifest['certification']['workers'],
+              'verification': 'PASS',
+              'missingSprites': verification['missingSprites'],
+              'environmentCompletedChunks': environment['statistics']['completedChunks'],
+          }
+          path = Path(f'build/full-world-floor-z{floor}.json')
+          path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          print(json.dumps(evidence, sort_keys=True))
+          PY
+
+      - name: Upload compact evidence only
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: full-world-floor-z${{ matrix.floor }}
+          path: build/full-world-floor-z${{ matrix.floor }}.json
+          if-no-files-found: error
+          retention-days: 1
+
+  world:
+    name: Certify complete Z0..Z15 evidence
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.label.name == 'ci:full-world-16')
+    needs: floor
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all floor evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          pattern: full-world-floor-z*
+          path: build/full-world-evidence
+          merge-multiple: true
+
+      - name: Assert exact complete world coverage
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          paths = sorted(Path('build/full-world-evidence').glob('full-world-floor-z*.json'))
+          assert len(paths) == 16, paths
+          reports = [json.loads(path.read_text(encoding='utf-8')) for path in paths]
+          assert sorted(int(report['floor']) for report in reports) == list(range(16))
+          assert sum(int(report['chunks']) for report in reports) == 3494
+          source_fingerprints = {json.dumps(report['sources'], sort_keys=True) for report in reports}
+          assert len(source_fingerprints) == 1
+          sources = reports[0]['sources']
+          assert sources['mapSha256'] == '3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034'
+          assert sources['chunkSize'] == 128
+          assert sources['atlasVersion'] == 3
+          assert all(int(report['workers']) == 4 for report in reports)
+          assert all(report['verification'] == 'PASS' for report in reports)
+          assert all(report['missingSprites'] == {} for report in reports)
+          assert all(int(report['environmentCompletedChunks']) == int(report['chunks']) for report in reports)
+          evidence = {
+              'schemaVersion': 3,
+              'chunks': 3494,
+              'floors': list(range(16)),
+              'runnerModel': 'one ubuntu-latest runner per floor, four bounded workers per runner',
+              'parallelFloorJobs': 16,
+              'workerCpuTotal': 64,
+              'sources': sources,
+              'verification': 'PASS',
+          }
+          print(json.dumps(evidence, sort_keys=True))
+          PY
