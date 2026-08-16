@@ -34,18 +34,20 @@ jobs:
           docker info >/dev/null
           image=python:3.12-alpine
           docker pull "$image" >/dev/null
-          docker run --rm --name "atlas-copy-verify-${GITHUB_RUN_ID}" \
-            -v "$GITHUB_WORKSPACE:/repo:ro" \
-            -v /volume1/docker:/nas:ro \
-            -w /repo -e PYTHONPATH=/repo "$image" sh -lc '
-              set -eu
-              root=/nas/oteryn/atlas/current
-              test -f "$root/manifest.json"
-              test -d "$root/tiles"
-              test -d "$root/overview"
-              test -d "$root/overview-low"
-              test -d "$root/data"
-              python - <<"PY"
+          tar -C "$GITHUB_WORKSPACE" -cf - tools/otbm_atlas | \
+            docker run --rm -i --name "atlas-copy-verify-${GITHUB_RUN_ID}" \
+              -v /volume1/docker:/nas:ro "$image" sh -lc '
+                set -eu
+                mkdir -p /repo
+                tar -xf - -C /repo
+                export PYTHONPATH=/repo
+                root=/nas/oteryn/atlas/current
+                test -f "$root/manifest.json"
+                test -d "$root/tiles"
+                test -d "$root/overview"
+                test -d "$root/overview-low"
+                test -d "$root/data"
+                python - <<"PY"
           import json
           from pathlib import Path
           root=Path("/nas/oteryn/atlas/current")
@@ -68,8 +70,8 @@ jobs:
           print("SPOOL_PRESENT=" + str((root/".spool").is_dir()).lower())
           print("ENV_INDEX_PRESENT=" + str((root/"data/environment-animations/index.json").is_file()).lower())
           PY
-              python -m tools.otbm_atlas.verify "$root" --output /tmp/verification-copy.json
-              python - <<"PY"
+                python -m tools.otbm_atlas.verify "$root" --output /tmp/verification-copy.json
+                python - <<"PY"
           import json
           r=json.load(open("/tmp/verification-copy.json",encoding="utf-8"))
           assert r["ok"] is True, r["errors"][:20]
@@ -77,38 +79,43 @@ jobs:
           print("INDEPENDENT_CORPUS_VERIFY=PASS")
           print("MISSING_SPRITES=" + str(sum(r.get("missingSprites",{}).values())))
           PY
-            '
+              '
 
       - name: Refresh only dependency-free viewer runtime
         shell: bash
         run: |
           set -Eeuo pipefail
-          image=python:3.12-alpine
-          docker run --rm --name "atlas-viewer-refresh-${GITHUB_RUN_ID}" \
-            -v "$GITHUB_WORKSPACE:/repo:ro" \
-            -v /volume1/docker:/nas \
-            -w /repo -e PYTHONPATH=/repo "$image" sh -lc '
-              set -eu
-              python -c "from tools.otbm_atlas.viewer import write_viewer; write_viewer(\"/nas/oteryn/atlas/current\")"
-              test -f /nas/oteryn/atlas/current/index.html
-              test -f /nas/oteryn/atlas/current/viewer-app.js
-              test -f /nas/oteryn/atlas/current/viewer-runtime.js
-              test -f /nas/oteryn/atlas/current/creature-animation-runtime.js
-              echo VIEWER_ONLY_REFRESH=PASS
-            '
+          viewer="$RUNNER_TEMP/atlas-viewer-runtime"
+          rm -rf "$viewer"
+          mkdir -p "$viewer"
+          PYTHONPATH="$GITHUB_WORKSPACE" python3 -c "from tools.otbm_atlas.viewer import write_viewer; write_viewer('$viewer')"
+          tar -C "$viewer" -cf - index.html viewer-app.js viewer-runtime.js creature-animation-runtime.js | \
+            docker run --rm -i --name "atlas-viewer-refresh-${GITHUB_RUN_ID}" \
+              -v /volume1/docker:/nas alpine:3.22 sh -lc '
+                set -eu
+                root=/nas/oteryn/atlas/current
+                tar -xf - -C "$root"
+                test -f "$root/index.html"
+                test -f "$root/viewer-app.js"
+                test -f "$root/viewer-runtime.js"
+                test -f "$root/creature-animation-runtime.js"
+                echo VIEWER_ONLY_REFRESH=PASS
+              '
 
       - name: Run deployment preflight after viewer refresh
         shell: bash
         run: |
           set -Eeuo pipefail
           image=python:3.12-alpine
-          docker run --rm --name "atlas-preflight-${GITHUB_RUN_ID}" \
-            -v "$GITHUB_WORKSPACE:/repo:ro" \
-            -v /volume1/docker:/nas:ro \
-            -w /repo -e PYTHONPATH=/repo "$image" sh -lc '
-              set -eu
-              python -m tools.otbm_atlas.deploy_preflight /nas/oteryn/atlas/current --output /tmp/deploy-preflight.json
-              python - <<"PY"
+          tar -C "$GITHUB_WORKSPACE" -cf - tools/otbm_atlas | \
+            docker run --rm -i --name "atlas-preflight-${GITHUB_RUN_ID}" \
+              -v /volume1/docker:/nas:ro "$image" sh -lc '
+                set -eu
+                mkdir -p /repo
+                tar -xf - -C /repo
+                export PYTHONPATH=/repo
+                python -m tools.otbm_atlas.deploy_preflight /nas/oteryn/atlas/current --output /tmp/deploy-preflight.json
+                python - <<"PY"
           import json
           r=json.load(open("/tmp/deploy-preflight.json",encoding="utf-8"))
           assert r["corePreviewReady"] is True, r["errors"][:20]
@@ -118,7 +125,7 @@ jobs:
           print("ENVIRONMENT_ANIMATIONS=" + str(r["environmentAnimations"].get("status")))
           print("CREATURES=" + str(r["creatures"].get("status")))
           PY
-            '
+              '
 
       - name: Stage corrected Oteryn project files on NAS
         shell: bash
@@ -147,7 +154,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          if docker ps --format '{{.Names}} {{.Ports}}' | grep -E '(^|[,:])127\.0\.0\.1:8095->|(^|[,:])0\.0\.0\.0:8095->|(^|[,:])\[::\]:8095->' ; then
+          if docker ps --format '{{.Names}} {{.Ports}}' | grep -E '127\.0\.0\.1:8095->|0\.0\.0\.0:8095->|\[::\]:8095->' ; then
             echo 'Port 8095 is already allocated by a running container.' >&2
             exit 1
           fi
