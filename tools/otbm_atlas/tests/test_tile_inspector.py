@@ -5,7 +5,6 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from tools.otbm_atlas.atlas import encode_tile
 from tools.otbm_atlas.semantic import Item, Position, Tile
 from tools.otbm_atlas.tile_inspector import tile_record, write_tile_inspector_data
 
@@ -57,27 +56,37 @@ class TileInspectorTests(unittest.TestCase):
         self.assertEqual(resolved, 0)
         self.assertEqual(ambiguous, 2)
 
-    def test_writer_is_chunk_bounded_deterministic_and_uses_spool_facts(self) -> None:
+    def test_writer_is_chunk_bounded_deterministic_and_preserves_exact_ground_stack(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            spool = root / ".spool/z7"
-            spool.mkdir(parents=True)
-            tiles = [
-                Tile(Position(150, 151, 7), None, 0, Item(100), (Item(200),)),
-                Tile(Position(151, 151, 7), None, 0, None, (Item(201),)),
-            ]
-            (spool / "1_1.bin").write_bytes(b"".join(encode_tile(tile) for tile in tiles))
-            (root / ".spool/facts.json").write_text(
-                json.dumps(
-                    {
-                        "actionIds": [
-                            {"position": {"x": 151, "y": 151, "z": 7}, "serverId": 201, "actionId": 42}
-                        ],
-                        "uniqueIds": [],
-                    }
-                ),
+            spool = root / ".spool"
+            sidecar = spool / "tile-facts/z7/1_1.jsonl"
+            sidecar.parent.mkdir(parents=True)
+            (spool / "spool.json").write_text(
+                json.dumps({"version": 1, "chunkSize": 128, "tiles": 2}),
                 encoding="utf-8",
             )
+            records = [
+                {
+                    "x": 150,
+                    "y": 151,
+                    "z": 7,
+                    "ground": {"serverId": 100},
+                    "items": [{"serverId": 200}],
+                },
+                {
+                    "x": 151,
+                    "y": 151,
+                    "z": 7,
+                    "ground": None,
+                    "items": [{"serverId": 201, "actionId": 42}],
+                },
+            ]
+            sidecar.write_text(
+                "".join(json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n" for record in records),
+                encoding="utf-8",
+            )
+
             first = write_tile_inspector_data(root)
             shard = root / "data/tile-inspector/z7/1_1.json"
             before = shard.read_bytes()
@@ -87,6 +96,7 @@ class TileInspectorTests(unittest.TestCase):
             payload = json.loads(shard.read_text(encoding="utf-8"))
             self.assertEqual(payload["schemaVersion"], 1)
             self.assertEqual(len(payload["records"]), 2)
+            self.assertIsNone(payload["records"][1]["ground"])
             self.assertEqual(payload["records"][1]["items"][0]["actionId"], 42)
             self.assertEqual(first["shards"], 1)
             self.assertEqual(first["tiles"], 2)
@@ -95,8 +105,21 @@ class TileInspectorTests(unittest.TestCase):
             self.assertEqual(first["attributesAmbiguousOmitted"], 0)
             index = json.loads((root / "data/tile-inspector/index.json").read_text(encoding="utf-8"))
             self.assertEqual(index["statistics"], first)
+            self.assertEqual(index["chunkSize"], 128)
             self.assertIn("raw OTBM server IDs", index["policy"]["identity"])
             self.assertIn("ambiguous attributes are omitted", index["policy"]["attributes"])
+
+    def test_writer_refuses_legacy_spool_without_exact_sidecars(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            spool = root / ".spool"
+            spool.mkdir(parents=True)
+            (spool / "spool.json").write_text(
+                json.dumps({"version": 1, "chunkSize": 128, "tiles": 0}),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(RuntimeError, "sidecars are missing"):
+                write_tile_inspector_data(root)
 
 
 if __name__ == "__main__":
