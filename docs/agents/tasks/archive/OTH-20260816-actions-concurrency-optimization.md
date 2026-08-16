@@ -4,7 +4,7 @@ status: completed
 owner: none
 created: "2026-08-16T09:16:00+02:00"
 completed: "2026-08-16T11:10:00+02:00"
-updated: "2026-08-16T11:10:00+02:00"
+updated: "2026-08-16T11:12:00+02:00"
 project_lane: infrastructure
 related_pr: "417"
 ownership_released: true
@@ -33,7 +33,7 @@ The controlled non-final `type:repair` label proof emitted only skipped Atlas jo
 
 ## Closeout
 
-This file is created by the documentation-only closeout PR. That PR must prove the archived task paths do not emit heavy Atlas/creature/environment workflows before it is merged.
+Documentation-only closeout PR #423 initially ran on head `55f07b2be64682abfcc2969a209d6e12a572da91`. GitHub emitted only `Required` run `31938361840`, which completed `success`; no Atlas Facts, Synology Preview, Atlas Tests, Creature Showcase, Creature Animation E2E/Audit, or Environment Animation E2E workflow was emitted. This directly proves task archival no longer creates heavy OTBM runner fanout.
 
 ```yaml
 closeout:
@@ -42,7 +42,11 @@ closeout:
   exact_head_required: PASS
   applicable_specialized_checks: PASS
   label_isolation: PASS
-  docs_only_trigger_proof: PENDING_CLOSEOUT_PR
+  closeout_pr: 423
+  closeout_proof_head: 55f07b2be64682abfcc2969a209d6e12a572da91
+  closeout_required_run: 31938361840
+  docs_only_trigger_proof: PASS
+  heavy_otbm_workflows_emitted: 0
   task_status: completed
   task_archived: true
   ownership_released: true
