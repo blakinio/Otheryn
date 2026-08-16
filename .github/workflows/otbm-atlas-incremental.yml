@@ -38,12 +38,15 @@ jobs:
           python3 -m py_compile \
             tools/otbm_atlas/incremental.py \
             tools/otbm_atlas/incremental_core.py \
+            tools/otbm_atlas/incremental_state.py \
+            tools/otbm_atlas/incremental_cached.py \
             tools/otbm_atlas/domain_probe.py \
             tools/otbm_atlas/chunk_benchmark.py
       - name: Run focused incremental tests
         run: |
           python3 -m unittest \
             tools.otbm_atlas.tests.test_incremental \
+            tools.otbm_atlas.tests.test_incremental_state \
             tools.otbm_atlas.tests.test_domain_probe \
             tools.otbm_atlas.tests.test_chunk_benchmark -v
 
@@ -69,6 +72,14 @@ jobs:
           ref: ${{ github.event.pull_request.base.sha }}
           path: base
           persist-credentials: false
+      - name: Restore persistent spatial/dependency state
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: .atlas-state-cache
+          key: atlas-spatial-v1-${{ runner.os }}-${{ hashFiles('target/vendor/map-analysis/crystalserver/data-global/world/world.otbm') }}-${{ hashFiles('target/vendor/map-analysis/tibia-client/15.25.bd5a04/assets/appearances-*.dat') }}
+          restore-keys: |
+            atlas-spatial-v1-${{ runner.os }}-${{ hashFiles('target/vendor/map-analysis/crystalserver/data-global/world/world.otbm') }}-
+            atlas-spatial-v1-${{ runner.os }}-
       - name: Record exact changed paths
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -81,7 +92,7 @@ jobs:
             printf '%s\n' 'tools/otbm_atlas/incremental_core.py' > /tmp/atlas-changed-paths.txt
           fi
           cat /tmp/atlas-changed-paths.txt
-      - name: Build canonical impact plan without implicit world rendering
+      - name: Build cached impact plan without implicit world rendering
         working-directory: target
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -91,10 +102,11 @@ jobs:
           else
             base_root=.
           fi
-          python3 -m tools.otbm_atlas.incremental plan \
+          python3 -m tools.otbm_atlas.incremental_cached \
             --base-root "$base_root" \
             --target-root . \
             --work /tmp/atlas-impact \
+            --state-root ../.atlas-state-cache \
             --changed-paths /tmp/atlas-changed-paths.txt \
             --output /tmp/atlas-impact-plan.json
       - name: Block accidental implicit full-world work
@@ -114,6 +126,8 @@ jobs:
           from pathlib import Path
           plan = json.loads(Path('/tmp/atlas-impact-plan.json').read_text(encoding='utf-8'))
           probe = json.loads(Path('/tmp/atlas-domain-probe.json').read_text(encoding='utf-8'))
+          operational_path = Path('/tmp/atlas-impact/operational-state.json')
+          operational = json.loads(operational_path.read_text(encoding='utf-8')) if operational_path.is_file() else {}
           print(json.dumps({
               'planDigest': plan['planDigest'],
               'fullBuildRequired': plan['fullBuildRequired'],
@@ -124,6 +138,9 @@ jobs:
               'deletedDetailChunks': len(plan['detail']['deletedChunks']),
               'domains': plan['classification']['domains'],
               'validatedNonRenderDomains': sorted(probe['validated']),
+              'spatialCacheHit': operational.get('spatial', {}).get('cacheHit'),
+              'targetSpoolSource': operational.get('spatial', {}).get('targetSpoolSource'),
+              'dependencyIndexCacheHit': operational.get('dependencies', {}).get('dependencyIndexCacheHit'),
           }, indent=2, sort_keys=True))
           PY
       - name: Execute exactly the planned dirty detail work
@@ -185,7 +202,10 @@ jobs:
               or any(path in {
                   'tools/otbm_atlas/incremental.py',
                   'tools/otbm_atlas/incremental_core.py',
+                  'tools/otbm_atlas/incremental_state.py',
+                  'tools/otbm_atlas/incremental_cached.py',
                   'tools/otbm_atlas/tests/test_incremental.py',
+                  'tools/otbm_atlas/tests/test_incremental_state.py',
                   '.github/workflows/otbm-atlas-incremental.yml',
               } for path in paths)
           )
@@ -198,7 +218,7 @@ jobs:
           print(f'render_validation={str(render_validation).lower()}')
           print(f'benchmark_validation={str(benchmark_validation).lower()}')
           PY
-      - name: Remove generated dirty-render data
+      - name: Remove ephemeral build data
         if: always()
         run: rm -rf /tmp/atlas-impact /tmp/atlas-dirty-render /tmp/atlas-impact-plan.json /tmp/atlas-domain-probe.json /tmp/atlas-dirty-count /tmp/atlas-changed-paths.txt
 
