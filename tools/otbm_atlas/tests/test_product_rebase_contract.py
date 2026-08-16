@@ -19,6 +19,14 @@ class ProductRebaseContractTests(unittest.TestCase):
             source,
         )
 
+    def test_atlas_emits_exact_per_chunk_tile_facts(self) -> None:
+        source = (ROOT / "tools/otbm_atlas/atlas.py").read_text(encoding="utf-8")
+        self.assertIn("TILE_FACTS_VERSION = 1", source)
+        self.assertIn('_TileFactWriterPool(spool_dir / "tile-facts")', source)
+        self.assertIn('"ground": None if record.ground is None else _tile_fact_item(record.ground)', source)
+        self.assertIn('"items": [_tile_fact_item(item) for item in record.items]', source)
+        self.assertIn('"tileFactsVersion": TILE_FACTS_VERSION', source)
+
     def test_mobile_viewer_keeps_layer_controls_visible(self) -> None:
         source = (ROOT / "tools/otbm_atlas/viewer.py").read_text(encoding="utf-8")
         self.assertNotIn(".controls .layers{display:none}", source)
