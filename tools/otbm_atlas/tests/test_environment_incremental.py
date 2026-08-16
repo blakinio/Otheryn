@@ -3,7 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
+import tools.otbm_atlas.environment_incremental as environment_incremental_module
 from tools.otbm_atlas.assets import Appearance, SpriteInfo
 from tools.otbm_atlas.environment_incremental import EnvironmentAssetFingerprinter, environment_contract_fingerprint
 from tools.otbm_atlas.incremental_core import encode_tile
@@ -45,6 +47,25 @@ class EnvironmentIncrementalFingerprintTests(unittest.TestCase):
             environment_contract_fingerprint(manifest, export_version=3, overlap_radius=2, semantics_digest="code-v1"),
             environment_contract_fingerprint(manifest, export_version=3, overlap_radius=2, semantics_digest="code-v2"),
         )
+
+    def test_automatic_semantics_digest_covers_direct_output_helpers(self) -> None:
+        captured: list[set[str]] = []
+
+        def capture(paths):
+            captured.append({path.name for path in paths})
+            return "captured"
+
+        with patch.object(environment_incremental_module, "python_semantics_digest", side_effect=capture):
+            self.assertEqual(environment_incremental_module._automatic_semantics_digest(), "captured")
+
+        self.assertEqual(len(captured), 1)
+        self.assertTrue({
+            "environment_incremental.py",
+            "environment_animation.py",
+            "environment_spool.py",
+            "render.py",
+            "assets.py",
+        }.issubset(captured[0]))
 
     def test_unrelated_sprite_change_invalidates_only_dependent_chunk(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
