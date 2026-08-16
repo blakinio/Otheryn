@@ -101,6 +101,7 @@ def write_spatial_data(output: Path, chunk_size: int, groups: dict[str, list[dic
     search_index_changed = _write_if_changed(output / "data" / "search-index.json", search_payload)
 
     return {
+        "chunks": len(shards),
         "shards": len(shards),
         "searchRecords": len(search),
         "changedChunks": changed,
