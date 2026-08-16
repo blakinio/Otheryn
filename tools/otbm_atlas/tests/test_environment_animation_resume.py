@@ -92,13 +92,21 @@ class EnvironmentAnimationResumeTests(unittest.TestCase):
             if path.is_file()
         }
 
+    @staticmethod
+    def reusable_payload_snapshot(root: Path) -> dict[str, bytes]:
+        return {
+            relative: payload
+            for relative, payload in EnvironmentAnimationResumeTests.snapshot(root).items()
+            if relative not in {"index.json", "export-state.json"}
+        }
+
     def test_clean_build_and_identical_restart_reuse_checkpoint(self) -> None:
         output, assets = self.make_fixture()
         with patch("tools.otbm_atlas.environment_animation_resume.AssetRenderer", _FakeRenderer):
             first = enrich_environment_animations_resumable(assets, output)
-            before = self.snapshot(output)
+            before = self.reusable_payload_snapshot(output)
             second = enrich_environment_animations_resumable(assets, output)
-            after = self.snapshot(output)
+            after = self.reusable_payload_snapshot(output)
         self.assertEqual(first["instances"], 1)
         self.assertEqual(first["reusedChunks"], 0)
         self.assertEqual(second["instances"], 1)
@@ -107,6 +115,7 @@ class EnvironmentAnimationResumeTests(unittest.TestCase):
         index = json.loads((output / "data/environment-animations/index.json").read_text(encoding="utf-8"))
         self.assertEqual(index["schemaVersion"], 2)
         self.assertEqual(index["statistics"]["completedChunks"], 1)
+        self.assertEqual(index["statistics"]["reusedChunks"], 1)
         shard = json.loads((output / "data/environment-animations/chunks/z7/1_1.json").read_text(encoding="utf-8"))
         record = shard["records"][0]
         self.assertIn("/underlays/", record["underlay"])
