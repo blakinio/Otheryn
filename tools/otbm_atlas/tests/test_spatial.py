@@ -12,6 +12,7 @@ class SpatialTests(unittest.TestCase):
 				],
 				"towns":[{"name":"Thais","temple":{"x":32369,"y":32241,"z":7}}],
 			})
+			self.assertEqual(stats["chunks"],2)
 			self.assertEqual(stats["shards"],2)
 			self.assertEqual(stats["searchRecords"],3)
 			self.assertEqual(stats["changedChunks"],2)
