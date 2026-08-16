@@ -10,11 +10,14 @@ on:
       - "tools/otbm_atlas/deployed_browser_probe.py"
       - "tools/otbm_atlas/tests/test_deploy_preflight.py"
       - ".github/workflows/otbm-atlas-synology-preview.yml"
-      - "docs/agents/tasks/active/OTH-20260815-otbm-atlas-product-readiness.md"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:
