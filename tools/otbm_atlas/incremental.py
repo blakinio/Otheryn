@@ -10,10 +10,7 @@ from __future__ import annotations
 import argparse
 from collections.abc import Iterable, Mapping
 import json
-import os
 from pathlib import Path
-import shutil
-import tempfile
 
 from .incremental_core import (
     ChunkKey,
@@ -30,8 +27,10 @@ from .incremental_core import (
     sha256_file,
     spool_hashes,
     spool_map,
+    write_bytes_atomic,
     write_json_atomic,
 )
+from .overview import LOW_OVERVIEW_FACTOR, OVERVIEW_FACTOR, OVERVIEW_VERSION, make_overview
 
 WORLD_REL = Path("vendor/map-analysis/crystalserver/data-global/world/world.otbm")
 ASSET_REL = Path("vendor/map-analysis/tibia-client/15.25.bd5a04/assets")
@@ -45,7 +44,7 @@ def _sorted_chunks(values: Iterable[str]) -> list[str]:
 
 def classify_changed_paths(paths: Iterable[str]) -> dict[str, object]:
     domains: set[str] = set()
-    normalized = [path.replace("\\", "/") for path in paths]
+    normalized = sorted({path.replace("\\", "/") for path in paths})
     for path in normalized:
         if path.endswith("world.otbm"):
             domains.add("mapGeometry")
@@ -179,17 +178,53 @@ def require_full_build_authorization(plan: Mapping[str, object], *, allow_full_b
         raise RuntimeError(f"full Atlas build is required but not authorized: {reasons}; rerun explicitly with --allow-full-build")
 
 
-def _logical_paths_for_chunk(text: str) -> list[str]:
+def _detail_paths_for_chunk(text: str) -> list[str]:
+    key = ChunkKey.parse(text)
+    stem = f"z{key.z}/{key.x}_{key.y}"
+    return [f"tiles/{stem}.png", f"tiles/{stem}.json"]
+
+
+def _overview_paths_for_chunk(text: str) -> list[str]:
     key = ChunkKey.parse(text)
     stem = f"z{key.z}/{key.x}_{key.y}"
     return [
-        f"tiles/{stem}.png",
-        f"tiles/{stem}.json",
         f"overview/{stem}.png",
         f"overview/{stem}.json",
         f"overview-low/{stem}.png",
         f"overview-low/{stem}.json",
     ]
+
+
+def _logical_paths_for_chunk(text: str) -> list[str]:
+    return _detail_paths_for_chunk(text) + _overview_paths_for_chunk(text)
+
+
+def render_overview_chunks(detail_source: Path, output: Path, chunk_keys: Iterable[str]) -> dict[str, object]:
+    rendered: list[dict[str, object]] = []
+    for text in _sorted_chunks(chunk_keys):
+        key = ChunkKey.parse(text)
+        detail_path = detail_source / "tiles" / f"z{key.z}" / f"{key.x}_{key.y}.png"
+        if not detail_path.is_file():
+            raise FileNotFoundError(f"overview-only rebuild requires existing detail PNG: {detail_path}")
+        detail = detail_path.read_bytes()
+        detail_checksum = sha256_bytes(detail)
+        result: dict[str, object] = {"chunk": text, "detailChecksum": detail_checksum}
+        for prefix, directory, factor in (("overview", "overview", OVERVIEW_FACTOR), ("lowOverview", "overview-low", LOW_OVERVIEW_FACTOR)):
+            payload = make_overview(detail, factor)
+            target = output / directory / f"z{key.z}" / f"{key.x}_{key.y}.png"
+            write_bytes_atomic(target, payload)
+            checksum = sha256_bytes(payload)
+            report = {
+                "fingerprint": sha256_bytes(f"{OVERVIEW_VERSION}:{factor}:{detail_checksum}".encode("utf-8")),
+                "checksum": checksum,
+            }
+            write_json_atomic(target.with_suffix(".json"), report)
+            result[f"{prefix}Path"] = target.relative_to(output).as_posix()
+            result[f"{prefix}Checksum"] = checksum
+        rendered.append(result)
+    manifest = {"schemaVersion": 1, "chunks": rendered}
+    write_json_atomic(output / "incremental-overview.json", manifest)
+    return manifest
 
 
 def compose_publication(base: Mapping[str, object] | None, changed_manifest: Mapping[str, object], deleted_chunks: Iterable[str]) -> dict[str, object]:
@@ -207,14 +242,22 @@ def compose_publication(base: Mapping[str, object] | None, changed_manifest: Map
 
 
 def publish_incremental(render_root: Path, object_root: Path, plan: Mapping[str, object], base_manifest_path: Path | None, target_manifest_path: Path) -> dict[str, object]:
-    dirty = plan.get("detail", {}).get("dirtyChunks", []) if isinstance(plan.get("detail"), Mapping) else []
-    logical_paths = [path for text in dirty for path in _logical_paths_for_chunk(str(text)) if (render_root / path).is_file()]
-    changed_manifest = build_content_addressed_manifest(render_root, logical_paths, object_root)
+    detail = plan.get("detail", {})
+    overview = plan.get("overview", {})
+    dirty_detail = {str(value) for value in detail.get("dirtyChunks", [])} if isinstance(detail, Mapping) else set()
+    dirty_overview = {str(value) for value in overview.get("dirtyChunks", [])} if isinstance(overview, Mapping) else set()
+    logical_paths: set[str] = set()
+    for text in dirty_detail:
+        logical_paths.update(_detail_paths_for_chunk(text))
+    for text in dirty_overview:
+        logical_paths.update(_overview_paths_for_chunk(text))
+    existing = [path for path in sorted(logical_paths) if (render_root / path).is_file()]
+    changed_manifest = build_content_addressed_manifest(render_root, existing, object_root)
     base = json.loads(base_manifest_path.read_text(encoding="utf-8")) if base_manifest_path and base_manifest_path.is_file() else None
-    deleted = plan.get("detail", {}).get("deletedChunks", []) if isinstance(plan.get("detail"), Mapping) else []
+    deleted = detail.get("deletedChunks", []) if isinstance(detail, Mapping) else []
     target = compose_publication(base, changed_manifest, (str(value) for value in deleted))
     patch = diff_publication_manifests(base, target)
-    # Promotion is one atomic manifest replacement; immutable objects are written first.
+    # Immutable objects are durable first; one atomic manifest replacement promotes the candidate.
     write_json_atomic(target_manifest_path, target)
     write_json_atomic(target_manifest_path.with_name("publication-patch.json"), patch)
     return patch
@@ -250,6 +293,7 @@ def main() -> int:
     render.add_argument("--work", type=Path, required=True)
     render.add_argument("--target-root", type=Path, required=True)
     render.add_argument("--output", type=Path, required=True)
+    render.add_argument("--detail-source", type=Path, help="existing detail publication used only for overview-only invalidation")
     render.add_argument("--allow-full-build", action="store_true")
 
     publish = sub.add_parser("publish")
@@ -280,8 +324,15 @@ def main() -> int:
         deps = json.loads((args.work / "dependency-index.json").read_text(encoding="utf-8"))
         assets = json.loads((args.work / "asset-state.json").read_text(encoding="utf-8"))
         detail = plan.get("detail", {})
-        dirty = detail.get("dirtyChunks", []) if isinstance(detail, Mapping) else []
-        render_selected_chunks(args.work / "target-spool", args.target_root / ASSET_REL, args.output, (str(value) for value in dirty), deps, assets, render_contract_digest(args.target_root))
+        overview = plan.get("overview", {})
+        dirty_detail = {str(value) for value in detail.get("dirtyChunks", [])} if isinstance(detail, Mapping) else set()
+        dirty_overview = {str(value) for value in overview.get("dirtyChunks", [])} if isinstance(overview, Mapping) else set()
+        render_selected_chunks(args.work / "target-spool", args.target_root / ASSET_REL, args.output, dirty_detail, deps, assets, render_contract_digest(args.target_root))
+        overview_only = dirty_overview - dirty_detail
+        if overview_only:
+            if args.detail_source is None:
+                raise RuntimeError("overview-only invalidation requires --detail-source pointing at the prior detail publication")
+            render_overview_chunks(args.detail_source, args.output, overview_only)
         return 0
     if args.command == "publish":
         plan = json.loads(args.plan.read_text(encoding="utf-8"))
