@@ -6,15 +6,24 @@ on:
     types: [opened, synchronize, reopened, labeled]
     paths:
       - "tools/otbm_atlas/**"
+      - "!tools/otbm_atlas/_deployed_browser_probe_core.py"
+      - "!tools/otbm_atlas/deploy_preflight.py"
+      - "!tools/otbm_atlas/deployed_browser_probe.py"
+      - "!tools/otbm_atlas/tests/test_deploy_preflight.py"
       - ".github/workflows/otbm-atlas-tests.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event.action == 'labeled' && github.event.label.name || 'standard' }}
+  cancel-in-progress: true
+
 jobs:
   unit:
     name: Atlas unit and runtime tests
+    if: github.event_name == 'workflow_dispatch' || github.event.action != 'labeled'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -26,6 +35,7 @@ jobs:
 
   canonical-data:
     name: Canonical Thais scan and render
+    if: github.event_name == 'workflow_dispatch' || github.event.action != 'labeled'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -70,7 +80,7 @@ jobs:
 
   browser-e2e:
     name: Real browser Thais E2E
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action != 'labeled')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

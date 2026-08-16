@@ -5,6 +5,10 @@ on:
   pull_request:
     paths:
       - "tools/otbm_atlas/**"
+      - "!tools/otbm_atlas/_deployed_browser_probe_core.py"
+      - "!tools/otbm_atlas/deploy_preflight.py"
+      - "!tools/otbm_atlas/deployed_browser_probe.py"
+      - "!tools/otbm_atlas/tests/test_deploy_preflight.py"
       - ".github/workflows/otbm-creature-showcase.yml"
       - "vendor/map-analysis/crystalserver/creature-sources-manifest.json"
       - "vendor/map-analysis/crystalserver/data-global/world/**"
@@ -16,6 +20,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   canonical-creatures:

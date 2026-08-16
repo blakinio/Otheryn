@@ -6,15 +6,19 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - "deploy/otbm-atlas-synology/**"
+      - "tools/otbm_atlas/_deployed_browser_probe_core.py"
       - "tools/otbm_atlas/deploy_preflight.py"
       - "tools/otbm_atlas/deployed_browser_probe.py"
       - "tools/otbm_atlas/tests/test_deploy_preflight.py"
       - ".github/workflows/otbm-atlas-synology-preview.yml"
-      - "docs/agents/tasks/active/OTH-20260815-otbm-atlas-product-readiness.md"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:
@@ -31,7 +35,7 @@ jobs:
         run: python3 -m unittest tools.otbm_atlas.tests.test_deploy_preflight -v
 
       - name: Compile deployment browser tooling
-        run: python3 -m py_compile tools/otbm_atlas/deploy_preflight.py tools/otbm_atlas/deployed_browser_probe.py
+        run: python3 -m py_compile tools/otbm_atlas/_deployed_browser_probe_core.py tools/otbm_atlas/deploy_preflight.py tools/otbm_atlas/deployed_browser_probe.py
 
       - name: Validate immutable static-serving container
         shell: bash
