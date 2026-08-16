@@ -32,7 +32,7 @@ jobs:
           python3 - <<'PY'
           import json
           from pathlib import Path
-          from tools.otbm_atlas.atlas import ATLAS_VERSION, _sha256, _tree_sha256, build_atlas, decode_tiles, spool_map
+          from tools.otbm_atlas.atlas import ATLAS_VERSION, TILE_FACTS_VERSION, _sha256, _tree_sha256, build_atlas, decode_tiles, spool_map
           from tools.otbm_atlas.environment_animation import _candidate_details, _dangerous, _hooks, _items, _overlap_radius
           from tools.otbm_atlas.render import AssetRenderer
 
@@ -78,8 +78,27 @@ jobs:
           for path in spool.glob('z*/*.bin'):
               if path != chosen_path:
                   path.unlink()
-          expected = {'mapSha256': _sha256(map_path), 'assetsSha256': _tree_sha256(asset_dir), 'chunkSize': 128, 'atlasVersion': ATLAS_VERSION}
+          chosen_z = int(chosen_path.parent.name[1:])
+          chosen_x, chosen_y = map(int, chosen_path.stem.split('_'))
+          expected = {
+              'mapSha256': _sha256(map_path),
+              'assetsSha256': _tree_sha256(asset_dir),
+              'chunkSize': 128,
+              'atlasVersion': ATLAS_VERSION,
+              'tileFactsVersion': TILE_FACTS_VERSION,
+          }
           (spool / 'source.json').write_text(json.dumps(expected, sort_keys=True) + '\n', encoding='utf-8')
+          (output / 'manifest.json').write_text(json.dumps({
+              'schemaVersion': ATLAS_VERSION,
+              'chunkSize': 128,
+              'sources': expected,
+              'chunks': [{
+                  'z': chosen_z,
+                  'chunkX': chosen_x,
+                  'chunkY': chosen_y,
+                  'logicalBounds': [chosen_x * 128, chosen_x * 128 + 127, chosen_y * 128, chosen_y * 128 + 127, chosen_z],
+              }],
+          }), encoding='utf-8')
           build_atlas(map_path, asset_dir, output, workers=1)
           statistics = json.loads((output / 'data/statistics.json').read_text(encoding='utf-8'))
           index = json.loads((output / 'data/environment-animations/index.json').read_text(encoding='utf-8'))
