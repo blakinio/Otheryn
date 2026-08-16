@@ -105,6 +105,17 @@ def _spool_contract_matches(metadata: Mapping[str, object] | None, expected: Map
     return all(metadata.get(key) == value for key, value in expected.items())
 
 
+def _normalized_hashes(value: Mapping[str, object] | None) -> dict[str, str] | None:
+    if value is None:
+        return None
+    normalized: dict[str, str] = {}
+    for key, digest in value.items():
+        if not isinstance(key, str) or not isinstance(digest, str):
+            return None
+        normalized[key] = digest
+    return normalized
+
+
 def _prepare_spool(
     map_path: Path,
     output: Path,
@@ -112,19 +123,36 @@ def _prepare_spool(
     chunk_size: int,
     spool_contract: Mapping[str, object],
     spool_builder: SpoolBuilder,
+    *,
+    expected_spool_hashes: Mapping[str, object] | None = None,
+    allow_unbound_legacy_reuse: bool = False,
 ) -> tuple[Path, dict[str, object]]:
     stable = output / ".spool"
     map_sha = sha256_file(map_path)
     metadata = _read_json(stable / "spool.json")
     auxiliary_ok = (stable / "facts.json").is_file() and (stable / "tile-facts").is_dir()
-    if _spool_contract_matches(metadata, spool_contract, map_sha, chunk_size) and auxiliary_ok:
-        hashes = spool_hashes(stable)
-        return stable, {
-            "parsed": False,
-            "renderShards": {"changed": [], "reused": sorted(hashes), "deleted": []},
-            "tileFacts": {"changed": [], "reused": [], "deleted": []},
-            "factsChanged": False,
-        }
+    contract_ok = _spool_contract_matches(metadata, spool_contract, map_sha, chunk_size) and auxiliary_ok
+    expected_hashes = _normalized_hashes(expected_spool_hashes)
+    integrity_mismatch = False
+    if contract_ok:
+        current_hashes = spool_hashes(stable)
+        if expected_hashes is not None and current_hashes == expected_hashes:
+            return stable, {
+                "parsed": False,
+                "integrity": "verified",
+                "renderShards": {"changed": [], "reused": sorted(current_hashes), "deleted": []},
+                "tileFacts": {"changed": [], "reused": [], "deleted": []},
+                "factsChanged": False,
+            }
+        if expected_hashes is None and allow_unbound_legacy_reuse:
+            return stable, {
+                "parsed": False,
+                "integrity": "legacy-adoption-bound-on-commit",
+                "renderShards": {"changed": [], "reused": sorted(current_hashes), "deleted": []},
+                "tileFacts": {"changed": [], "reused": [], "deleted": []},
+                "factsChanged": False,
+            }
+        integrity_mismatch = expected_hashes is not None
 
     candidate = state_root / "spool-candidate"
     if candidate.exists():
@@ -160,6 +188,7 @@ def _prepare_spool(
         stale_index.unlink()
     return stable, {
         "parsed": True,
+        "integrity": "repaired-from-canonical-source" if integrity_mismatch else "rebuilt-from-canonical-source",
         "renderShards": render_reconciliation,
         "tileFacts": tile_fact_reconciliation,
         "factsChanged": facts_changed,
@@ -254,7 +283,20 @@ def prepare_production_render_plan(
         reasons = ", ".join(sorted(full_reasons))
         raise RuntimeError(f"full Atlas detail rebuild is required but not authorized: {reasons}; rerun explicitly with --allow-full-build")
 
-    stable_spool, spool_report = _prepare_spool(map_path, output, state_root, chunk_size, spool_contract, spool_builder)
+    manifest_sources = manifest.get("sources") if manifest and isinstance(manifest.get("sources"), Mapping) else None
+    legacy_adoption = previous is None and _same_source(manifest_sources, expected_sources)
+    previous_spool_hashes = previous.get("spoolChunkHashes") if previous and isinstance(previous.get("spoolChunkHashes"), Mapping) else None
+    stable_spool, spool_report = _prepare_spool(
+        map_path,
+        output,
+        state_root,
+        chunk_size,
+        spool_contract,
+        spool_builder,
+        expected_spool_hashes=previous_spool_hashes,
+        allow_unbound_legacy_reuse=legacy_adoption,
+    )
+    current_spool_hashes = spool_hashes(stable_spool)
     dependency_index, dependency_report = prepare_dependency_index(stable_spool, asset_dir, state_root)
     records = dependency_index.get("chunks", {})
     if not isinstance(records, Mapping):
@@ -265,8 +307,6 @@ def prepare_production_render_plan(
         if isinstance(text, str) and isinstance(record, Mapping)
     }
 
-    manifest_sources = manifest.get("sources") if manifest and isinstance(manifest.get("sources"), Mapping) else None
-    legacy_adoption = previous is None and _same_source(manifest_sources, expected_sources)
     previous_fingerprints = previous.get("chunkFingerprints", {}) if previous and isinstance(previous.get("chunkFingerprints"), Mapping) else {}
     old_keys = set(str(key) for key in previous_fingerprints) if previous is not None else _manifest_chunk_keys(manifest)
     current_keys = set(fingerprints)
@@ -293,6 +333,7 @@ def prepare_production_render_plan(
         "gutterProfile": asset_state.get("gutterProfile"),
         "assetStateDigest": asset_state.get("stateDigest"),
         "mapSha256": sha256_file(map_path),
+        "spoolChunkHashes": dict(sorted(current_spool_hashes.items())),
         "chunkFingerprints": dict(sorted(fingerprints.items())),
         "adoptedLegacyPublication": legacy_adoption,
     }
