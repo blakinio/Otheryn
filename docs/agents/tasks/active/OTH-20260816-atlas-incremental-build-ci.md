@@ -2,28 +2,34 @@
 task_id: OTH-20260816-atlas-incremental-build-ci
 status: validating
 owner: chat-github-atlas-incremental
-branch: perf/OTH-20260816-atlas-incremental-build
+branch: perf/OTH-20260816-atlas-production-incremental-entry
 base_branch: main
 created: "2026-08-16T10:04:00+02:00"
-updated: "2026-08-16T10:39:00+02:00"
+updated: "2026-08-16T16:25:00+02:00"
 project_lane: otheryn-content
 execution_mode: chat-github
-related_pr: "421"
+related_pr: "426"
 ownership_released: false
 owned_paths:
   - tools/otbm_atlas/incremental.py
   - tools/otbm_atlas/incremental_core.py
   - tools/otbm_atlas/incremental_state.py
   - tools/otbm_atlas/incremental_cached.py
+  - tools/otbm_atlas/production_incremental.py
+  - tools/otbm_atlas/environment_incremental.py
+  - tools/otbm_atlas/environment_animation_resume.py
+  - tools/otbm_atlas/atlas.py
   - tools/otbm_atlas/domain_probe.py
   - tools/otbm_atlas/chunk_benchmark.py
   - tools/otbm_atlas/tests/test_incremental.py
   - tools/otbm_atlas/tests/test_incremental_state.py
+  - tools/otbm_atlas/tests/test_production_incremental.py
+  - tools/otbm_atlas/tests/test_environment_incremental.py
+  - tools/otbm_atlas/tests/test_environment_animation_resume.py
   - tools/otbm_atlas/tests/test_domain_probe.py
   - tools/otbm_atlas/tests/test_chunk_benchmark.py
   - .github/workflows/otbm-atlas-incremental.yml
   - docs/maps/otbm-atlas-incremental-build.md
-  - docs/agents/reports/OTH-20260816-atlas-incremental-build-audit.md
   - docs/agents/tasks/active/OTH-20260816-atlas-incremental-build-ci.md
   - docs/agents/tasks/archive/OTH-20260816-atlas-incremental-build-ci.md
 ---
@@ -32,7 +38,7 @@ owned_paths:
 
 ## Goal
 
-Move ordinary Atlas build/test CPU work to GitHub-hosted Actions while making full-world rebuilds exceptional. A normal change must produce a deterministic change-impact plan and rebuild only affected map/render/data/frontend domains. Full rebuilds must be explicit, justified and independently verifiable against incremental output.
+Move ordinary Atlas build/test CPU work to GitHub-hosted Actions while making full-world rebuilds exceptional. A normal change must rebuild only affected map/render/data/frontend domains. Production `atlas.py` must persist and verify local state instead of treating a new monolithic map or asset-tree SHA as permission to rerender the world.
 
 ## Delivery classification
 
@@ -46,81 +52,86 @@ feature_scope:
   e2e_required: true
 ```
 
-E2E here means a real incremental builder journey on deterministic fixtures/canonical representative data: unchanged inputs reuse outputs, one map chunk change rebuilds only that chunk, one used asset change invalidates only dependent chunks, unrelated data/frontend/docs changes do not render the world, and clean/incremental manifests remain equivalent for the same inputs.
+E2E means real incremental builder journeys on deterministic and canonical representative data: unchanged inputs reuse outputs, a local change dirties only its dependency closure, unrelated asset/source SHA changes do not invalidate unrelated chunks, corrupted persisted state is repaired from canonical source, environment-animation checkpoints are local, and the fail-closed full-build guard remains explicit.
 
-## Verified constraints at task start
+## Verified baseline
 
-- `main` was `39cb2ce4ff427e7c3760eb6112b45efc0c1f73b8`; exact main must be re-read before merge/integration.
-- Current Atlas v3 uses 128x128 chunks and has 3,494 certified detail chunks.
-- Existing canonical detail PNG output is 10,995,096,999 bytes before other publication data, so GitHub Pages is not a valid current full-Atlas hosting target.
-- Current legacy `atlas.py` cache fingerprint includes whole-map and whole-asset-tree SHA-256 values, so a single source change can invalidate all detail chunks.
-- Current legacy `spool_map` recreates the complete spool when its global source state changes.
-- Open PR #418 owns `tools/otbm_atlas/atlas.py` for resumable environment-animation export.
-- Open PR #419 also owns `tools/otbm_atlas/atlas.py` for product-completion/tile-inspector work.
-- Open PR #417 owns existing specialized Atlas workflow files; PR #420 owns `required.yml`.
-- This task therefore implements new non-overlapping incremental paths first and must not overwrite those active owners.
+- Atlas v3 production chunk contract remains 128x128.
+- Certified canonical world baseline contains 3,494 detail chunks across Z0..Z15.
+- Existing canonical detail PNG output is 10,995,096,999 bytes before other publication data, so GitHub Pages is not the current full-Atlas hosting target.
+- PR #417 runner-fanout optimization is merged.
+- PR #418 resumable environment-animation exporter is merged.
+- PR #420 stale Required-poller cancellation is merged.
+- PR #421 spatial incremental planner/cache/publication pipeline is merged as `32f7d5c58a889b78de5637ff9fbea56686b79bcd`; its final implementation head passed incremental unit tests, real dirty-build planning, pixel equivalence, the bounded 32/64/128 benchmark, CI, Required, Atlas Tests and applicable creature/environment workflows.
+- PR #419 product/tile-inspector branch was reconciled with current incremental `main` as merge head `3a151e95e0c285135bb8cf96414b731b8910deb7`; its exact-head incremental workflow, CI and Required are green while the remaining bounded product/browser workflows complete.
+- PR #426 owns the final production-entry integration on top of the reconciled product stack.
 
 ## Acceptance inventory
 
 - [x] Map source is spatially fingerprinted per chunk; a monolithic OTBM SHA change alone never forces all detail renders.
 - [x] Stable spool state has per-chunk reconciliation; unchanged spool bytes are reused and deleted chunks are removed explicitly.
+- [x] Persisted production spool bytes are bound to per-chunk hashes; corruption is repaired from canonical OTBM rather than trusted.
 - [x] Dependency index records chunk -> appearance/sprite dependencies and reverse dependency maps.
 - [x] Appearance metadata changes invalidate only chunks using changed appearances unless a global render-bound profile changes.
-- [x] Sprite-sheet changes invalidate only chunks using sprites from changed sheet ranges.
+- [x] Sprite-sheet changes invalidate only chunks using sprites from changed sheet ranges for detail rendering.
 - [x] Detail fingerprints depend only on local spool bytes, local render dependencies, render contract and required global gutter profile.
-- [x] Overview invalidation is separate from detail invalidation.
+- [x] Production `atlas.py` consumes exact dirty/reused/deleted chunk sets rather than whole-map/tree SHA cache invalidation.
+- [x] Existing certified detail corpus can be adopted without rerender when exact source identity matches; the migration binds the legacy spool to verified local hashes.
+- [x] Reused detail/overview images are not re-hashed across the complete ~11 GB corpus on every ordinary build.
+- [x] Overview invalidation remains separate from detail invalidation.
+- [x] Environment-animation global fingerprint excludes monolithic map SHA, complete asset SHA and complete chunk inventory.
+- [x] Environment-animation chunk fingerprint binds local spool, logical bounds, used appearance semantics and exact decoded sprite pixels.
+- [x] Unrelated sprite changes do not invalidate unrelated environment-animation checkpoints.
+- [x] Deleted environment chunks remove stale checkpoint/shard references and unreachable payloads.
 - [x] Change-impact planning separates map, assets, spawn/NPC/monster, houses, mechanics, factual data, frontend and documentation domains.
-- [x] Non-render-only changes skip map spool/dependency scanning in the incremental planner.
+- [x] Non-render-only changes skip map spool/dependency scanning in the PR incremental planner.
 - [x] Full-build-required decisions are fail-closed, carry machine-readable reasons and require an explicit allow flag.
+- [x] Production full-detail override is explicit `--allow-full-build`; there is no implicit fallback.
 - [x] Render-sensitive incremental-core changes require an explicit render-core version transition; unversioned semantic drift fails closed.
 - [x] Content-addressed publication metadata maps logical output paths to SHA-256 objects and supports deterministic patch manifests.
 - [x] Incremental publication manifest promotion is atomic; immutable changed objects are written before manifest selection.
-- [x] Persistent GitHub cache is source-derived spool/dependency state only; it contains no rendered map imagery and is self-validating by exact map/appearance identity.
-- [x] 32/64/128 chunk-size benchmark tooling exists; final measured result is pending exact-head workflow completion.
-- [x] GitHub-hosted workflow contains focused tests, impact planning, proportional domain probes, exact dirty-detail execution, representative pixel-equivalence E2E and bounded chunk benchmark.
+- [x] Persistent GitHub cache is source-derived spool/dependency state only; it contains no rendered map imagery and is self-validating.
+- [x] 32/64/128 benchmark tooling and exact-head evidence exist; production chunk size remains 128 pending browser/deployment evidence for a change.
+- [x] GitHub-hosted workflow contains focused tests, impact planning, proportional domain probes, exact dirty-detail execution, representative equivalence E2E and bounded benchmark.
 - [x] PR path changes do not automatically trigger canonical full-world build.
 - [x] No generated Tibia/CipSoft-derived render corpus is uploaded by the incremental workflow.
 - [x] Existing Game -> Atlas v1 remains complete-snapshot artifact-first; this work is Atlas-side consumption/build invalidation, not a delta protocol.
-- [ ] Final exact-head CI for the persistent-state generation is green and benchmark results are recorded.
-- [ ] Fresh post-implementation audit is closed with no unresolved material finding inside owned paths.
-- [ ] Main `tools/otbm_atlas/atlas.py` entry-point integration is complete after PRs #418/#419 release overlapping ownership.
+- [x] GitHub Pages remains disabled for the full Atlas; CI/build compute is separated from hosting/storage.
+- [ ] Final exact-head #426 CI/E2E generation is terminal green after production-contract documentation.
+- [ ] Fresh final audit has zero unresolved material findings and clean review/thread state.
+- [ ] PR #426 is merged and `main` is re-read to prove the production entry point and local environment invalidation are present.
+- [ ] Task lifecycle is archived/released after post-merge verification.
 
 ## Scope guard
 
-Do not enable GitHub Pages or publish Atlas render assets from this public repository. Current output size exceeds Pages suitability and public redistribution of generated third-party-derived assets is not authorized by this task. GitHub-hosted CI may generate bounded ephemeral outputs for validation but must not upload the render corpus.
+Do not enable GitHub Pages or publish the Atlas render corpus from this public repository. Build/test Actions may create bounded ephemeral derived data but must not upload the full generated map corpus.
 
-Do not edit paths currently owned by PRs #417, #418, #419 or #420 while those tasks remain live. Integrating the new builder into `atlas.py` or replacing their workflow paths is a later phase of this same task only after ownership is terminal and exact-base reconciliation is safe.
+Do not reintroduce complete-map or complete-asset SHA into a local detail/environment chunk fingerprint. If a real global dependency exists, encode it as a narrow contract/profile/version and fail closed with an explicit reason.
 
 ## Context checkpoint
 
 ```yaml
-checkpoint_version: 2
-updated_at: 2026-08-16T10:39:00+02:00
-phase: exact-head-validation
+checkpoint_version: 3
+updated_at: 2026-08-16T16:25:00+02:00
+phase: final-production-validation
 session_id: chat-github-atlas-incremental-20260816
 session_role: implementer
 execution_mode: chat-github
 project_lane: otheryn-content
-context_pressure: medium
-context_growth: stable
-decomposition_decision: phased
-validation_level: focused-plus-live-ci
-branch: perf/OTH-20260816-atlas-incremental-build
-pr: 421
+validation_level: exact-head-plus-post-merge
+branch: perf/OTH-20260816-atlas-production-incremental-entry
+pr: 426
 status: validating
-head_before_checkpoint: 820bb6dea53a4312fa17bded0cde19c711207392
 proven:
-  - current global map/assets fingerprint can invalidate every legacy detail chunk
-  - current Atlas output exceeds GitHub Pages practical/declared site-size target
-  - Atlas-side incremental build does not require changing Game -> Atlas v1 snapshot semantics
-  - local/reverse dependency invalidation and content-addressed publication primitives exist
-  - non-render changes can skip render-source scanning entirely
-  - persistent state stores only source-derived spool/dependency metadata and validates exact source identity
-  - earlier focused generation passed 23 tests on a GitHub-hosted runner; new persistent-state tests are pending exact-head CI
-  - exact-head checkout defect found during audit was repaired
-blockers:
-  - final integration into tools/otbm_atlas/atlas.py remains ownership-blocked by active PRs 418 and 419
-  - PR 419 exact-head workflows currently require action, so it cannot be merged as verified
-  - PR 418 CI is green but its own task still requires canonical full-world/deployed-browser acceptance before terminal closeout
-next_action: obtain terminal exact-head PR 421 CI including persistent-state tests and benchmark, record fresh audit evidence, then merge the independent incremental infrastructure if clean while preserving the atlas.py integration blocker
+  - PR 421 incremental infrastructure merged with fully green exact-head validation
+  - PR 418 resumable environment exporter merged
+  - product branch 419 reconciled with incremental main without dropping either change set
+  - production planner persists per-chunk detail and spool identities
+  - production planner repairs corrupt spool from canonical source
+  - production atlas entry renders exact dirty detail set and requires explicit --allow-full-build for global transitions
+  - environment exporter v3 uses global semantic contract plus local appearance/sprite/spool dependencies
+  - tests cover zero-dirty reuse, legacy adoption, one local dirty chunk, corruption repair, local environment sprite impact and deleted-chunk cleanup
+  - final stack CI, Required, Atlas Incremental, Synology Preview and multiple factual/audit checks have already produced green evidence on pre-documentation exact heads
+blockers: []
+next_action: obtain one final terminal exact-head PR 426 generation after this checkpoint, perform fresh diff/review/source audit, merge, re-read main and archive the task
 ```
