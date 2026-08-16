@@ -1,0 +1,347 @@
+---
+name: OTBM Atlas Incremental
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "tools/otbm_atlas/**"
+      - "tools/otbm_atlas_facts/**"
+      - "vendor/map-analysis/crystalserver/data-global/world/**"
+      - "vendor/map-analysis/crystalserver/data-global/npc/**"
+      - "vendor/map-analysis/crystalserver/data-global/monster/**"
+      - "vendor/map-analysis/crystalserver/data-global/scripts/**"
+      - "vendor/map-analysis/tibia-client/**"
+      - ".github/workflows/otbm-atlas-incremental.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: otbm-atlas-incremental-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  focused-tests:
+    name: Incremental planner unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact head
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Compile incremental modules
+        run: |
+          python3 -m py_compile \
+            tools/otbm_atlas/incremental.py \
+            tools/otbm_atlas/incremental_core.py \
+            tools/otbm_atlas/incremental_state.py \
+            tools/otbm_atlas/incremental_cached.py \
+            tools/otbm_atlas/incremental_shards.py \
+            tools/otbm_atlas/incremental_sharded.py \
+            tools/otbm_atlas/domain_probe.py \
+            tools/otbm_atlas/chunk_benchmark.py
+      - name: Run focused incremental tests
+        run: |
+          python3 -m unittest \
+            tools.otbm_atlas.tests.test_incremental \
+            tools.otbm_atlas.tests.test_incremental_state \
+            tools.otbm_atlas.tests.test_incremental_shards \
+            tools.otbm_atlas.tests.test_domain_probe \
+            tools.otbm_atlas.tests.test_chunk_benchmark -v
+
+  impact-plan:
+    name: Real change-impact plan and dirty build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      render_validation: ${{ steps.flags.outputs.render_validation }}
+      benchmark_validation: ${{ steps.flags.outputs.benchmark_validation }}
+    steps:
+      - name: Checkout exact target head
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          path: target
+          persist-credentials: false
+      - name: Checkout exact PR base
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          persist-credentials: false
+      - name: Restore persistent spatial/dependency state
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: .atlas-state-cache
+          key: atlas-spatial-v2-${{ runner.os }}-${{ hashFiles('target/vendor/map-analysis/crystalserver/data-global/world/world.otbm') }}-${{ hashFiles('target/vendor/map-analysis/tibia-client/15.25.bd5a04/assets/appearances-*.dat') }}
+          restore-keys: |
+            atlas-spatial-v2-${{ runner.os }}-${{ hashFiles('target/vendor/map-analysis/crystalserver/data-global/world/world.otbm') }}-
+            atlas-spatial-v2-${{ runner.os }}-
+      - name: Record exact changed paths
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            git -C target diff --name-only "$BASE_SHA" "$HEAD_SHA" > /tmp/atlas-changed-paths.txt
+          else
+            printf '%s\n' 'tools/otbm_atlas/incremental_core.py' > /tmp/atlas-changed-paths.txt
+          fi
+          cat /tmp/atlas-changed-paths.txt
+      - name: Build cached impact plan without implicit world rendering
+        working-directory: target
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base_root=../base
+          else
+            base_root=.
+          fi
+          python3 -m tools.otbm_atlas.incremental_cached \
+            --base-root "$base_root" \
+            --target-root . \
+            --work /tmp/atlas-impact \
+            --state-root ../.atlas-state-cache \
+            --changed-paths /tmp/atlas-changed-paths.txt \
+            --output /tmp/atlas-impact-plan.json
+      - name: Block accidental implicit full-world work
+        working-directory: target
+        run: python3 -m tools.otbm_atlas.incremental guard /tmp/atlas-impact-plan.json
+      - name: Validate only changed non-render domains
+        working-directory: target
+        run: |
+          python3 -m tools.otbm_atlas.domain_probe \
+            /tmp/atlas-impact-plan.json \
+            --repository . \
+            --output /tmp/atlas-domain-probe.json
+      - name: Emit compact impact evidence
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          plan = json.loads(Path('/tmp/atlas-impact-plan.json').read_text(encoding='utf-8'))
+          probe = json.loads(Path('/tmp/atlas-domain-probe.json').read_text(encoding='utf-8'))
+          operational_path = Path('/tmp/atlas-impact/operational-state.json')
+          operational = json.loads(operational_path.read_text(encoding='utf-8')) if operational_path.is_file() else {}
+          print(json.dumps({
+              'planDigest': plan['planDigest'],
+              'fullBuildRequired': plan['fullBuildRequired'],
+              'fullBuildReasons': plan['fullBuildReasons'],
+              'renderScanSkipped': plan['renderScanSkipped'],
+              'dirtyDetailChunks': len(plan['detail']['dirtyChunks']),
+              'dirtyOverviewChunks': len(plan['overview']['dirtyChunks']),
+              'deletedDetailChunks': len(plan['detail']['deletedChunks']),
+              'domains': plan['classification']['domains'],
+              'validatedNonRenderDomains': sorted(probe['validated']),
+              'spatialCacheHit': operational.get('spatial', {}).get('cacheHit'),
+              'targetSpoolSource': operational.get('spatial', {}).get('targetSpoolSource'),
+              'dependencyIndexCacheHit': operational.get('dependencies', {}).get('dependencyIndexCacheHit'),
+          }, indent=2, sort_keys=True))
+          PY
+      - name: Record planned dirty work
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          plan = json.loads(Path('/tmp/atlas-impact-plan.json').read_text(encoding='utf-8'))
+          detail = set(plan['detail']['dirtyChunks'])
+          overview = set(plan['overview']['dirtyChunks'])
+          overview_only = sorted(overview - detail)
+          if overview_only:
+              raise SystemExit(
+                  'overview-only invalidation requires an existing prior detail publication; '
+                  'ordinary PR CI refuses to rebuild detail implicitly. Use the explicit publication/recovery path.'
+              )
+          Path('/tmp/atlas-dirty-count').write_text(str(len(detail)), encoding='utf-8')
+          print(json.dumps({'dirtyDetailChunks': len(detail), 'overviewOnlyChunks': 0}, sort_keys=True))
+          PY
+      - name: Execute planned dirty detail work in process shards
+        working-directory: target
+        run: |
+          dirty_count="$(cat /tmp/atlas-dirty-count)"
+          if [ "$dirty_count" -gt 0 ]; then
+            workers="$(nproc)"
+            shards="$((workers * 4))"
+            echo "Atlas dirty render: chunks=${dirty_count} workers=${workers} shards=${shards}"
+            python3 -m tools.otbm_atlas.incremental_sharded \
+              /tmp/atlas-impact-plan.json \
+              --work /tmp/atlas-impact \
+              --target-root . \
+              --output /tmp/atlas-dirty-render \
+              --workers "$workers" \
+              --shards "$shards"
+          else
+            echo 'No detail chunks are dirty; rendered 0 chunks as planned.'
+          fi
+      - name: Verify dirty-render execution matches plan
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          plan = json.loads(Path('/tmp/atlas-impact-plan.json').read_text(encoding='utf-8'))
+          expected = sorted(plan['detail']['dirtyChunks'])
+          render_manifest = Path('/tmp/atlas-dirty-render/incremental-render.json')
+          shard_plan = Path('/tmp/atlas-dirty-render/incremental-shard-plan.json')
+          if expected:
+              rendered = json.loads(render_manifest.read_text(encoding='utf-8'))
+              actual = sorted(chunk['chunk'] for chunk in rendered['chunks'])
+              sharding = rendered.get('sharding', {})
+              assert int(sharding.get('workers', 0)) >= 1, sharding
+              assert shard_plan.is_file(), shard_plan
+          else:
+              if render_manifest.exists():
+                  raise AssertionError('render manifest exists despite zero dirty detail chunks')
+              actual = []
+          assert actual == expected, {'expected': expected, 'actual': actual}
+          print(json.dumps({'plannedDirtyChunks': len(expected), 'renderedDirtyChunks': len(actual), 'result': 'PASS'}, sort_keys=True))
+          PY
+      - name: Select proportional validation
+        id: flags
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          plan = json.loads(Path('/tmp/atlas-impact-plan.json').read_text(encoding='utf-8'))
+          paths = set(plan['classification']['changedPaths'])
+          render_sources = {
+              'tools/otbm_atlas/render.py',
+              'tools/otbm_atlas/assets.py',
+              'tools/otbm_atlas/semantic.py',
+              'tools/otbm_atlas/overview.py',
+          }
+          render_validation = (
+              any(path.endswith('world.otbm') for path in paths)
+              or any(path.startswith('vendor/map-analysis/tibia-client/') for path in paths)
+              or bool(paths & render_sources)
+              or any(path in {
+                  'tools/otbm_atlas/incremental.py',
+                  'tools/otbm_atlas/incremental_core.py',
+                  'tools/otbm_atlas/incremental_state.py',
+                  'tools/otbm_atlas/incremental_cached.py',
+                  'tools/otbm_atlas/incremental_shards.py',
+                  'tools/otbm_atlas/incremental_sharded.py',
+                  'tools/otbm_atlas/tests/test_incremental.py',
+                  'tools/otbm_atlas/tests/test_incremental_state.py',
+                  'tools/otbm_atlas/tests/test_incremental_shards.py',
+                  '.github/workflows/otbm-atlas-incremental.yml',
+              } for path in paths)
+          )
+          benchmark_validation = any(path in {
+              'tools/otbm_atlas/incremental_core.py',
+              'tools/otbm_atlas/chunk_benchmark.py',
+              'tools/otbm_atlas/tests/test_chunk_benchmark.py',
+              '.github/workflows/otbm-atlas-incremental.yml',
+          } for path in paths)
+          print(f'render_validation={str(render_validation).lower()}')
+          print(f'benchmark_validation={str(benchmark_validation).lower()}')
+          PY
+      - name: Remove ephemeral build data
+        if: always()
+        run: rm -rf /tmp/atlas-impact /tmp/atlas-dirty-render /tmp/atlas-impact-plan.json /tmp/atlas-domain-probe.json /tmp/atlas-dirty-count /tmp/atlas-changed-paths.txt
+
+  representative-e2e:
+    name: Sharded incremental pixel-equivalence E2E
+    needs: impact-plan
+    if: needs.impact-plan.outputs.render_validation == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact head
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Build two real canonical chunks through the sharded path
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from tools.otbm_atlas.incremental import ASSET_REL, WORLD_REL
+          from tools.otbm_atlas.incremental_core import (
+              AssetRenderer,
+              build_dependency_index,
+              collect_asset_state,
+              render_contract_digest,
+              spool_map,
+          )
+          from tools.otbm_atlas.incremental_shards import render_selected_chunks_sharded
+          from tools.otbm_atlas.atlas import _write_rendered_chunk
+
+          root = Path('.')
+          spool = Path('/tmp/atlas-e2e-spool')
+          output = Path('/tmp/atlas-e2e-incremental')
+          legacy = Path('/tmp/atlas-e2e-legacy')
+          spool_map(root / WORLD_REL, spool, 128)
+          dependencies = build_dependency_index(spool, root / ASSET_REL)
+          assets = collect_asset_state(root / ASSET_REL)
+          chunks = [key for key in sorted(dependencies['chunks']) if key.startswith('z7/')][:2]
+          assert len(chunks) == 2, chunks
+          result = render_selected_chunks_sharded(
+              spool,
+              root / ASSET_REL,
+              output,
+              chunks,
+              dependencies,
+              assets,
+              render_contract_digest(root),
+              workers=2,
+              shards=4,
+          )
+          renderer = AssetRenderer(root / ASSET_REL)
+          for chunk in chunks:
+              floor, stem = chunk.split('/', 1)
+              source_spool = spool / floor / f'{stem}.bin'
+              legacy_png = legacy / 'tiles' / floor / f'{stem}.png'
+              legacy_report = legacy_png.with_suffix('.json')
+              _write_rendered_chunk(legacy_png, legacy_report, source_spool, 'equivalence-only', renderer)
+              incremental_png = output / 'tiles' / floor / f'{stem}.png'
+              assert incremental_png.read_bytes() == legacy_png.read_bytes(), chunk
+              assert (output / 'overview' / floor / f'{stem}.png').is_file(), chunk
+              assert (output / 'overview-low' / floor / f'{stem}.png').is_file(), chunk
+          assert [row['chunk'] for row in result['chunks']] == chunks
+          assert result['sharding']['workers'] == 2
+          shard_plan = json.loads((output / 'incremental-shard-plan.json').read_text(encoding='utf-8'))
+          assert shard_plan['chunks'] == 2
+          assert len(shard_plan['shards']) == 2
+          print(json.dumps({
+              'chunks': chunks,
+              'pixelEquivalence': 'PASS',
+              'overviews': 'PASS',
+              'workers': result['sharding']['workers'],
+              'executedShards': result['sharding']['executedShards'],
+          }, sort_keys=True))
+          PY
+      - name: Prove no generated render corpus is retained
+        run: |
+          rm -rf /tmp/atlas-e2e-spool /tmp/atlas-e2e-incremental /tmp/atlas-e2e-legacy
+          test ! -e /tmp/atlas-e2e-incremental
+
+  chunk-size-benchmark:
+    name: Bounded 32/64/128 chunk benchmark
+    needs: impact-plan
+    if: needs.impact-plan.outputs.benchmark_validation == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact head
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Benchmark representative Thais region
+        run: |
+          python3 -m tools.otbm_atlas.chunk_benchmark \
+            --bounds 32280 32440 32155 32305 7 \
+            --sizes 32 64 128 \
+            --output /tmp/atlas-chunk-benchmark.json
+          cat /tmp/atlas-chunk-benchmark.json
+      - name: Remove bounded generated data
+        run: rm -f /tmp/atlas-chunk-benchmark.json
