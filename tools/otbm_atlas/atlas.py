@@ -114,6 +114,23 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _read_report(path: Path) -> dict[str, object] | None:
+    if not path.is_file():
+        return None
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def _write_text_atomic(path: Path, payload: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(payload, encoding="utf-8")
+    temporary.replace(path)
+
+
 def _tree_sha256(directory: Path) -> str:
     digest = hashlib.sha256()
     for path in sorted((path for path in directory.rglob("*") if path.is_file()), key=lambda value: value.relative_to(directory).as_posix()):
@@ -161,7 +178,7 @@ def chunk_render_bounds(tiles: list[Tile], renderer: AssetRenderer) -> tuple[int
 def _write_rendered_chunk(path: Path, report_path: Path, spool_path: Path, fingerprint: str, renderer: AssetRenderer) -> dict[str, object]:
     tiles = list(incremental_decode_tiles(spool_path)); bounds = incremental_chunk_render_bounds(tiles, renderer); png, report = render_tiles(iter(tiles), renderer, bounds); path.parent.mkdir(parents=True, exist_ok=True)
     temporary_png = path.with_suffix(path.suffix + ".tmp"); temporary_png.write_bytes(png); temporary_png.replace(path)
-    report["fingerprint"] = fingerprint; report["checksum"] = hashlib.sha256(png).hexdigest(); temporary_report = report_path.with_suffix(report_path.suffix + ".tmp"); temporary_report.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"); temporary_report.replace(report_path); return report
+    report["fingerprint"] = fingerprint; report["checksum"] = hashlib.sha256(png).hexdigest(); _write_text_atomic(report_path, json.dumps(report, indent=2, sort_keys=True) + "\n"); return report
 
 
 def _init_render_worker(asset_dir: str) -> None:
@@ -210,7 +227,7 @@ def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int =
         chunk_x, chunk_y = map(int, value.stem.split("_")); return int(value.parent.name[1:]), chunk_y, chunk_x
     for path in sorted(spool_dir.glob("z*/*.bin"), key=chunk_order):
         z = int(path.parent.name[1:]); chunk_x, chunk_y = map(int, path.stem.split("_")); chunk_text = f"z{z}/{chunk_x}_{chunk_y}"; logical_bounds = (chunk_x * chunk_size, chunk_x * chunk_size + chunk_size - 1, chunk_y * chunk_size, chunk_y * chunk_size + chunk_size - 1, z); tile_path = output / "tiles" / f"z{z}" / f"{chunk_x}_{chunk_y}.png"; report_path = tile_path.with_suffix(".json"); fingerprint = fingerprints[chunk_text]
-        cached_report = json.loads(report_path.read_text()) if report_path.exists() else {}; cache_valid = chunk_text not in dirty_chunks and tile_path.exists() and report_path.exists()
+        cached_report = _read_report(report_path); cache_valid = chunk_text not in dirty_chunks and tile_path.exists() and cached_report is not None
         if cache_valid: entries.append(({"z": z, "chunkX": chunk_x, "chunkY": chunk_y, "logicalBounds": list(logical_bounds), "path": tile_path.relative_to(output).as_posix(), **cached_report, "fingerprint": fingerprint}, None))
         else: entries.append(({"z": z, "chunkX": chunk_x, "chunkY": chunk_y, "logicalBounds": list(logical_bounds), "path": tile_path.relative_to(output).as_posix()}, (str(path), str(tile_path), str(report_path), fingerprint)))
     if workers == 1:
@@ -225,14 +242,15 @@ def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int =
         detailed_path = output / str(chunk["path"]); chunk_text = f"z{chunk['z']}/{chunk['chunkX']}_{chunk['chunkY']}"
         for prefix, directory, factor in (("overview", "overview", OVERVIEW_FACTOR), ("lowOverview", "overview-low", LOW_OVERVIEW_FACTOR)):
             overview_path = output / directory / f"z{chunk['z']}" / f"{chunk['chunkX']}_{chunk['chunkY']}.png"; fingerprint = hashlib.sha256(f"{OVERVIEW_VERSION}:{factor}:{chunk['checksum']}".encode()).hexdigest(); report_path = overview_path.with_suffix(".json")
-            reusable = overview_output_reusable(output, directory, chunk_text, fingerprint, previous_overviews)
-            report = json.loads(report_path.read_text()) if report_path.exists() else {}
+            report = _read_report(report_path)
+            reusable = report is not None and overview_output_reusable(output, directory, chunk_text, fingerprint, previous_overviews)
             if not reusable:
-                payload = make_overview(detailed_path.read_bytes(), factor); overview_path.parent.mkdir(parents=True, exist_ok=True); temporary = overview_path.with_suffix(".png.tmp"); temporary.write_bytes(payload); temporary.replace(overview_path); report = {"fingerprint": fingerprint, "checksum": hashlib.sha256(payload).hexdigest(), "imageWidth": int(chunk["imageWidth"]) // factor, "imageHeight": int(chunk["imageHeight"]) // factor}; report_path.write_text(json.dumps(report, sort_keys=True) + "\n", encoding="utf-8")
+                payload = make_overview(detailed_path.read_bytes(), factor); overview_path.parent.mkdir(parents=True, exist_ok=True); temporary = overview_path.with_suffix(".png.tmp"); temporary.write_bytes(payload); temporary.replace(overview_path); report = {"fingerprint": fingerprint, "checksum": hashlib.sha256(payload).hexdigest(), "imageWidth": int(chunk["imageWidth"]) // factor, "imageHeight": int(chunk["imageHeight"])}; _write_text_atomic(report_path, json.dumps(report, sort_keys=True) + "\n")
+            assert report is not None
             chunk.update({f"{prefix}Path": overview_path.relative_to(output).as_posix(), f"{prefix}Checksum": report["checksum"], f"{prefix}ImageWidth": report["imageWidth"], f"{prefix}ImageHeight": report["imageHeight"]})
     provenance = {"map": CANONICAL_WORLD_ROOT.joinpath("world.otbm").as_posix(), "worldRoot": CANONICAL_WORLD_ROOT.as_posix(), "npcDefinitionRoot": CANONICAL_NPC_ROOT.as_posix(), "monsterDefinitionRoot": CANONICAL_MONSTER_ROOT.as_posix(), "appearanceAssetRoot": CANONICAL_ASSET_ROOT.as_posix()}
-    manifest = {"schemaVersion": ATLAS_VERSION, "chunkSize": chunk_size, "tilePixels": 32, "overviewFactor": OVERVIEW_FACTOR, "lowOverviewFactor": LOW_OVERVIEW_FACTOR, "overviewVersion": OVERVIEW_VERSION, "chunks": chunks, "sources": expected, "provenance": provenance}; output.mkdir(parents=True, exist_ok=True); (output / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    commit_production_render_state(output, render_plan); (spool_dir / "source.json").write_text(json.dumps(expected, sort_keys=True) + "\n", encoding="utf-8")
+    manifest = {"schemaVersion": ATLAS_VERSION, "chunkSize": chunk_size, "tilePixels": 32, "overviewFactor": OVERVIEW_FACTOR, "lowOverviewFactor": LOW_OVERVIEW_FACTOR, "overviewVersion": OVERVIEW_VERSION, "chunks": chunks, "sources": expected, "provenance": provenance}; output.mkdir(parents=True, exist_ok=True); _write_text_atomic(output / "manifest.json", json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    commit_production_render_state(output, render_plan); _write_text_atomic(spool_dir / "source.json", json.dumps(expected, sort_keys=True) + "\n")
     build_incremental_production_data(map_path=map_path, asset_dir=asset_dir, output=output, repository_root=repository_root, canonical=canonical, chunk_size=chunk_size, chunks=chunks, render_plan=render_plan, provenance=provenance, assets_sha=assets_sha)
     return manifest
 
