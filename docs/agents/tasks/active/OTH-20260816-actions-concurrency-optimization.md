@@ -5,7 +5,7 @@ owner: current-agent
 branch: ci/OTH-20260816-actions-concurrency-optimization
 base_branch: main
 created: "2026-08-16T09:16:00+02:00"
-updated: "2026-08-16T09:42:00+02:00"
+updated: "2026-08-16T09:46:00+02:00"
 project_lane: infrastructure
 execution_mode: chat-github
 related_pr: "417"
@@ -34,11 +34,10 @@ Reduce avoidable GitHub-hosted runner occupancy in OTBM Atlas validation without
 - That task path was listed in `.github/workflows/otbm-atlas-synology-preview.yml`, so the docs-only handoff emitted and completed the heavy Docker preview workflow even though no deployment/tool/workflow input changed.
 - `.github/workflows/otbm-atlas-facts-tests.yml` similarly listed active/archive task-record paths, so task bookkeeping could allocate two Atlas factual-source jobs without changing factual inputs.
 - Core `.github/workflows/ci.yml` already has per-PR/ref `cancel-in-progress: true`; specialized Atlas workflows did not consistently have it.
-- Live Actions state showed multiple Otheryn workflows in progress while other repositories were contending for the owner's GitHub Pro hosted-runner pool.
 - Merged PR #415 changed preview/deployment paths plus four deployment-specific files under `tools/otbm_atlas/`: `_deployed_browser_probe_core.py`, `deploy_preflight.py`, `deployed_browser_probe.py`, and `tests/test_deploy_preflight.py`.
-- Those four files matched broad `tools/otbm_atlas/**` triggers in unrelated Atlas/creature/environment workflows and therefore caused heavy general E2E/audit fanout in addition to the dedicated Synology preview validation.
-- The dedicated Synology preview workflow now owns all four deployment-tool paths and directly compiles the probe core and public wrappers, while retaining the deployment preflight tests and immutable container contract.
-- On exact head `1d7993156b07a0af83dafd96725d2c4f1974d6b2`, an unrelated `programme:infrastructure` label caused `OTBM Atlas Tests` run #160 to replace #159 and re-run unit, canonical Thais, and browser E2E solely because the workflow listened to every `pull_request:labeled` event.
+- Those four files matched broad `tools/otbm_atlas/**` triggers in unrelated Atlas/creature/environment workflows and caused heavy general E2E/audit fanout in addition to dedicated Synology preview validation.
+- On head `1d7993156b07a0af83dafd96725d2c4f1974d6b2`, unrelated label `programme:infrastructure` caused `OTBM Atlas Tests` run #160 to replace #159 and re-run standard unit/Thais/browser work because the workflow listened to every `pull_request:labeled` event.
+- On head `0f484cceac2fcae8c178b9f1905610c991418f79`, controlled temporary label `type:repair` produced OTBM Atlas Tests run #167 with zero jobs and conclusion `skipped`, proving standard jobs no longer allocate runners for a non-final label. That label run still canceled standard run #164 because both events shared the same workflow-level concurrency group, exposing a second-order cancellation bug.
 
 ## Implemented change
 
@@ -46,37 +45,39 @@ Reduce avoidable GitHub-hosted runner occupancy in OTBM Atlas validation without
 - Added per-PR/ref `concurrency` with `cancel-in-progress: true` to factual-source and Synology-preview workflows.
 - Added `_deployed_browser_probe_core.py` to the dedicated preview trigger and compile check.
 - Added exact negative filters for the four deployment-only tool paths to the broad Atlas suite, canonical creature showcase, creature animation E2E, independent creature animation audit, and environment animation E2E.
-- Added per-PR/ref `concurrency` with `cancel-in-progress: true` to every broad workflow changed by this task.
-- Standard Atlas unit, canonical Thais and browser E2E jobs now skip `labeled` events; the workflow retains `labeled` only so the existing `ci:final-gate` label can launch the full-world shard/aggregate jobs. Unrelated labels therefore allocate no standard Atlas runners.
-- Preserved other `tools/otbm_atlas/**`, vendor, workflow-file and manual-dispatch triggers; a mixed deployment + functional change still emits the applicable heavy workflow.
+- Added superseded-run cancellation to every broad heavy workflow changed by this task.
+- Standard Atlas unit, canonical Thais and browser E2E jobs skip `labeled` events; `labeled` remains only for the existing `ci:final-gate` full-world path.
+- Atlas Tests concurrency now separates ordinary validation (`standard`) from labeled events and isolates each label by `github.event.label.name`. An unrelated label can therefore neither allocate standard Atlas runners nor cancel an in-flight standard/final-gate run.
+- Preserved other `tools/otbm_atlas/**`, vendor, workflow-file and manual-dispatch triggers; mixed deployment + functional changes still emit applicable heavy validation.
 - Preserved every real factual source/vendor path in the facts workflow.
-- Core Otheryn CI and required semantics remain untouched.
+- Core Otheryn CI and Required semantics remain untouched.
 
 ## Acceptance inventory
 
 - [x] Remove task/checkpoint Markdown paths from heavy Atlas workflow path triggers; real deploy/tool/vendor/workflow inputs remain covered.
-- [x] Add per-PR/ref `concurrency` with `cancel-in-progress: true` to the factual-source and Synology-preview workflows.
+- [x] Add superseded-run cancellation to specialized factual/preview and broad heavy workflows.
 - [x] Dedicated Synology preview covers all four deployment-only tool files and compiles the probe core plus wrappers.
-- [x] Deployment-only changes are excluded from unrelated Atlas/creature/environment heavy workflows while mixed relevant changes still match their positive paths.
-- [x] Every broad heavy workflow changed by this task cancels superseded runs for the same PR/ref.
-- [x] Unrelated PR label events do not re-run standard Atlas unit/canonical/browser jobs; `ci:final-gate` still retains its full-world launch path.
+- [x] Deployment-only changes are excluded from unrelated Atlas/creature/environment heavy workflows while mixed relevant changes still match positive paths.
+- [x] Unrelated PR label events allocate no standard Atlas unit/canonical/browser runner jobs; `ci:final-gate` retains its full-world launch path.
+- [x] Label-event concurrency is isolated from standard validation and by label name, preventing unrelated labels from canceling standard or final-gate work.
 - [x] Do not route required validation to self-hosted runners while live runner availability remains unproven.
-- [x] Do not change core Otheryn CI scope or required semantics.
+- [x] Do not change core Otheryn CI scope or Required semantics.
 - [ ] Validate exact final workflow syntax and changed-file diff.
-- [ ] Observe implementation PR emitted checks and require repository-required checks on the exact final head.
+- [ ] On the final head, prove a non-final label run is skipped without canceling the simultaneously active standard Atlas run.
+- [ ] Require repository-required and applicable specialized checks on the exact final head before merge.
 - [ ] After merge, archive this task via a docs-only closeout PR and verify heavy Atlas workflows are not emitted solely because this task record moves to archive.
 - [x] No owner-funded AI/Codex/OpenAI quota is used.
 
 ## Coordination
 
 - Existing OTClient PR #280 owns dedicated Synology runner provisioning for `synology-otclient-01` and `synology-ots-01`; this task does not duplicate or redefine that runner stack.
-- Current open Otheryn PRs were re-inventoried before expanding workflow ownership; none of PRs #369, #339, #341 or #347 owns the OTBM workflow paths claimed here.
+- Current open Otheryn PRs were re-inventoried before expanding workflow ownership; none of the other open PRs owns the OTBM workflow paths claimed here.
 
 ## Context checkpoint
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-08-16T09:42:00+02:00
+updated_at: 2026-08-16T09:46:00+02:00
 branch: ci/OTH-20260816-actions-concurrency-optimization
 pr: 417
 status: active
@@ -90,12 +91,13 @@ owned_paths:
   - .github/workflows/otbm-creature-animation-audit.yml
   - .github/workflows/otbm-environment-animation-tests.yml
 proven:
-  - task-only trigger paths removed from factual-source and preview workflows
+  - task-only trigger waste from PR #416
+  - deployment-only broad trigger waste from PR #415
   - dedicated preview owns all four deployment-only tool files and compiles the probe core
-  - deployment-only trigger waste independently observed from merged PR #415
-  - five unrelated broad workflows exclude only those four exact deployment-tool paths
-  - all seven changed specialized workflows cancel superseded same-PR/ref runs
-  - unrelated label event duplicate fanout observed and suppressed for standard Atlas jobs
+  - five unrelated broad workflows exclude only those four deployment-tool paths
+  - all seven specialized workflows changed here cancel superseded same-scope work
+  - non-final label run #167 emitted zero jobs, but exposed cross-scope workflow cancellation
+  - Atlas Tests concurrency now isolates standard validation and each label name
   - core CI untouched
-next_action: validate final exact head, including that a non-final label event produces no standard Atlas runner jobs; remediate any failure before ready-for-review
+next_action: run the final exact-head non-final-label isolation proof while standard Atlas validation is active, then complete exact-head CI/review/merge gates
 ```
