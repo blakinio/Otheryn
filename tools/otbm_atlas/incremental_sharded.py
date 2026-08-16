@@ -33,7 +33,9 @@ def execute(
     dirty_overview = {str(value) for value in overview.get("dirtyChunks", [])} if isinstance(overview, Mapping) else set()
 
     resolved_workers = workers if workers is not None else max(1, os.cpu_count() or 1)
-    resolved_shards = shards if shards is not None else max(1, resolved_workers * 4)
+    # One weighted shard per process is the normal default because each shard
+    # initializes an AssetRenderer. Extra shards remain an explicit tuning knob.
+    resolved_shards = shards if shards is not None else resolved_workers
     if resolved_workers <= 0:
         raise ValueError("worker count must be positive")
     if resolved_shards <= 0:
