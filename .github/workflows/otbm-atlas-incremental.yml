@@ -76,10 +76,10 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: .atlas-state-cache
-          key: atlas-spatial-v1-${{ runner.os }}-${{ hashFiles('target/vendor/map-analysis/crystalserver/data-global/world/world.otbm') }}-${{ hashFiles('target/vendor/map-analysis/tibia-client/15.25.bd5a04/assets/appearances-*.dat') }}
+          key: atlas-spatial-v2-${{ runner.os }}-${{ hashFiles('target/vendor/map-analysis/crystalserver/data-global/world/world.otbm') }}-${{ hashFiles('target/vendor/map-analysis/tibia-client/15.25.bd5a04/assets/appearances-*.dat') }}
           restore-keys: |
-            atlas-spatial-v1-${{ runner.os }}-${{ hashFiles('target/vendor/map-analysis/crystalserver/data-global/world/world.otbm') }}-
-            atlas-spatial-v1-${{ runner.os }}-
+            atlas-spatial-v2-${{ runner.os }}-${{ hashFiles('target/vendor/map-analysis/crystalserver/data-global/world/world.otbm') }}-
+            atlas-spatial-v2-${{ runner.os }}-
       - name: Record exact changed paths
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -143,8 +143,7 @@ jobs:
               'dependencyIndexCacheHit': operational.get('dependencies', {}).get('dependencyIndexCacheHit'),
           }, indent=2, sort_keys=True))
           PY
-      - name: Execute exactly the planned dirty detail work
-        working-directory: target
+      - name: Record planned dirty work
         run: |
           python3 - <<'PY'
           import json
@@ -158,9 +157,12 @@ jobs:
                   'overview-only invalidation requires an existing prior detail publication; '
                   'ordinary PR CI refuses to rebuild detail implicitly. Use the explicit publication/recovery path.'
               )
-          print(json.dumps({'dirtyDetailChunks': len(detail), 'overviewOnlyChunks': 0}, sort_keys=True))
           Path('/tmp/atlas-dirty-count').write_text(str(len(detail)), encoding='utf-8')
+          print(json.dumps({'dirtyDetailChunks': len(detail), 'overviewOnlyChunks': 0}, sort_keys=True))
           PY
+      - name: Execute exactly the planned dirty detail work
+        working-directory: target
+        run: |
           dirty_count="$(cat /tmp/atlas-dirty-count)"
           if [ "$dirty_count" -gt 0 ]; then
             python3 -m tools.otbm_atlas.incremental render \
@@ -168,19 +170,27 @@ jobs:
               --work /tmp/atlas-impact \
               --target-root . \
               --output /tmp/atlas-dirty-render
-            python3 - <<'PY'
-            import json
-            from pathlib import Path
-            plan = json.loads(Path('/tmp/atlas-impact-plan.json').read_text(encoding='utf-8'))
-            rendered = json.loads(Path('/tmp/atlas-dirty-render/incremental-render.json').read_text(encoding='utf-8'))
-            expected = sorted(plan['detail']['dirtyChunks'])
-            actual = sorted(chunk['chunk'] for chunk in rendered['chunks'])
-            assert actual == expected, {'expected': expected, 'actual': actual}
-            print(json.dumps({'plannedDirtyChunks': len(expected), 'renderedDirtyChunks': len(actual), 'result': 'PASS'}, sort_keys=True))
-            PY
           else
             echo 'No detail chunks are dirty; rendered 0 chunks as planned.'
           fi
+      - name: Verify dirty-render execution matches plan
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          plan = json.loads(Path('/tmp/atlas-impact-plan.json').read_text(encoding='utf-8'))
+          expected = sorted(plan['detail']['dirtyChunks'])
+          render_manifest = Path('/tmp/atlas-dirty-render/incremental-render.json')
+          if expected:
+              rendered = json.loads(render_manifest.read_text(encoding='utf-8'))
+              actual = sorted(chunk['chunk'] for chunk in rendered['chunks'])
+          else:
+              if render_manifest.exists():
+                  raise AssertionError('render manifest exists despite zero dirty detail chunks')
+              actual = []
+          assert actual == expected, {'expected': expected, 'actual': actual}
+          print(json.dumps({'plannedDirtyChunks': len(expected), 'renderedDirtyChunks': len(actual), 'result': 'PASS'}, sort_keys=True))
+          PY
       - name: Select proportional validation
         id: flags
         run: |
