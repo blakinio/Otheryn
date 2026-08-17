@@ -44,6 +44,7 @@ jobs:
   receiver:
     name: Prepare temporary Synology ingest
     needs: unit
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [ots, synology]
     timeout-minutes: 10
     outputs:
@@ -80,7 +81,6 @@ jobs:
               sh -lc "tar -xf - -C '/atlas/ci-ingest-tests/${generation}/control'"
 
           token="$(openssl rand -hex 32)"
-          echo "::add-mask::$token"
           printf '%s\n' "$token" | \
             docker run --rm -i -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 \
               sh -lc "umask 077; cat > '/atlas/ci-ingest-tests/${generation}/control/token'"
