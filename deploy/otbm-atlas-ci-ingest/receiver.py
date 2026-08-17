@@ -18,6 +18,7 @@ import re
 import shutil
 import tarfile
 import tempfile
+import threading
 from typing import Any
 
 BUNDLE_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
@@ -25,6 +26,8 @@ PART_RE = re.compile(r"^part-[0-9]{4,6}$")
 PUT_RE = re.compile(r"^/v1/bundles/([^/]+)/parts/([^/]+)$")
 COMPLETE_RE = re.compile(r"^/v1/bundles/([^/]+)/complete$")
 MAX_PART_BYTES = 64 * 1024 * 1024
+MAX_BUNDLE_BYTES = 4 * 1024 * 1024 * 1024
+MAX_PARTS = 128
 MAX_MANIFEST_BYTES = 1024 * 1024
 COPY_BLOCK = 1024 * 1024
 
@@ -116,6 +119,8 @@ class Receiver:
         self.parts = self.root / "parts"
         self.bundles = self.root / "bundles"
         self.receipts = self.root / "receipts"
+        self._locks_guard = threading.Lock()
+        self._completion_locks: dict[str, threading.Lock] = {}
         for path in (self.parts, self.bundles, self.receipts):
             path.mkdir(parents=True, exist_ok=True)
 
@@ -124,6 +129,10 @@ class Receiver:
         if not header or not header.startswith(prefix):
             return False
         return hmac.compare_digest(header[len(prefix):], self.token)
+
+    def _completion_lock(self, bundle: str) -> threading.Lock:
+        with self._locks_guard:
+            return self._completion_locks.setdefault(bundle, threading.Lock())
 
     def part_path(self, bundle: str, part: str) -> Path:
         bundle = _safe_name(bundle, BUNDLE_RE, "bundle id")
@@ -170,6 +179,10 @@ class Receiver:
 
     def complete(self, bundle: str, manifest: dict[str, Any]) -> dict[str, Any]:
         bundle = _safe_name(bundle, BUNDLE_RE, "bundle id")
+        with self._completion_lock(bundle):
+            return self._complete_locked(bundle, manifest)
+
+    def _complete_locked(self, bundle: str, manifest: dict[str, Any]) -> dict[str, Any]:
         receipt_path = self.receipts / f"{bundle}.json"
         if receipt_path.is_file():
             return _json_object(receipt_path.read_bytes())
@@ -185,11 +198,12 @@ class Receiver:
             raise ValueError("producerSha must be a lowercase 40-hex commit SHA")
         if not isinstance(archive_sha, str) or not re.fullmatch(r"[0-9a-f]{64}", archive_sha):
             raise ValueError("archiveSha256 must be lowercase SHA-256")
-        if not isinstance(parts, list) or not parts:
-            raise ValueError("bundle parts must be a non-empty list")
+        if not isinstance(parts, list) or not parts or len(parts) > MAX_PARTS:
+            raise ValueError(f"bundle parts must contain 1..{MAX_PARTS} records")
 
         normalized: list[dict[str, Any]] = []
         expected_names: list[str] = []
+        archive_bytes = 0
         for index, raw in enumerate(parts):
             if not isinstance(raw, dict):
                 raise ValueError("invalid part record")
@@ -200,6 +214,9 @@ class Receiver:
             sha = str(raw.get("sha256", ""))
             if size < 0 or size > self.max_part_bytes or not re.fullmatch(r"[0-9a-f]{64}", sha):
                 raise ValueError("invalid part metadata")
+            archive_bytes += size
+            if archive_bytes > MAX_BUNDLE_BYTES:
+                raise ValueError(f"bundle archive exceeds {MAX_BUNDLE_BYTES} bytes")
             path = self.part_path(bundle, name)
             if not path.is_file() or path.stat().st_size != size or _sha256(path) != sha:
                 raise ValueError(f"part verification failed: {name}")
@@ -234,7 +251,7 @@ class Receiver:
                 "producerSha": producer_sha,
                 "shardIndex": manifest.get("shardIndex"),
                 "archiveSha256": archive_sha,
-                "archiveBytes": sum(int(record["bytes"]) for record in normalized),
+                "archiveBytes": archive_bytes,
                 "parts": normalized,
                 "files": len(files),
                 "status": "COMPLETE",
