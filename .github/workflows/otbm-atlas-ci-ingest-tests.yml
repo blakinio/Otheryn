@@ -18,7 +18,7 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   unit:
@@ -35,11 +35,15 @@ jobs:
           python3 -m py_compile \
             deploy/otbm-atlas-ci-ingest/receiver.py \
             deploy/otbm-atlas-ci-ingest/upload_bundle.py \
+            deploy/otbm-atlas-ci-ingest/test_receiver_oidc.py \
             tools/otbm_atlas/world_publish.py \
             tools/otbm_atlas/production_data.py \
             tools/otbm_atlas/tests/test_world_publish.py
       - name: Run focused publication tests
-        run: python3 -m unittest tools.otbm_atlas.tests.test_world_publish -v
+        run: |
+          set -Eeuo pipefail
+          python3 -m unittest tools.otbm_atlas.tests.test_world_publish -v
+          python3 deploy/otbm-atlas-ci-ingest/test_receiver_oidc.py -v
 
   receiver:
     name: Prepare temporary Synology ingest
@@ -49,7 +53,6 @@ jobs:
     timeout-minutes: 10
     outputs:
       url: ${{ steps.prepare.outputs.url }}
-      token: ${{ steps.prepare.outputs.token }}
       generation: ${{ steps.prepare.outputs.generation }}
       receiver: ${{ steps.prepare.outputs.receiver }}
       tunnel: ${{ steps.prepare.outputs.tunnel }}
@@ -59,7 +62,7 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
         with:
           persist-credentials: false
-      - name: Start authenticated write-only receiver and temporary tunnel
+      - name: Start OIDC write-only receiver and temporary tunnel
         id: prepare
         shell: bash
         run: |
@@ -71,13 +74,12 @@ jobs:
           tunnel="atlas-ci-test-tunnel-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           network="atlas-ci-test-net-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           host_root="/volume1/docker/otheryn/atlas/ci-ingest-tests/${generation}"
+          audience="ots-atlas-ci-ingest:${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}"
 
           mapfile -t stale_containers < <(docker ps -a --format '{{.Names}}' | grep -E '^atlas-ci-test-(receiver|tunnel)-[0-9]+-[0-9]+$' || true)
           if ((${#stale_containers[@]})); then docker rm -f "${stale_containers[@]}" >/dev/null 2>&1 || true; fi
           mapfile -t stale_networks < <(docker network ls --format '{{.Name}}' | grep -E '^atlas-ci-test-net-[0-9]+-[0-9]+$' || true)
           if ((${#stale_networks[@]})); then docker network rm "${stale_networks[@]}" >/dev/null 2>&1 || true; fi
-          docker run --rm -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 sh -lc \
-            "find /atlas/ci-ingest-tests -path '*/control/token' -type f -delete 2>/dev/null || true"
 
           docker rm -f "$receiver" "$tunnel" >/dev/null 2>&1 || true
           docker network rm "$network" >/dev/null 2>&1 || true
@@ -87,16 +89,19 @@ jobs:
             docker run --rm -i -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 \
               sh -lc "tar -xf - -C '/atlas/ci-ingest-tests/${generation}/control'"
 
-          token="$(openssl rand -hex 32)"
-          printf '%s\n' "$token" | \
-            docker run --rm -i -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 \
-              sh -lc "umask 077; cat > '/atlas/ci-ingest-tests/${generation}/control/token'"
-
           docker network create "$network" >/dev/null
           docker run -d --name "$receiver" --network "$network" \
             -v "${host_root}:/data" \
             python:3.12-slim \
-            python /data/control/receiver.py --root /data --token-file /data/control/token --port 8080 >/dev/null
+            python /data/control/receiver.py \
+              --root /data \
+              --github-oidc-repository "$GITHUB_REPOSITORY" \
+              --github-oidc-run-id "$GITHUB_RUN_ID" \
+              --github-oidc-run-attempt "$GITHUB_RUN_ATTEMPT" \
+              --github-oidc-audience "$audience" \
+              --github-oidc-event-name "$GITHUB_EVENT_NAME" \
+              --github-oidc-runner-environment github-hosted \
+              --port 8080 >/dev/null
           docker run -d --name "$tunnel" --network "$network" \
             cloudflare/cloudflared:2026.7.3 \
             tunnel --no-autoupdate --url "http://${receiver}:8080" >/dev/null
@@ -109,16 +114,15 @@ jobs:
           done
           [[ -n "$url" ]] || { docker logs "$tunnel"; exit 1; }
           for _ in $(seq 1 30); do
-            if docker exec -e ATLAS_INGEST_TOKEN="$token" "$receiver" python -c 'import json, os; from urllib.request import Request, urlopen; request=Request("http://127.0.0.1:8080/health", headers={"Authorization": "Bearer " + os.environ["ATLAS_INGEST_TOKEN"]}); assert json.load(urlopen(request, timeout=5))["status"] == "READY"'; then
+            if docker exec "$receiver" python -c 'import json; from urllib.request import urlopen; assert json.load(urlopen("http://127.0.0.1:8080/health", timeout=5))["status"] == "READY"'; then
               break
             fi
             sleep 2
           done
-          docker exec -e ATLAS_INGEST_TOKEN="$token" "$receiver" python -c 'import json, os; from urllib.request import Request, urlopen; request=Request("http://127.0.0.1:8080/health", headers={"Authorization": "Bearer " + os.environ["ATLAS_INGEST_TOKEN"]}); assert json.load(urlopen(request, timeout=5))["status"] == "READY"'
+          docker exec "$receiver" python -c 'import json; from urllib.request import urlopen; assert json.load(urlopen("http://127.0.0.1:8080/health", timeout=5))["status"] == "READY"'
 
           {
             echo "url=$url"
-            echo "token=$token"
             echo "generation=$generation"
             echo "receiver=$receiver"
             echo "tunnel=$tunnel"
@@ -130,18 +134,27 @@ jobs:
     needs: receiver
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout exact head
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
         with:
           persist-credentials: false
-      - name: Upload fixture
+      - name: Upload fixture with job-scoped GitHub OIDC
         env:
           ATLAS_INGEST_URL: ${{ needs.receiver.outputs.url }}
-          ATLAS_INGEST_TOKEN: ${{ needs.receiver.outputs.token }}
+          OIDC_AUDIENCE: ots-atlas-ci-ingest:${{ github.run_id }}:${{ github.run_attempt }}
         run: |
           set -Eeuo pipefail
+          oidc_response="$(curl --fail --silent --show-error \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${OIDC_AUDIENCE}")"
+          ATLAS_INGEST_TOKEN="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$oidc_response")"
+          test -n "$ATLAS_INGEST_TOKEN"
           echo "::add-mask::$ATLAS_INGEST_TOKEN"
+          unset oidc_response
           fixture="$RUNNER_TEMP/atlas-ingest-fixture"
           mkdir -p "$fixture/nested"
           printf 'hosted-to-synology\n' > "$fixture/hello.txt"
@@ -153,6 +166,7 @@ jobs:
             --producer-sha "$GITHUB_SHA" \
             --kind fixture \
             --part-bytes 4096
+          unset ATLAS_INGEST_TOKEN
 
   verify:
     name: Verify received bytes and cleanup temporary ingest
@@ -162,6 +176,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Verify exact received fixture
+        id: verify
         if: needs.upload.result == 'success'
         shell: bash
         env:
@@ -191,12 +206,17 @@ jobs:
           RECEIVER: ${{ needs.receiver.outputs.receiver }}
           TUNNEL: ${{ needs.receiver.outputs.tunnel }}
           NETWORK: ${{ needs.receiver.outputs.network }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
         run: |
           set -Eeuo pipefail
           docker rm -f "$RECEIVER" "$TUNNEL" >/dev/null 2>&1 || true
           docker network rm "$NETWORK" >/dev/null 2>&1 || true
-          docker run --rm -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 \
-            sh -lc "rm -rf '/atlas/ci-ingest-tests/${GENERATION}'"
+          if [[ "$VERIFY_OUTCOME" == success ]]; then
+            docker run --rm -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 \
+              sh -lc "rm -rf '/atlas/ci-ingest-tests/${GENERATION}'"
+          else
+            echo "verify_outcome=$VERIFY_OUTCOME; generation preserved for inspection"
+          fi
       - name: Require hosted upload success
         if: always()
         env:
