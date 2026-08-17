@@ -98,6 +98,7 @@ def build_incremental_production_data(
     render_plan: Mapping[str, object],
     provenance: Mapping[str, object],
     assets_sha: str,
+    environment_statistics_override: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     data_dir = output / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -267,7 +268,11 @@ def build_incremental_production_data(
         tile_statistics = write_tile_inspector_data(output, changed_sidecars=changed or None, deleted_sidecars=deleted or None)
         cache.commit("tile-inspector", tile_fingerprint, tile_patterns, {"statistics": tile_statistics})
 
-    environment_statistics = enrich_environment_animations_resumable(asset_dir, output)
+    environment_statistics = (
+        dict(environment_statistics_override)
+        if environment_statistics_override is not None
+        else enrich_environment_animations_resumable(asset_dir, output)
+    )
 
     viewer_fingerprint = payload_digest({
         "schema": 1,
