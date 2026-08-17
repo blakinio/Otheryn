@@ -6,7 +6,8 @@ import tempfile
 import unittest
 
 from tools.otbm_atlas.assets import encode_png
-from tools.otbm_atlas.local_parallel_build import build_overviews
+from tools.otbm_atlas.local_parallel_build import _make_overviews, build_overviews
+from tools.otbm_atlas.overview import LOW_OVERVIEW_FACTOR, OVERVIEW_FACTOR, make_overview
 
 
 def _detail_png(seed: int, width: int = 64, height: int = 64) -> bytes:
@@ -38,6 +39,12 @@ def _write_chunks(output: Path) -> list[dict[str, object]]:
 
 
 class ParallelOverviewTests(unittest.TestCase):
+	def test_single_decode_fast_path_matches_canonical_overviews(self) -> None:
+		payload = _detail_png(43)
+		results = _make_overviews(payload, (OVERVIEW_FACTOR, LOW_OVERVIEW_FACTOR))
+		self.assertEqual(results[OVERVIEW_FACTOR], make_overview(payload, OVERVIEW_FACTOR))
+		self.assertEqual(results[LOW_OVERVIEW_FACTOR], make_overview(payload, LOW_OVERVIEW_FACTOR))
+
 	def test_parallel_overviews_are_byte_identical_to_sequential(self) -> None:
 		with tempfile.TemporaryDirectory() as directory:
 			root = Path(directory)
