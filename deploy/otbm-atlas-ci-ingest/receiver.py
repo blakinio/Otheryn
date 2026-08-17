@@ -7,6 +7,7 @@ There is no shell, file-read, listing, or arbitrary-path API.
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import hmac
 from http import HTTPStatus
@@ -19,7 +20,9 @@ import shutil
 import tarfile
 import tempfile
 import threading
-from typing import Any
+import time
+from typing import Any, Callable
+from urllib import request
 
 BUNDLE_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 PART_RE = re.compile(r"^part-[0-9]{4,6}$")
@@ -30,6 +33,12 @@ MAX_BUNDLE_BYTES = 4 * 1024 * 1024 * 1024
 MAX_PARTS = 128
 MAX_MANIFEST_BYTES = 1024 * 1024
 COPY_BLOCK = 1024 * 1024
+OIDC_ISSUER = "https://token.actions.githubusercontent.com"
+OIDC_JWKS_URL = f"{OIDC_ISSUER}/.well-known/jwks"
+OIDC_CLOCK_SKEW_SECONDS = 60
+OIDC_JWKS_REFRESH_SECONDS = 300
+OIDC_HTTP_TIMEOUT_SECONDS = 10
+RSA_SHA256_DIGEST_INFO_PREFIX = bytes.fromhex("3031300d060960864801650304020105000420")
 
 
 def _sha256(path: Path) -> str:
@@ -52,6 +61,152 @@ def _inside(root: Path, path: Path) -> bool:
         return True
     except ValueError:
         return False
+
+
+def _b64url_decode(value: str) -> bytes:
+    if not value or not re.fullmatch(r"[A-Za-z0-9_-]+", value):
+        raise ValueError("invalid base64url value")
+    return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
+
+
+def _b64url_uint(value: str) -> int:
+    decoded = _b64url_decode(value)
+    if not decoded:
+        raise ValueError("empty base64url integer")
+    return int.from_bytes(decoded, "big")
+
+
+def _verify_rs256(signing_input: bytes, signature: bytes, jwk: dict[str, Any]) -> None:
+    if jwk.get("kty") != "RSA" or jwk.get("alg") not in {None, "RS256"}:
+        raise ValueError("OIDC signing key is not RSA/RS256")
+    modulus = _b64url_uint(str(jwk.get("n", "")))
+    exponent = _b64url_uint(str(jwk.get("e", "")))
+    width = (modulus.bit_length() + 7) // 8
+    if len(signature) != width:
+        raise ValueError("OIDC signature has invalid size")
+    encoded = pow(int.from_bytes(signature, "big"), exponent, modulus).to_bytes(width, "big")
+    digest_info = RSA_SHA256_DIGEST_INFO_PREFIX + hashlib.sha256(signing_input).digest()
+    padding = width - len(digest_info) - 3
+    if padding < 8:
+        raise ValueError("OIDC RSA key is too small")
+    expected = b"\x00\x01" + (b"\xff" * padding) + b"\x00" + digest_info
+    if not hmac.compare_digest(encoded, expected):
+        raise ValueError("OIDC signature verification failed")
+
+
+class GitHubOIDCAuthorizer:
+    """Validate GitHub Actions OIDC JWTs for one exact workflow run."""
+
+    def __init__(
+        self,
+        repository: str,
+        run_id: str,
+        run_attempt: str,
+        audience: str,
+        event_name: str,
+        runner_environment: str = "github-hosted",
+    ) -> None:
+        if not repository or not run_id or not run_attempt or not audience or not event_name:
+            raise ValueError("GitHub OIDC authorization requires exact workflow identity")
+        self.repository = repository
+        self.run_id = str(run_id)
+        self.run_attempt = str(run_attempt)
+        self.audience = audience
+        self.event_name = event_name
+        self.runner_environment = runner_environment
+        self._jwks: dict[str, dict[str, Any]] = {}
+        self._jwks_loaded_at = 0.0
+        self._jwks_lock = threading.Lock()
+
+    def _load_jwks(self, force: bool = False) -> None:
+        now = time.monotonic()
+        with self._jwks_lock:
+            if not force and self._jwks and now - self._jwks_loaded_at < OIDC_JWKS_REFRESH_SECONDS:
+                return
+            req = request.Request(OIDC_JWKS_URL, headers={"Accept": "application/json"})
+            with request.urlopen(req, timeout=OIDC_HTTP_TIMEOUT_SECONDS) as response:
+                value = _json_object(response.read())
+            raw_keys = value.get("keys")
+            if not isinstance(raw_keys, list):
+                raise ValueError("GitHub OIDC JWKS does not contain keys")
+            keys: dict[str, dict[str, Any]] = {}
+            for raw in raw_keys:
+                if not isinstance(raw, dict):
+                    continue
+                kid = raw.get("kid")
+                if isinstance(kid, str) and kid:
+                    keys[kid] = raw
+            if not keys:
+                raise ValueError("GitHub OIDC JWKS is empty")
+            self._jwks = keys
+            self._jwks_loaded_at = now
+
+    def _jwk(self, kid: str) -> dict[str, Any]:
+        self._load_jwks()
+        key = self._jwks.get(kid)
+        if key is None:
+            self._load_jwks(force=True)
+            key = self._jwks.get(kid)
+        if key is None:
+            raise ValueError("GitHub OIDC signing key is unknown")
+        return key
+
+    def _claims(self, token: str) -> dict[str, Any]:
+        parts = token.split(".")
+        if len(parts) != 3:
+            raise ValueError("OIDC bearer is not a JWT")
+        header = _json_object(_b64url_decode(parts[0]))
+        claims = _json_object(_b64url_decode(parts[1]))
+        if header.get("alg") != "RS256":
+            raise ValueError("OIDC JWT must use RS256")
+        kid = header.get("kid")
+        if not isinstance(kid, str) or not kid:
+            raise ValueError("OIDC JWT is missing kid")
+        signing_input = f"{parts[0]}.{parts[1]}".encode("ascii")
+        _verify_rs256(signing_input, _b64url_decode(parts[2]), self._jwk(kid))
+        return claims
+
+    def _validate_claims(self, claims: dict[str, Any]) -> None:
+        now = int(time.time())
+        try:
+            exp = int(claims["exp"])
+            nbf = int(claims.get("nbf", claims["iat"]))
+            iat = int(claims["iat"])
+        except (KeyError, TypeError, ValueError) as error:
+            raise ValueError("OIDC JWT time claims are invalid") from error
+        if exp < now - OIDC_CLOCK_SKEW_SECONDS:
+            raise ValueError("OIDC JWT is expired")
+        if nbf > now + OIDC_CLOCK_SKEW_SECONDS or iat > now + OIDC_CLOCK_SKEW_SECONDS:
+            raise ValueError("OIDC JWT is not yet valid")
+        if claims.get("iss") != OIDC_ISSUER:
+            raise ValueError("OIDC issuer mismatch")
+        audience = claims.get("aud")
+        if isinstance(audience, str):
+            audiences = {audience}
+        elif isinstance(audience, list) and all(isinstance(value, str) for value in audience):
+            audiences = set(audience)
+        else:
+            audiences = set()
+        if self.audience not in audiences:
+            raise ValueError("OIDC audience mismatch")
+        expected = {
+            "repository": self.repository,
+            "run_id": self.run_id,
+            "run_attempt": self.run_attempt,
+            "event_name": self.event_name,
+            "runner_environment": self.runner_environment,
+        }
+        for key, value in expected.items():
+            if str(claims.get(key, "")) != value:
+                raise ValueError(f"OIDC {key} mismatch")
+
+    def authorized(self, token: str) -> bool:
+        try:
+            claims = self._claims(token)
+            self._validate_claims(claims)
+            return True
+        except (OSError, TimeoutError, ValueError, json.JSONDecodeError):
+            return False
 
 
 def safe_extract_tar(archive: Path, destination: Path) -> list[str]:
@@ -112,17 +267,22 @@ def _json_object(payload: bytes) -> dict[str, Any]:
 
 
 class Receiver:
-    def __init__(self, root: Path, token: str, max_part_bytes: int = MAX_PART_BYTES) -> None:
+    def __init__(
+        self,
+        root: Path,
+        token: str | None = None,
+        max_part_bytes: int = MAX_PART_BYTES,
+        authorizer: Callable[[str], bool] | None = None,
+    ) -> None:
+        if (token is None) == (authorizer is None):
+            raise ValueError("exactly one receiver authentication mode is required")
         self.root = root.resolve()
         self.token = token
+        self.authorizer = authorizer
         self.max_part_bytes = max_part_bytes
         self.parts = self.root / "parts"
         self.bundles = self.root / "bundles"
         self.receipts = self.root / "receipts"
-        # Parts may arrive from all hosted shard jobs concurrently, but bundle
-        # reconstruction/extraction is intentionally serialized. This bounds the
-        # temporary archive/extraction disk peak on Synology while preserving
-        # parallel network ingest.
         self._completion_lock = threading.Lock()
         for path in (self.parts, self.bundles, self.receipts):
             path.mkdir(parents=True, exist_ok=True)
@@ -131,7 +291,11 @@ class Receiver:
         prefix = "Bearer "
         if not header or not header.startswith(prefix):
             return False
-        return hmac.compare_digest(header[len(prefix):], self.token)
+        bearer = header[len(prefix):]
+        if self.authorizer is not None:
+            return self.authorizer(bearer)
+        assert self.token is not None
+        return hmac.compare_digest(bearer, self.token)
 
     def part_path(self, bundle: str, part: str) -> Path:
         bundle = _safe_name(bundle, BUNDLE_RE, "bundle id")
@@ -268,7 +432,7 @@ class Receiver:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "AtlasCIIngest/1"
+    server_version = "AtlasCIIngest/2"
     receiver: Receiver
 
     def _send(self, status: int, value: dict[str, Any]) -> None:
@@ -290,8 +454,6 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         if self.path != "/health":
             self._send(HTTPStatus.NOT_FOUND, {"status": "NOT_FOUND"})
-            return
-        if not self._auth():
             return
         self._send(HTTPStatus.OK, {"status": "READY"})
 
@@ -341,30 +503,78 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, format: str, *args: Any) -> None:
         # Deliberately omit Authorization and request headers. The default line is
-        # useful for bounded operational logs without exposing the bearer token.
+        # useful for bounded operational logs without exposing bearer credentials.
         super().log_message(format, *args)
 
 
-def serve(root: Path, token_file: Path, host: str, port: int, max_part_bytes: int) -> None:
-    token = token_file.read_text(encoding="utf-8").strip()
-    if len(token) < 32:
-        raise ValueError("bearer token must contain at least 32 characters")
-    receiver = Receiver(root, token, max_part_bytes=max_part_bytes)
+def serve(
+    root: Path,
+    token_file: Path | None,
+    host: str,
+    port: int,
+    max_part_bytes: int,
+    oidc_repository: str | None = None,
+    oidc_run_id: str | None = None,
+    oidc_run_attempt: str | None = None,
+    oidc_audience: str | None = None,
+    oidc_event_name: str | None = None,
+    oidc_runner_environment: str = "github-hosted",
+) -> None:
+    if token_file is not None:
+        if any(value is not None for value in (oidc_repository, oidc_run_id, oidc_run_attempt, oidc_audience, oidc_event_name)):
+            raise ValueError("token-file and GitHub OIDC modes are mutually exclusive")
+        token = token_file.read_text(encoding="utf-8").strip()
+        if len(token) < 32:
+            raise ValueError("bearer token must contain at least 32 characters")
+        receiver = Receiver(root, token=token, max_part_bytes=max_part_bytes)
+        auth_mode = "token-file"
+    else:
+        values = (oidc_repository, oidc_run_id, oidc_run_attempt, oidc_audience, oidc_event_name)
+        if not all(values):
+            raise ValueError("GitHub OIDC mode requires repository, run id, run attempt, audience, and event name")
+        oidc = GitHubOIDCAuthorizer(
+            str(oidc_repository),
+            str(oidc_run_id),
+            str(oidc_run_attempt),
+            str(oidc_audience),
+            str(oidc_event_name),
+            oidc_runner_environment,
+        )
+        receiver = Receiver(root, authorizer=oidc.authorized, max_part_bytes=max_part_bytes)
+        auth_mode = "github-oidc"
     handler = type("AtlasHandler", (Handler,), {"receiver": receiver})
     server = ThreadingHTTPServer((host, port), handler)
-    print(json.dumps({"status": "READY", "host": host, "port": port, "root": str(root.resolve())}, sort_keys=True), flush=True)
+    print(json.dumps({"status": "READY", "host": host, "port": port, "root": str(root.resolve()), "auth": auth_mode}, sort_keys=True), flush=True)
     server.serve_forever()
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, required=True)
-    parser.add_argument("--token-file", type=Path, required=True)
+    parser.add_argument("--token-file", type=Path)
+    parser.add_argument("--github-oidc-repository")
+    parser.add_argument("--github-oidc-run-id")
+    parser.add_argument("--github-oidc-run-attempt")
+    parser.add_argument("--github-oidc-audience")
+    parser.add_argument("--github-oidc-event-name")
+    parser.add_argument("--github-oidc-runner-environment", default="github-hosted")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument("--max-part-bytes", type=int, default=MAX_PART_BYTES)
     args = parser.parse_args()
-    serve(args.root, args.token_file, args.host, args.port, args.max_part_bytes)
+    serve(
+        args.root,
+        args.token_file,
+        args.host,
+        args.port,
+        args.max_part_bytes,
+        oidc_repository=args.github_oidc_repository,
+        oidc_run_id=args.github_oidc_run_id,
+        oidc_run_attempt=args.github_oidc_run_attempt,
+        oidc_audience=args.github_oidc_audience,
+        oidc_event_name=args.github_oidc_event_name,
+        oidc_runner_environment=args.github_oidc_runner_environment,
+    )
     return 0
 
 
