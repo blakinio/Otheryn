@@ -1,0 +1,56 @@
+---
+name: OTBM Atlas Synology Deployment Request
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "deploy/otbm-atlas-ci-ingest/deployment-request.json"
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: otbm-atlas-synology-deployment-request
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    name: Validate request and dispatch canonical full-world deployment
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact main request
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Validate explicit deployment request
+        run: |
+          set -Eeuo pipefail
+          [[ "$GITHUB_REF" == refs/heads/main ]]
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('deploy/otbm-atlas-ci-ingest/deployment-request.json')
+          value = json.loads(path.read_text(encoding='utf-8'))
+          assert value == {
+              'schemaVersion': 1,
+              'deploy': True,
+              'target': 'private-synology',
+              'fullWorldCertificationRequired': True,
+              'generatedCorpusArtifacts': False,
+          }, value
+          print(json.dumps(value, sort_keys=True))
+          PY
+      - name: Dispatch canonical full-world build and private Synology deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/otbm-atlas-full-world-16.yml/dispatches" \
+            -f ref=main \
+            -f 'inputs[deploy_to_synology]=true'
+          echo "Canonical full-world deployment dispatch accepted for main@$GITHUB_SHA"
