@@ -161,7 +161,10 @@ jobs:
           GENERATION: ${{ needs.receiver.outputs.generation }}
         run: |
           set -Eeuo pipefail
-          docker run --rm -v /volume1/docker/otheryn/atlas:/atlas:ro python:3.12-slim python - <<'PY'
+          docker run --rm -i \
+            -e GENERATION -e GITHUB_SHA \
+            -v /volume1/docker/otheryn/atlas:/atlas:ro \
+            python:3.12-slim python - <<'PY'
           import json
           import os
           from pathlib import Path
