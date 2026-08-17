@@ -67,10 +67,17 @@ jobs:
           [[ "${RUNNER_NAME:-}" == "synology-ots-01" ]]
           docker version >/dev/null
           generation="ci-test-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          receiver="atlas-ci-receiver-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          tunnel="atlas-ci-tunnel-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          network="atlas-ci-net-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          receiver="atlas-ci-test-receiver-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          tunnel="atlas-ci-test-tunnel-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          network="atlas-ci-test-net-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           host_root="/volume1/docker/otheryn/atlas/ci-ingest-tests/${generation}"
+
+          mapfile -t stale_containers < <(docker ps -a --format '{{.Names}}' | grep -E '^atlas-ci-test-(receiver|tunnel)-[0-9]+-[0-9]+$' || true)
+          if ((${#stale_containers[@]})); then docker rm -f "${stale_containers[@]}" >/dev/null 2>&1 || true; fi
+          mapfile -t stale_networks < <(docker network ls --format '{{.Name}}' | grep -E '^atlas-ci-test-net-[0-9]+-[0-9]+$' || true)
+          if ((${#stale_networks[@]})); then docker network rm "${stale_networks[@]}" >/dev/null 2>&1 || true; fi
+          docker run --rm -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 sh -lc \
+            "find /atlas/ci-ingest-tests -path '*/control/token' -type f -delete 2>/dev/null || true"
 
           docker rm -f "$receiver" "$tunnel" >/dev/null 2>&1 || true
           docker network rm "$network" >/dev/null 2>&1 || true
