@@ -18,6 +18,9 @@ from typing import Any, Iterable, Mapping
 
 EXPECTED_SHARDS = 32
 EXPECTED_CHUNKS = 3494
+EXPECTED_CHUNK_SIZE = 128
+EXPECTED_ATLAS_VERSION = 3
+EXPECTED_MAP_SHA256 = "3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034"
 EXPECTED_FLOORS = {
     0: 87, 1: 120, 2: 150, 3: 183, 4: 213, 5: 240, 6: 251, 7: 346,
     8: 285, 9: 286, 10: 265, 11: 238, 12: 234, 13: 201, 14: 210, 15: 185,
@@ -94,6 +97,10 @@ def merge_shard_manifests(directory: Path, producer_sha: str) -> dict[str, Any]:
     expected_coverage: str | None = None
 
     for manifest in manifests:
+        if int(manifest.get("schemaVersion", -1)) != EXPECTED_ATLAS_VERSION:
+            raise ValueError("shard Atlas schemaVersion mismatch")
+        if int(manifest.get("chunkSize", -1)) != EXPECTED_CHUNK_SIZE:
+            raise ValueError("shard chunkSize mismatch")
         certification = manifest.get("certification")
         if not isinstance(certification, dict) or certification.get("scope") != "world-chunk-shard":
             raise ValueError("shard manifest is not world-chunk-shard certified")
@@ -107,6 +114,10 @@ def merge_shard_manifests(directory: Path, producer_sha: str) -> dict[str, Any]:
         provenance = manifest.get("provenance")
         if not isinstance(sources, dict) or not isinstance(provenance, dict):
             raise ValueError("shard source/provenance metadata missing")
+        if sources.get("mapSha256") != EXPECTED_MAP_SHA256:
+            raise ValueError("shard map SHA-256 is not the certified canonical world")
+        if int(sources.get("chunkSize", -1)) != EXPECTED_CHUNK_SIZE or int(sources.get("atlasVersion", -1)) != EXPECTED_ATLAS_VERSION:
+            raise ValueError("shard source Atlas identity mismatch")
         source_text = _canonical(sources)
         provenance_text = _canonical(provenance)
         source_identity = source_text if source_identity is None else source_identity
@@ -185,10 +196,8 @@ def build_global_bundle(manifest_dir: Path, map_path: Path, asset_dir: Path, out
     chunk_size = int(manifest["chunkSize"])
     spool = output / ".spool"
     spool_map(map_path, spool, chunk_size)
-    expected_spool_chunks = {text for text in (_chunk_key(chunk) for chunk in manifest["chunks"])}
-    actual_spool_chunks = {
-        f"{path.parent.name}/{path.stem}" for path in spool.glob("z*/*.bin")
-    }
+    expected_spool_chunks = {_chunk_key(chunk) for chunk in manifest["chunks"]}
+    actual_spool_chunks = {f"{path.parent.name}/{path.stem}" for path in spool.glob("z*/*.bin")}
     if actual_spool_chunks != expected_spool_chunks:
         raise RuntimeError("global spool coverage differs from certified render coverage")
 
@@ -250,7 +259,14 @@ def _copy_file_verified(source: Path, target: Path) -> None:
         return
     if target.exists():
         raise RuntimeError(f"publication path collision: {target}")
-    shutil.copy2(source, target)
+    try:
+        # Received bundles and assembled/current live below the same Synology
+        # Atlas root. Hardlinks avoid a second ~11 GiB assembly copy while
+        # preserving independent directory lifecycles. Fall back safely if the
+        # backing filesystem refuses hardlinks.
+        os.link(source, target)
+    except OSError:
+        shutil.copy2(source, target)
 
 
 def _copy_tree(source: Path, target: Path, *, exclude_names: set[str] | None = None) -> None:
@@ -355,6 +371,13 @@ def _validate_receipts(generation_root: Path, producer_sha: str) -> None:
         receipt = _load_json(receipts / f"{bundle_id}.json")
         if receipt.get("status") != "COMPLETE" or receipt.get("producerSha") != producer_sha or receipt.get("bundleId") != bundle_id:
             raise RuntimeError(f"invalid receiver receipt: {bundle_id}")
+        if bundle_id == "global":
+            if receipt.get("kind") != "global" or receipt.get("shardIndex") is not None:
+                raise RuntimeError("invalid global receiver receipt")
+        else:
+            index = int(bundle_id.split("-", 1)[1])
+            if receipt.get("kind") != "shard" or int(receipt.get("shardIndex", -1)) != index:
+                raise RuntimeError(f"invalid shard receiver receipt: {bundle_id}")
 
 
 def assemble_generation(generation_root: Path, output: Path, producer_sha: str) -> dict[str, Any]:
