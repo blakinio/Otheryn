@@ -1,6 +1,7 @@
 import importlib.util
 import pathlib
 import unittest
+from unittest import mock
 
 MODULE_PATH = pathlib.Path(__file__).with_name("publication_gate.py")
 SPEC = importlib.util.spec_from_file_location("atlas_publication_gate", MODULE_PATH)
@@ -95,6 +96,17 @@ class PublicationGateTests(unittest.TestCase):
         report = gate.evaluate_publication(preflight, mode="private-local")
         self.assertEqual(report["status"], "BLOCKED")
         self.assertIn("Atlas map SHA-256 is not the certified canonical world", report["reasons"])
+
+    def test_evaluate_atlas_runs_fresh_full_preflight_on_real_root(self):
+        atlas = pathlib.Path("build/full-map-atlas")
+        with mock.patch.object(gate, "deployment_preflight", return_value=valid_preflight()) as preflight:
+            report = gate.evaluate_atlas(atlas, mode="private-local")
+        preflight.assert_called_once_with(
+            atlas,
+            verify_chunks=True,
+            require_environment_animations=True,
+        )
+        self.assertEqual(report["status"], "READY")
 
 
 if __name__ == "__main__":
