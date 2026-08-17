@@ -31,7 +31,7 @@ function Get-ManifestSha256 {
 
     $manifest = Join-Path $AtlasPath "manifest.json"
     if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) {
-        throw "Missing manifest after promotion: $manifest"
+        throw "Missing Atlas manifest: $manifest"
     }
     return (Get-FileHash -LiteralPath $manifest -Algorithm SHA256).Hash.ToLowerInvariant()
 }
@@ -88,10 +88,13 @@ if (-not (Test-Path -LiteralPath $AtlasRoot -PathType Container)) {
     New-Item -ItemType Directory -Path $AtlasRoot -Force | Out-Null
 }
 
-if (Test-Path -LiteralPath $currentPath) {
+$currentExistedInitially = Test-Path -LiteralPath $currentPath -PathType Container
+$currentManifestInitially = $null
+if ($currentExistedInitially) {
     if (-not $AllowReplaceCurrent) {
         throw "'$currentPath' already exists. Refusing to replace a live/current Atlas without -AllowReplaceCurrent. Stop the preview first and rerun explicitly if replacement is intended."
     }
+    $currentManifestInitially = Get-ManifestSha256 -AtlasPath $currentPath
 }
 
 if (Test-Path -LiteralPath $incomingPath) {
@@ -122,9 +125,23 @@ if ($robocopyExitCode -ge 8) {
 Write-Host "[3/5] Re-verifying the copied corpus over SMB..."
 Invoke-PublicationGate -AtlasPath $incomingPath -OutputPath $remoteGateReport
 
-Write-Host "[4/5] Promoting verified staging to current..."
+Write-Host "[4/5] Checking current-state drift and promoting verified staging..."
+$currentExistsAtPromotion = Test-Path -LiteralPath $currentPath -PathType Container
+if ($currentExistsAtPromotion -ne $currentExistedInitially) {
+    throw "Atlas current state changed during transfer. Refusing promotion; verified staging remains at '$incomingPath'."
+}
+if ($currentExistsAtPromotion) {
+    $currentManifestAtPromotion = Get-ManifestSha256 -AtlasPath $currentPath
+    if ($currentManifestAtPromotion -ne $currentManifestInitially) {
+        throw "Atlas current manifest changed during transfer. Refusing promotion; verified staging remains at '$incomingPath'."
+    }
+}
+
 $previousCreated = $false
-if (Test-Path -LiteralPath $currentPath) {
+if ($currentExistsAtPromotion) {
+    if (-not $AllowReplaceCurrent) {
+        throw "Replacement authorization changed unexpectedly. Refusing to modify '$currentPath'."
+    }
     if (Test-Path -LiteralPath $previousPath) {
         throw "Rollback path already exists: $previousPath"
     }
