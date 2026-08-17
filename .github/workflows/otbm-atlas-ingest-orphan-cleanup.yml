@@ -1,0 +1,54 @@
+---
+name: OTBM Atlas Ingest Orphan Cleanup
+
+on:
+  workflow_run:
+    workflows: ["OTBM Atlas Full World 32 Chunk Shards"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: otbm-atlas-ingest-orphan-cleanup-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    name: Remove exact run-scoped ingest capability
+    runs-on: [ots, synology]
+    timeout-minutes: 10
+    steps:
+      - name: Remove only endpoint resources belonging to completed full-world run
+        shell: bash
+        env:
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -Eeuo pipefail
+          [[ "${RUNNER_NAME:-}" == "synology-ots-01" ]]
+          [[ "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]]
+
+          mapfile -t containers < <(
+            docker ps -a --format '{{.Names}}' |
+              grep -E "^atlas-ci-(receiver|tunnel)-${SOURCE_RUN_ID}-[0-9]+$" || true
+          )
+          if ((${#containers[@]})); then
+            docker rm -f "${containers[@]}" >/dev/null 2>&1 || true
+          fi
+
+          mapfile -t networks < <(
+            docker network ls --format '{{.Name}}' |
+              grep -E "^atlas-ci-net-${SOURCE_RUN_ID}-[0-9]+$" || true
+          )
+          if ((${#networks[@]})); then
+            docker network rm "${networks[@]}" >/dev/null 2>&1 || true
+          fi
+
+          docker run --rm \
+            -e SOURCE_RUN_ID \
+            -v /volume1/docker/otheryn/atlas:/atlas \
+            alpine:3.22 sh -lc '
+              find /atlas/ci-ingest -maxdepth 3 -type f -path "*/gha-${SOURCE_RUN_ID}-*/control/token" -delete 2>/dev/null || true
+            '
+
+          echo "INGEST_ORPHAN_CLEANUP=PASS source_run_id=$SOURCE_RUN_ID"
