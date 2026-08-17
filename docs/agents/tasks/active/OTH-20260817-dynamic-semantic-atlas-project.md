@@ -1,14 +1,14 @@
 ---
 task_id: OTH-20260817-dynamic-semantic-atlas-project
-status: implementing
+status: validating
 owner: chat-github-dynamic-semantic-atlas
 branch: docs/OTH-20260817-dynamic-semantic-atlas-project
 base_branch: main
 created: "2026-08-17T22:50:00+02:00"
-updated: "2026-08-17T22:50:00+02:00"
+updated: "2026-08-17T22:56:00+02:00"
 project_lane: otheryn-content
 execution_mode: chat-github
-related_pr: ""
+related_pr: "447"
 ownership_released: false
 owned_paths:
   - docs/architecture/oteryn-dynamic-semantic-atlas.md
@@ -129,11 +129,11 @@ This project does not supersede current raster work. In particular:
 
 ```yaml
 checkpoint_version: 1
-updated_at: 2026-08-17T22:50:00+02:00
-head: PENDING_INITIAL_DOC_COMMIT
+updated_at: 2026-08-17T22:56:00+02:00
+head: aa353d17b5e6d5d1776461f312d7568347113fcc
 branch: docs/OTH-20260817-dynamic-semantic-atlas-project
-pr: none
-status: implementing
+pr: 447
+status: validating
 context_routes:
   - docs/architecture/OTERYN_ATLAS_EXTRACTION_REVIEW_2026-08-15.md
   - docs/maps/otbm-atlas-product-readiness-backlog-20260815.md
@@ -146,9 +146,11 @@ owned_paths:
   - docs/agents/tasks/active/OTH-20260817-dynamic-semantic-atlas-project.md
 proven:
   - trusted base main is e382f93b7b1b12e39edfe14afe08ccb639c4fe2a
+  - project documents were committed as aa353d17b5e6d5d1776461f312d7568347113fcc
+  - draft PR 447 targets main from the dedicated project branch
   - current raster Atlas baseline is certified at 3494 populated detail chunks and remains production/reference architecture
   - existing extraction review assigns future canonical OTBM/world truth to Game and browser/publication runtime to Atlas
-  - no existing open PR was found for a dynamic semantic Atlas architecture project
+  - no pre-existing open PR was found for a dynamic semantic Atlas architecture project
   - PR 446 is related only as raster overview generation optimization and has non-overlapping project-document ownership
 derived:
   - a semantic world representation is required for authoritative tile/entity interaction without pixel inference
@@ -170,12 +172,12 @@ changed_paths:
   - docs/maps/oteryn-dynamic-semantic-atlas-execution-prompt.md
   - docs/agents/tasks/active/OTH-20260817-dynamic-semantic-atlas-project.md
 validation:
-  - command: repository documentation/checkpoint validation
+  - command: PR changed-path and documentation/checkpoint validation
     result: NOT_RUN
-    evidence: run after initial commit/PR exists
+    evidence: run against final checkpoint head before Ready/merge
   - command: runtime E2E
     result: NOT_APPLICABLE
     evidence: documentation-only architecture project; no runtime code or deployment changes
 blockers: []
-next_action: Commit the four project documents, open a draft PR, then validate checkpoint/path/link consistency and exact-head repository checks without changing the current production Atlas runtime.
+next_action: Validate PR 447 changed paths, document links and task checkpoint on the final checkpoint head, then obtain a fresh documentation audit and exact-head repository checks before Ready/merge; do not start DYN-ATLAS-001 in this task.
 ```
