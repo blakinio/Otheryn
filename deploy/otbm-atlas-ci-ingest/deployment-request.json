@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "requestId": "oth-20260817-atlas-production-1",
+  "deploy": true,
+  "target": "private-synology",
+  "fullWorldCertificationRequired": true,
+  "generatedCorpusArtifacts": false
+}
