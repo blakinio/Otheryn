@@ -105,7 +105,7 @@ jobs:
             "test ! -e '/atlas/ci-ingest/${generation}'; mkdir -p '/atlas/ci-ingest/${generation}/control/repo'"
 
           tar -cf - \
-            tools/__init__.py tools/otbm_atlas tools/otbm_atlas_facts \
+            tools/otbm_atlas tools/otbm_atlas_facts \
             deploy/otbm-atlas-ci-ingest deploy/otbm-atlas-controlled-beta | \
             docker run --rm -i -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 sh -lc \
               "tar -xf - -C '/atlas/ci-ingest/${generation}/control/repo'"
