@@ -32,15 +32,21 @@ jobs:
           [[ "$GITHUB_REF" == refs/heads/main ]]
           python3 - <<'PY'
           import json
+          import re
           from pathlib import Path
           path = Path('deploy/otbm-atlas-ci-ingest/deployment-request.json')
           value = json.loads(path.read_text(encoding='utf-8'))
-          assert value == {
-              'schemaVersion': 1,
-              'deploy': True,
-              'target': 'private-synology',
-              'fullWorldCertificationRequired': True,
-              'generatedCorpusArtifacts': False,
+          assert isinstance(value, dict)
+          assert value.get('schemaVersion') == 1
+          assert value.get('deploy') is True
+          assert value.get('target') == 'private-synology'
+          assert value.get('fullWorldCertificationRequired') is True
+          assert value.get('generatedCorpusArtifacts') is False
+          request_id = value.get('requestId')
+          assert isinstance(request_id, str) and re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9._-]{0,95}', request_id), request_id
+          assert set(value) == {
+              'schemaVersion', 'requestId', 'deploy', 'target',
+              'fullWorldCertificationRequired', 'generatedCorpusArtifacts',
           }, value
           print(json.dumps(value, sort_keys=True))
           PY
@@ -52,5 +58,6 @@ jobs:
           gh api --method POST \
             "repos/${GITHUB_REPOSITORY}/actions/workflows/otbm-atlas-full-world-16.yml/dispatches" \
             -f ref=main \
-            -f 'inputs[deploy_to_synology]=true'
-          echo "Canonical full-world deployment dispatch accepted for main@$GITHUB_SHA"
+            -f 'inputs[deploy_to_synology]=true' \
+            -f "inputs[expected_producer_sha]=$GITHUB_SHA"
+          echo "Canonical full-world deployment dispatch accepted for exact main@$GITHUB_SHA"
