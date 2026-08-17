@@ -1,0 +1,37 @@
+---
+name: OTBM Atlas Controlled Distribution
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "deploy/otbm-atlas-controlled-beta/**"
+      - ".github/workflows/otbm-atlas-controlled-beta.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Publication gate contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          persist-credentials: false
+
+      - name: Compile publication tooling
+        run: python3 -m py_compile deploy/otbm-atlas-controlled-beta/publication_gate.py deploy/otbm-atlas-controlled-beta/test_publication_gate.py
+
+      - name: Validate approval template JSON
+        run: python3 -m json.tool deploy/otbm-atlas-controlled-beta/approval.template.json >/dev/null
+
+      - name: Run publication gate tests
+        run: python3 deploy/otbm-atlas-controlled-beta/test_publication_gate.py -v
