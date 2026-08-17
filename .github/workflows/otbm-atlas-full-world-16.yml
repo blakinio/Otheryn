@@ -1,4 +1,4 @@
-name: OTBM Atlas Full World 16 Floors
+name: OTBM Atlas Full World 32 Chunk Shards
 
 on:
   pull_request:
@@ -9,27 +9,21 @@ permissions:
   contents: read
 
 concurrency:
-  group: otbm-atlas-full-world-16-${{ github.event.pull_request.number || github.ref }}
+  group: otbm-atlas-full-world-32-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  floor:
-    name: Canonical Atlas floor Z${{ matrix.floor }}
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.label.name == 'ci:full-world-16')
+  plan:
+    name: Plan canonical world into 32 weighted chunk shards
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && (github.event.label.name == 'ci:full-world-16' || github.event.label.name == 'ci:full-world-32'))
     runs-on: ubuntu-latest
-    timeout-minutes: 180
-    strategy:
-      fail-fast: false
-      max-parallel: 16
-      matrix:
-        floor: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    timeout-minutes: 90
     steps:
       - name: Checkout exact PR head
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-
       - name: Assert standard GitHub runner contract
         env:
           EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -41,135 +35,248 @@ jobs:
           echo "memory_bytes=$(awk '/MemTotal/{print $2*1024}' /proc/meminfo)"
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
           test "$(nproc)" -eq 4
+      - name: Free disk for planner-local canonical spool
+        run: |
+          sudo rm -rf /usr/local/lib/android /opt/ghc /usr/share/dotnet || true
+          df -h /
+      - name: Plan all populated chunks by deterministic spool-byte weight
+        run: |
+          set -Eeuo pipefail
+          python3 -m tools.otbm_atlas.world_shards plan \
+            vendor/map-analysis/crystalserver/data-global/world/world.otbm \
+            vendor/map-analysis/tibia-client/15.25.bd5a04/assets \
+            build/full-world-plan.json \
+            --shards 32
+      - name: Assert canonical plan identity and exact world inventory
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          expected_floors = {
+              "0": 87, "1": 120, "2": 150, "3": 183,
+              "4": 213, "5": 240, "6": 251, "7": 346,
+              "8": 285, "9": 286, "10": 265, "11": 238,
+              "12": 234, "13": 201, "14": 210, "15": 185,
+          }
+          plan = json.loads(Path("build/full-world-plan.json").read_text(encoding="utf-8"))
+          assert plan["schemaVersion"] == 1
+          assert plan["algorithm"] == "deterministic-lpt-spool-bytes-v1"
+          assert plan["shardCount"] == 32
+          assert plan["chunks"] == 3494
+          assert plan["floorCounts"] == expected_floors
+          assert len(plan["assignments"]) == 32
+          assert [entry["index"] for entry in plan["assignments"]] == list(range(32))
+          assert sum(entry["chunkCount"] for entry in plan["assignments"]) == 3494
+          assert all(entry["chunkCount"] > 0 for entry in plan["assignments"])
+          sources = plan["sources"]
+          assert sources["mapSha256"] == "3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034"
+          assert sources["chunkSize"] == 128
+          assert sources["atlasVersion"] == 3
+          print({"chunks": plan["chunks"], "shards": plan["shardCount"], "minShardBytes": plan["minShardBytes"], "maxShardBytes": plan["maxShardBytes"], "worldPlanDigest": plan["worldPlanDigest"], "coverageDigest": plan["coverageDigest"]})
+          PY
+      - name: Upload compact deterministic plan only
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: full-world-chunk-plan
+          path: build/full-world-plan.json
+          if-no-files-found: error
+          retention-days: 1
 
+  shard:
+    name: Canonical Atlas chunk shard ${{ matrix.shard }}/31
+    needs: plan
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && (github.event.label.name == 'ci:full-world-16' || github.event.label.name == 'ci:full-world-32'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 32
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Assert standard GitHub runner contract
+        env:
+          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "head_sha=$(git rev-parse HEAD)"
+          echo "nproc=$(nproc)"
+          echo "memory_bytes=$(awk '/MemTotal/{print $2*1024}' /proc/meminfo)"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          test "$(nproc)" -eq 4
       - name: Free disk for runner-local generated corpus
         run: |
           sudo rm -rf /usr/local/lib/android /opt/ghc /usr/share/dotnet || true
           df -h /
-
-      - name: Build exactly one canonical floor with four bounded workers
+      - name: Download compact deterministic world plan
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: full-world-chunk-plan
+          path: build
+      - name: Build one weighted chunk assignment with four bounded workers
         env:
-          ATLAS_FLOOR: ${{ matrix.floor }}
+          ATLAS_SHARD: ${{ matrix.shard }}
         run: |
           set -Eeuo pipefail
-          root="build/full-map-atlas-v3-z${ATLAS_FLOOR}"
-          python3 -m tools.otbm_atlas.floor_build \
+          root="build/full-map-atlas-v3-shard-${ATLAS_SHARD}"
+          python3 -m tools.otbm_atlas.world_shards build \
             vendor/map-analysis/crystalserver/data-global/world/world.otbm \
             vendor/map-analysis/tibia-client/15.25.bd5a04/assets \
+            build/full-world-plan.json \
             "$root" \
-            --floor "$ATLAS_FLOOR" \
+            --shard "$ATLAS_SHARD" \
             --workers 4
-
-      - name: Independently verify one-floor generated corpus
+      - name: Independently verify static and environment shard corpus
         env:
-          ATLAS_FLOOR: ${{ matrix.floor }}
+          ATLAS_SHARD: ${{ matrix.shard }}
         run: |
           set -Eeuo pipefail
-          root="build/full-map-atlas-v3-z${ATLAS_FLOOR}"
-          python3 -m tools.otbm_atlas.verify "$root" --output "$root/verification.json"
-
-      - name: Emit compact floor evidence
+          root="build/full-map-atlas-v3-shard-${ATLAS_SHARD}"
+          python3 -m tools.otbm_atlas.verify_world_shard "$root" --output "$root/verification.json"
+      - name: Emit compact shard evidence
         env:
-          ATLAS_FLOOR: ${{ matrix.floor }}
+          ATLAS_SHARD: ${{ matrix.shard }}
           PRODUCER_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -Eeuo pipefail
           python3 - <<'PY'
-          import json, os
+          import json
+          import os
           from pathlib import Path
-
-          floor = int(os.environ['ATLAS_FLOOR'])
-          producer_sha = os.environ['PRODUCER_SHA']
-          root = Path(f'build/full-map-atlas-v3-z{floor}')
-          manifest = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
-          verification = json.loads((root / 'verification.json').read_text(encoding='utf-8'))
-          statistics = json.loads((root / 'data/statistics.json').read_text(encoding='utf-8'))
-          environment = json.loads((root / 'data/environment-animations/index.json').read_text(encoding='utf-8'))
-
-          floors = sorted({int(chunk['z']) for chunk in manifest['chunks']})
-          assert floors == [floor], floors
-          assert verification['ok'] is True
-          assert sorted(map(int, verification['floors'].keys())) == [floor]
-          assert verification['missingSprites'] == {}
-          assert statistics['chunks'] == len(manifest['chunks'])
-          assert statistics['populatedFloors'] == [floor]
-          assert environment['schemaVersion'] == 2
-          assert environment['statistics']['completedChunks'] == len(manifest['chunks'])
-
+          shard = int(os.environ["ATLAS_SHARD"])
+          producer_sha = os.environ["PRODUCER_SHA"]
+          root = Path(f"build/full-map-atlas-v3-shard-{shard}")
+          manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+          verification = json.loads((root / "verification.json").read_text(encoding="utf-8"))
+          environment = json.loads((root / "data/environment-animations/index.json").read_text(encoding="utf-8"))
+          plan = json.loads(Path("build/full-world-plan.json").read_text(encoding="utf-8"))
+          assignment = plan["assignments"][shard]
+          assert verification["ok"] is True, verification["errors"]
+          assert verification["missingSprites"] == {}
+          assert manifest["certification"]["scope"] == "world-chunk-shard"
+          assert manifest["certification"]["shardIndex"] == shard
+          assert manifest["certification"]["shardCount"] == 32
+          assert manifest["certification"]["workers"] == 4
+          assert set(verification["chunkKeys"]) == set(assignment["chunks"])
+          assert verification["chunks"] == assignment["chunkCount"]
+          assert environment["schemaVersion"] == 2
+          assert environment["statistics"]["completedChunks"] == assignment["chunkCount"]
           evidence = {
-              'schemaVersion': 1,
-              'producerSha': producer_sha,
-              'floor': floor,
-              'chunks': len(manifest['chunks']),
-              'sources': manifest['sources'],
-              'workers': manifest['certification']['workers'],
-              'verification': 'PASS',
-              'missingSprites': verification['missingSprites'],
-              'environmentCompletedChunks': environment['statistics']['completedChunks'],
+              "schemaVersion": 2,
+              "producerSha": producer_sha,
+              "shardIndex": shard,
+              "shardCount": 32,
+              "chunks": assignment["chunkCount"],
+              "chunkKeys": assignment["chunks"],
+              "floorCounts": verification["floors"],
+              "sources": manifest["sources"],
+              "workers": manifest["certification"]["workers"],
+              "worldPlanDigest": manifest["certification"]["worldPlanDigest"],
+              "coverageDigest": manifest["certification"]["coverageDigest"],
+              "assignmentDigest": manifest["certification"]["assignmentDigest"],
+              "verification": "PASS",
+              "missingSprites": verification["missingSprites"],
+              "environmentCompletedChunks": environment["statistics"]["completedChunks"],
           }
-          path = Path(f'build/full-world-floor-z{floor}.json')
-          path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + '\n', encoding='utf-8')
-          print(json.dumps(evidence, sort_keys=True))
+          path = Path(f"build/full-world-shard-{shard:02d}.json")
+          path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          print(json.dumps({"shardIndex": shard, "chunks": evidence["chunks"], "floors": evidence["floorCounts"], "worldPlanDigest": evidence["worldPlanDigest"], "verification": evidence["verification"]}, sort_keys=True))
           PY
-
       - name: Upload compact evidence only
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          name: full-world-floor-z${{ matrix.floor }}
-          path: build/full-world-floor-z${{ matrix.floor }}.json
+          name: full-world-shard-${{ matrix.shard }}
+          path: build/full-world-shard-*.json
           if-no-files-found: error
           retention-days: 1
 
   world:
-    name: Certify complete Z0..Z15 evidence
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.label.name == 'ci:full-world-16')
-    needs: floor
+    name: Certify exact 3494-chunk full world
+    needs: shard
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && (github.event.label.name == 'ci:full-world-16' || github.event.label.name == 'ci:full-world-32'))
     runs-on: ubuntu-latest
     steps:
-      - name: Download all floor evidence
+      - name: Download all compact shard evidence
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
-          pattern: full-world-floor-z*
+          pattern: full-world-shard-*
           path: build/full-world-evidence
           merge-multiple: true
-
-      - name: Assert exact complete world coverage
+      - name: Assert exact deterministic full-world coverage
         env:
           EXPECTED_PRODUCER_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -Eeuo pipefail
           python3 - <<'PY'
-          import json, os
+          from collections import Counter
+          import hashlib
+          import json
+          import os
           from pathlib import Path
-
-          expected_producer_sha = os.environ['EXPECTED_PRODUCER_SHA']
-          paths = sorted(Path('build/full-world-evidence').glob('full-world-floor-z*.json'))
-          assert len(paths) == 16, paths
-          reports = [json.loads(path.read_text(encoding='utf-8')) for path in paths]
-          assert sorted(int(report['floor']) for report in reports) == list(range(16))
-          assert all(report['producerSha'] == expected_producer_sha for report in reports)
-          assert sum(int(report['chunks']) for report in reports) == 3494
-          source_fingerprints = {json.dumps(report['sources'], sort_keys=True) for report in reports}
+          def sort_key(text):
+              floor, name = text.split("/", 1)
+              x_text, y_text = name.split("_", 1)
+              return int(floor[1:]), int(y_text), int(x_text)
+          def assignment_digest(values):
+              payload = json.dumps(sorted(set(values), key=sort_key), separators=(",", ":"), sort_keys=True).encode("utf-8")
+              return hashlib.sha256(payload).hexdigest()
+          def coverage_digest(values):
+              ordered = sorted(set(values), key=sort_key)
+              return hashlib.sha256(("\n".join(ordered) + "\n").encode("utf-8")).hexdigest()
+          expected_producer_sha = os.environ["EXPECTED_PRODUCER_SHA"]
+          expected_floors = {0: 87, 1: 120, 2: 150, 3: 183, 4: 213, 5: 240, 6: 251, 7: 346, 8: 285, 9: 286, 10: 265, 11: 238, 12: 234, 13: 201, 14: 210, 15: 185}
+          paths = sorted(Path("build/full-world-evidence").glob("full-world-shard-*.json"))
+          assert len(paths) == 32, paths
+          reports = [json.loads(path.read_text(encoding="utf-8")) for path in paths]
+          assert sorted(int(report["shardIndex"]) for report in reports) == list(range(32))
+          assert all(int(report["shardCount"]) == 32 for report in reports)
+          assert all(report["producerSha"] == expected_producer_sha for report in reports)
+          all_chunks = []
+          for report in reports:
+              assert int(report["chunks"]) == len(report["chunkKeys"])
+              assert report["assignmentDigest"] == assignment_digest(report["chunkKeys"])
+              all_chunks.extend(report["chunkKeys"])
+          assert len(all_chunks) == 3494
+          assert len(set(all_chunks)) == 3494
+          actual_floors = Counter(int(text.split("/", 1)[0][1:]) for text in all_chunks)
+          assert dict(sorted(actual_floors.items())) == expected_floors
+          actual_coverage_digest = coverage_digest(all_chunks)
+          assert all(report["coverageDigest"] == actual_coverage_digest for report in reports)
+          world_plan_digests = {report["worldPlanDigest"] for report in reports}
+          assert len(world_plan_digests) == 1
+          source_fingerprints = {json.dumps(report["sources"], sort_keys=True) for report in reports}
           assert len(source_fingerprints) == 1
-          sources = reports[0]['sources']
-          assert sources['mapSha256'] == '3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034'
-          assert sources['chunkSize'] == 128
-          assert sources['atlasVersion'] == 3
-          assert all(int(report['workers']) == 4 for report in reports)
-          assert all(report['verification'] == 'PASS' for report in reports)
-          assert all(report['missingSprites'] == {} for report in reports)
-          assert all(int(report['environmentCompletedChunks']) == int(report['chunks']) for report in reports)
+          sources = reports[0]["sources"]
+          assert sources["mapSha256"] == "3bd40d14fefec41f24c4b3ae879e420be1a831ef55b95dcbec721e587a09b034"
+          assert sources["chunkSize"] == 128
+          assert sources["atlasVersion"] == 3
+          assert all(int(report["workers"]) == 4 for report in reports)
+          assert all(report["verification"] == "PASS" for report in reports)
+          assert all(report["missingSprites"] == {} for report in reports)
+          assert all(int(report["environmentCompletedChunks"]) == int(report["chunks"]) for report in reports)
           evidence = {
-              'schemaVersion': 3,
-              'producerSha': expected_producer_sha,
-              'chunks': 3494,
-              'floors': list(range(16)),
-              'runnerModel': 'one ubuntu-latest runner per floor, four bounded workers per runner',
-              'parallelFloorJobs': 16,
-              'workerCpuTotal': 64,
-              'sources': sources,
-              'verification': 'PASS',
-              'deploymentPreflightBoundary': 'assembled full Z0..Z15 corpus only',
+              "schemaVersion": 4,
+              "producerSha": expected_producer_sha,
+              "chunks": 3494,
+              "floors": list(range(16)),
+              "floorCounts": expected_floors,
+              "renderShards": 32,
+              "runnerModel": "32 weighted chunk shards on ubuntu-latest, four bounded workers per runner",
+              "workerCpuTotal": 128,
+              "worldPlanDigest": next(iter(world_plan_digests)),
+              "coverageDigest": actual_coverage_digest,
+              "sources": sources,
+              "verification": "PASS",
+              "generatedCorpusPublication": "NONE",
+              "globalProductDataBoundary": "source-driven global phases are not repeated per render shard; exact-head product-data CI remains authoritative",
+              "deploymentPreflightBoundary": "assembled full Z0..Z15 corpus only",
           }
           print(json.dumps(evidence, sort_keys=True))
           PY
