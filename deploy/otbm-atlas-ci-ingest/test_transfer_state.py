@@ -71,14 +71,32 @@ class TransferStateTests(unittest.TestCase):
             self.assertEqual(summary["transferredVerifiedShards"], [])
             self.assertEqual(summary["transferredCsv"], "")
 
-    def test_verify_existing_reports_missing_without_touching_uploader(self):
+    def test_verify_existing_reports_missing_without_loading_uploader(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "generation"
             root.mkdir(parents=True)
             summary = transfer_state.verify_existing(root, PRODUCER, Path("does-not-need-to-exist.py"), False)
             self.assertEqual(summary["verifiedShards"], [])
             self.assertEqual(summary["missingShards"], list(range(32)))
+            self.assertEqual(summary["invalidShards"], {})
             self.assertEqual(summary["status"], "PARTIAL_TRANSFERRED_VERIFIED")
+
+    def test_inconsistent_receipt_is_quarantined_for_safe_rerender(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "generation"
+            receipt = root / "receipts" / "shard-00.json"
+            receipt.parent.mkdir(parents=True)
+            receipt.write_text('{"status":"COMPLETE"}\n', encoding="utf-8")
+
+            summary = transfer_state.verify_existing(root, PRODUCER, Path("unused.py"), False)
+
+            self.assertIn(0, summary["missingShards"])
+            self.assertEqual(summary["invalidShards"]["0"], "inconsistent active receipt/bundle state")
+            self.assertFalse(receipt.exists())
+            quarantines = list((root / "control" / "quarantine").glob("shard-00*"))
+            self.assertEqual(len(quarantines), 1)
+            self.assertTrue((quarantines[0] / "receipt").is_file())
+            self.assertTrue((quarantines[0] / "reason.json").is_file())
 
     def test_verify_existing_require_all_fails_on_missing(self):
         with tempfile.TemporaryDirectory() as temporary:

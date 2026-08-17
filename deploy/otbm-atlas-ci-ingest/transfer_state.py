@@ -15,10 +15,14 @@ from pathlib import Path
 import re
 import shutil
 import tempfile
-from typing import Any
+from typing import Any, Callable
 
 EXPECTED_SHARDS = 32
 PRODUCER_RE = re.compile(r"^[0-9a-f]{40}$")
+
+
+class PhysicalVerificationError(RuntimeError):
+    """The persisted shard state is present but not safe to reuse."""
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -64,12 +68,42 @@ def _load_uploader(path: Path):
     return module
 
 
+def _dependencies(uploader_path: Path) -> tuple[Any, Callable[[Path], dict[str, Any]]]:
+    uploader = _load_uploader(uploader_path)
+    from tools.otbm_atlas.verify_world_shard import verify_world_shard
+    return uploader, verify_world_shard
+
+
 def _remove_marker(generation: Path, index: int) -> None:
-    marker = _marker_path(generation, index)
-    marker.unlink(missing_ok=True)
+    _marker_path(generation, index).unlink(missing_ok=True)
     evidence = _marker_root(generation) / "evidence"
     (evidence / f"full-world-shard-{index:02d}.json").unlink(missing_ok=True)
     (evidence / f"shard-manifest-{index:02d}.json").unlink(missing_ok=True)
+
+
+def _quarantine_active_shard(generation: Path, index: int, reason: str) -> Path | None:
+    bundle_id = _bundle_id(index)
+    active = {
+        "bundle": generation / "bundles" / bundle_id,
+        "receipt": generation / "receipts" / f"{bundle_id}.json",
+        "parts": generation / "parts" / bundle_id,
+    }
+    present = {name: path for name, path in active.items() if path.exists()}
+    _remove_marker(generation, index)
+    if not present:
+        return None
+    quarantine_root = generation / "control" / "quarantine"
+    quarantine_root.mkdir(parents=True, exist_ok=True)
+    target = quarantine_root / bundle_id
+    suffix = 0
+    while target.exists():
+        suffix += 1
+        target = quarantine_root / f"{bundle_id}-{suffix}"
+    target.mkdir()
+    for name, source in present.items():
+        os.replace(source, target / name)
+    _write_json(target / "reason.json", {"schemaVersion": 1, "shardIndex": index, "reason": reason})
+    return target
 
 
 def _evidence(bundle: Path, producer_sha: str, index: int, verification: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -110,7 +144,13 @@ def _evidence(bundle: Path, producer_sha: str, index: int, verification: dict[st
     return evidence, manifest
 
 
-def verify_shard(generation: Path, producer_sha: str, index: int, uploader_path: Path) -> dict[str, Any]:
+def verify_shard(
+    generation: Path,
+    producer_sha: str,
+    index: int,
+    uploader: Any,
+    verify_world_shard: Callable[[Path], dict[str, Any]],
+) -> dict[str, Any]:
     producer_sha = _producer(producer_sha)
     bundle_id = _bundle_id(index)
     bundle = generation / "bundles" / bundle_id
@@ -124,11 +164,8 @@ def verify_shard(generation: Path, producer_sha: str, index: int, uploader_path:
         if receipt.get("bundleId") != bundle_id or receipt.get("kind") != "shard" or int(receipt.get("shardIndex", -1)) != index:
             raise RuntimeError(f"receiver identity mismatch for {bundle_id}")
 
-        from tools.otbm_atlas.verify_world_shard import verify_world_shard
-
         verification = verify_world_shard(bundle)
         evidence, manifest = _evidence(bundle, producer_sha, index, verification)
-        uploader = _load_uploader(uploader_path)
         with tempfile.TemporaryDirectory(prefix=f"atlas-transfer-verify-{index:02d}-") as temporary:
             archive = Path(temporary) / "rebuilt.tar"
             info = uploader.build_archive(bundle, archive)
@@ -152,30 +189,48 @@ def verify_shard(generation: Path, producer_sha: str, index: int, uploader_path:
         _write_json(evidence_root / f"full-world-shard-{index:02d}.json", evidence)
         _write_json(evidence_root / f"shard-manifest-{index:02d}.json", manifest)
         return marker
-    except Exception:
+    except (FileNotFoundError, ValueError, RuntimeError, json.JSONDecodeError) as error:
         _remove_marker(generation, index)
-        raise
+        raise PhysicalVerificationError(str(error)) from error
 
 
 def verify_existing(generation: Path, producer_sha: str, uploader_path: Path, require_all: bool = False) -> dict[str, Any]:
     producer_sha = _producer(producer_sha)
+    uploader: Any | None = None
+    verifier: Callable[[Path], dict[str, Any]] | None = None
     verified: list[int] = []
     missing: list[int] = []
+    invalid: dict[str, str] = {}
     for index in range(EXPECTED_SHARDS):
         receipt = generation / "receipts" / f"shard-{index:02d}.json"
         bundle = generation / "bundles" / f"shard-{index:02d}"
-        if not receipt.is_file() or not bundle.is_dir():
+        if not receipt.exists() and not bundle.exists():
             _remove_marker(generation, index)
             missing.append(index)
             continue
-        verify_shard(generation, producer_sha, index, uploader_path)
-        verified.append(index)
+        if receipt.is_file() != bundle.is_dir():
+            reason = "inconsistent active receipt/bundle state"
+            _quarantine_active_shard(generation, index, reason)
+            invalid[str(index)] = reason
+            missing.append(index)
+            continue
+        if uploader is None or verifier is None:
+            uploader, verifier = _dependencies(uploader_path)
+        try:
+            verify_shard(generation, producer_sha, index, uploader, verifier)
+            verified.append(index)
+        except PhysicalVerificationError as error:
+            reason = str(error)
+            _quarantine_active_shard(generation, index, reason)
+            invalid[str(index)] = reason
+            missing.append(index)
     summary = {
         "schemaVersion": 1,
         "status": "TRANSFERRED_VERIFIED" if len(verified) == EXPECTED_SHARDS else "PARTIAL_TRANSFERRED_VERIFIED",
         "producerSha": producer_sha,
         "verifiedShards": verified,
         "missingShards": missing,
+        "invalidShards": invalid,
     }
     _write_json(_marker_root(generation) / "summary.json", summary)
     if require_all and missing:

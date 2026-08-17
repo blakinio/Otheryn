@@ -172,10 +172,26 @@ jobs:
     needs: [admission, receiver]
     if: needs.admission.outputs.deploy == 'true' && needs.receiver.result == 'success'
     runs-on: [ots, synology]
-    timeout-minutes: 15
+    timeout-minutes: 30
     outputs:
       transferred_csv: ${{ steps.state.outputs.transferred_csv }}
     steps:
+      - name: Physically reverify any COMPLETE shards from earlier attempts
+        env:
+          GENERATION: ${{ needs.receiver.outputs.generation }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "${RUNNER_NAME:-}" == "synology-ots-01" ]]
+          host_root="/volume1/docker/otheryn/atlas/ci-ingest/${GENERATION}"
+          docker run --rm \
+            -v /volume1/docker/otheryn/atlas:/atlas \
+            -v "${host_root}/control/repo:/repo:ro" \
+            -w /repo python:3.12-slim \
+            python deploy/otbm-atlas-ci-ingest/transfer_state.py verify-existing \
+              "/atlas/ci-ingest/${GENERATION}" \
+              --producer-sha "$GITHUB_SHA" \
+              --uploader /repo/deploy/otbm-atlas-ci-ingest/upload_bundle.py
       - name: Export reusable shard evidence from producer-fenced generation
         id: state
         env:
@@ -185,23 +201,28 @@ jobs:
           set -Eeuo pipefail
           [[ "${RUNNER_NAME:-}" == "synology-ots-01" ]]
           host_root="/volume1/docker/otheryn/atlas/ci-ingest/${GENERATION}"
-          out="$RUNNER_TEMP/atlas-resume-evidence"
-          rm -rf "$out"
-          mkdir -p "$out"
+          docker run --rm -e GENERATION \
+            -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 sh -lc \
+            'rm -rf "/atlas/ci-ingest/${GENERATION}/control/resume-export"'
           docker run --rm \
-            -e PRODUCER_SHA="$GITHUB_SHA" \
-            -v /volume1/docker/otheryn/atlas:/atlas:ro \
+            -v /volume1/docker/otheryn/atlas:/atlas \
             -v "${host_root}/control/repo:/repo:ro" \
-            -v "$out:/out" \
             -w /repo python:3.12-slim \
             python deploy/otbm-atlas-ci-ingest/transfer_state.py export-resume \
               "/atlas/ci-ingest/${GENERATION}" \
               --producer-sha "$GITHUB_SHA" \
-              --output /out
-          transferred_csv="$(docker run --rm -v "$out:/out:ro" python:3.12-slim \
-            python -c 'import json; print(json.load(open("/out/resume-summary.json"))["transferredCsv"])')"
+              --output "/atlas/ci-ingest/${GENERATION}/control/resume-export"
+          transferred_csv="$(docker run --rm -e GENERATION \
+            -v /volume1/docker/otheryn/atlas:/atlas:ro python:3.12-slim \
+            python -c 'import json,os; p=f"/atlas/ci-ingest/{os.environ[\"GENERATION\"]}/control/resume-export/resume-summary.json"; print(json.load(open(p))["transferredCsv"])')"
           echo "transferred_csv=$transferred_csv" >> "$GITHUB_OUTPUT"
           echo "reusable_transferred_verified=$transferred_csv"
+          out="$RUNNER_TEMP/atlas-resume-evidence"
+          rm -rf "$out"
+          mkdir -p "$out"
+          docker run --rm -e GENERATION \
+            -v /volume1/docker/otheryn/atlas:/atlas:ro alpine:3.22 sh -lc \
+            'cd "/atlas/ci-ingest/${GENERATION}/control/resume-export" && tar -cf - .' | tar -xf - -C "$out"
       - name: Upload reusable compact shard evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
@@ -468,24 +489,26 @@ jobs:
           set -Eeuo pipefail
           [[ "${RUNNER_NAME:-}" == "synology-ots-01" ]]
           host_root="/volume1/docker/otheryn/atlas/ci-ingest/${GENERATION}"
-          out="$RUNNER_TEMP/atlas-transfer-verification"
-          rm -rf "$out"
-          mkdir -p "$out"
-          require_all=()
-          if [[ "$SHARD_RESULT" == success ]]; then
-            require_all=(--require-all)
-          fi
           docker run --rm \
             -v /volume1/docker/otheryn/atlas:/atlas \
             -v "${host_root}/control/repo:/repo:ro" \
-            -v "$out:/out" \
             -w /repo python:3.12-slim \
             python deploy/otbm-atlas-ci-ingest/transfer_state.py verify-existing \
               "/atlas/ci-ingest/${GENERATION}" \
               --producer-sha "$GITHUB_SHA" \
               --uploader /repo/deploy/otbm-atlas-ci-ingest/upload_bundle.py \
-              "${require_all[@]}" \
-              --output /out/transfer-summary.json
+              --output "/atlas/ci-ingest/${GENERATION}/control/transfer-summary.json"
+          if [[ "$SHARD_RESULT" == success ]]; then
+            docker run --rm -e GENERATION \
+              -v /volume1/docker/otheryn/atlas:/atlas:ro python:3.12-slim \
+              python -c 'import json,os; p=f"/atlas/ci-ingest/{os.environ[\"GENERATION\"]}/control/transfer-summary.json"; v=json.load(open(p)); assert v["status"]=="TRANSFERRED_VERIFIED" and len(v["verifiedShards"])==32, v'
+          fi
+          out="$RUNNER_TEMP/atlas-transfer-verification"
+          rm -rf "$out"
+          mkdir -p "$out"
+          docker run --rm -e GENERATION \
+            -v /volume1/docker/otheryn/atlas:/atlas:ro alpine:3.22 sh -lc \
+            'cat "/atlas/ci-ingest/${GENERATION}/control/transfer-summary.json"' > "$out/transfer-summary.json"
       - name: Upload compact transfer verification summary
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
@@ -774,4 +797,4 @@ jobs:
           docker run --rm -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 sh -lc \
             "if [ '$FINALIZE_RESULT' = success ]; then rm -rf '/atlas/ci-ingest/${GENERATION}'; fi"
           echo "finalize_result=$FINALIZE_RESULT"
-          [[ "$FINALIZE_RESULT" == success ]] || echo "Failed/incomplete producer-fenced generation preserved with TRANSFERRED_VERIFIED markers for safe retry."
+          [[ "$FINALIZE_RESULT" == success ]] || echo "Failed/incomplete producer-fenced generation preserved with TRANSFERRED_VERIFIED markers/quarantine for safe retry and inspection."
