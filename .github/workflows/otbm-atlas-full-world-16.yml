@@ -91,7 +91,7 @@ jobs:
           }
           trap cleanup_prepare EXIT
 
-          available_kb="$(df -Pk /volume1/docker/otheryn/atlas | awk 'NR==2 {print $4}')"
+          available_kb="$(docker run --rm -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 df -Pk /atlas | awk 'NR==2 {print $4}')"
           minimum_kb=$((20 * 1024 * 1024))
           [[ "$available_kb" =~ ^[0-9]+$ ]]
           (( available_kb >= minimum_kb )) || {
