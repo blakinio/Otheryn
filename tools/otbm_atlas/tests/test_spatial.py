@@ -12,7 +12,13 @@ class SpatialTests(unittest.TestCase):
 				],
 				"towns":[{"name":"Thais","temple":{"x":32369,"y":32241,"z":7}}],
 			})
-			self.assertEqual(stats,{"shards":2,"searchRecords":3})
+			self.assertEqual(stats["chunks"],2)
+			self.assertEqual(stats["shards"],2)
+			self.assertEqual(stats["searchRecords"],3)
+			self.assertEqual(stats["changedChunks"],2)
+			self.assertEqual(stats["reusedChunks"],0)
+			self.assertEqual(stats["deletedChunks"],0)
+			self.assertTrue(stats["searchIndexChanged"])
 			chunk=json.loads((root/"data/chunks/z7/2_3.json").read_text())
 			self.assertEqual(chunk["npcSpawns"][0]["name"],"Guide")
 			self.assertEqual(chunk["supplementalNpcSpawns"][0]["name"],"Event Guide")

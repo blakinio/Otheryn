@@ -1,0 +1,166 @@
+name: OTBM Environment Parallel Benchmark
+
+on:
+  push:
+    branches:
+      - perf/OTH-20260816-atlas-production-incremental-entry
+    paths:
+      - tools/otbm_atlas/environment_animation_resume.py
+      - tools/otbm_atlas/environment_animation.py
+      - tools/otbm_atlas/environment_incremental.py
+      - tools/otbm_atlas/tests/test_environment_parallel.py
+      - .github/workflows/otbm-environment-parallel-benchmark.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: otbm-environment-parallel-benchmark-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  z7-heavy-chunks:
+    name: Z7 heavy chunks 1-core vs 4-core
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+
+      - name: Assert standard runner CPU contract
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "nproc=$(nproc)"
+          echo "memory_bytes=$(awk '/MemTotal/{print $2*1024}' /proc/meminfo)"
+          test "$(nproc)" -eq 4
+
+      - name: Free disk for bounded canonical fixture
+        run: |
+          sudo rm -rf /usr/local/lib/android /opt/ghc /usr/share/dotnet || true
+          df -h /
+
+      - name: Prepare four historically expensive Z7 chunks
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import json, shutil
+          from pathlib import Path
+          from tools.otbm_atlas.atlas import spool_map
+
+          root = Path('/tmp/atlas-env-benchmark-base')
+          shutil.rmtree(root, ignore_errors=True)
+          spool = root / '.spool'
+          map_path = Path('vendor/map-analysis/crystalserver/data-global/world/world.otbm')
+          spool_map(map_path, spool, 128)
+          selected = {(7, 249, 242), (7, 254, 242), (7, 257, 242), (7, 263, 242)}
+          for path in list(spool.glob('z*/*.bin')):
+              z = int(path.parent.name[1:])
+              x, y = map(int, path.stem.split('_'))
+              if (z, x, y) not in selected:
+                  path.unlink()
+          shutil.rmtree(spool / 'tile-facts', ignore_errors=True)
+          (spool / 'facts.json').unlink(missing_ok=True)
+          actual = sorted((int(p.parent.name[1:]), *map(int, p.stem.split('_'))) for p in spool.glob('z*/*.bin'))
+          assert actual == sorted(selected), actual
+          chunks = [
+              {
+                  'z': z,
+                  'chunkX': x,
+                  'chunkY': y,
+                  'logicalBounds': [x * 128, x * 128 + 127, y * 128, y * 128 + 127, z],
+              }
+              for z, x, y in sorted(selected)
+          ]
+          (root / 'manifest.json').write_text(json.dumps({'schemaVersion': 3, 'chunkSize': 128, 'chunks': chunks}, sort_keys=True), encoding='utf-8')
+          for name in ('sequential', 'parallel'):
+              target = Path(f'/tmp/atlas-env-benchmark-{name}')
+              shutil.rmtree(target, ignore_errors=True)
+              shutil.copytree(root, target)
+          print(json.dumps({'chunks': chunks, 'spoolBytes': sum(p.stat().st_size for p in spool.glob('z*/*.bin'))}, sort_keys=True))
+          PY
+
+      - name: Measure sequential exporter
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          /usr/bin/time -v -o /tmp/sequential-time.txt python3 - <<'PY'
+          import json, time
+          from pathlib import Path
+          from tools.otbm_atlas.environment_animation_resume import enrich_environment_animations_resumable
+          root = Path('/tmp/atlas-env-benchmark-sequential')
+          assets = Path('vendor/map-analysis/tibia-client/15.25.bd5a04/assets')
+          started = time.perf_counter()
+          stats = enrich_environment_animations_resumable(assets, root, workers=1)
+          elapsed = time.perf_counter() - started
+          Path('/tmp/sequential.json').write_text(json.dumps({'elapsedSeconds': elapsed, 'stats': stats}, sort_keys=True), encoding='utf-8')
+          print(json.dumps({'mode': 'sequential', 'elapsedSeconds': elapsed, 'stats': stats}, sort_keys=True))
+          PY
+          cat /tmp/sequential-time.txt
+
+      - name: Measure 4-core exporter
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          /usr/bin/time -v -o /tmp/parallel-time.txt python3 - <<'PY'
+          import json, time
+          from pathlib import Path
+          from tools.otbm_atlas.environment_animation_resume import enrich_environment_animations_resumable
+          root = Path('/tmp/atlas-env-benchmark-parallel')
+          assets = Path('vendor/map-analysis/tibia-client/15.25.bd5a04/assets')
+          started = time.perf_counter()
+          stats = enrich_environment_animations_resumable(assets, root, workers=4)
+          elapsed = time.perf_counter() - started
+          Path('/tmp/parallel.json').write_text(json.dumps({'elapsedSeconds': elapsed, 'stats': stats}, sort_keys=True), encoding='utf-8')
+          print(json.dumps({'mode': 'parallel', 'elapsedSeconds': elapsed, 'stats': stats}, sort_keys=True))
+          PY
+          cat /tmp/parallel-time.txt
+
+      - name: Prove byte equivalence and emit benchmark evidence
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+
+          def digest_tree(root: Path):
+              result = {}
+              env = root / 'data/environment-animations'
+              for path in sorted(p for p in env.rglob('*') if p.is_file()):
+                  rel = path.relative_to(env).as_posix()
+                  if rel in {'index.json', 'export-state.json'}:
+                      continue
+                  result[rel] = hashlib.sha256(path.read_bytes()).hexdigest()
+              return result
+
+          sequential = json.loads(Path('/tmp/sequential.json').read_text())
+          parallel = json.loads(Path('/tmp/parallel.json').read_text())
+          assert sequential['stats'] == parallel['stats'], (sequential['stats'], parallel['stats'])
+          assert digest_tree(Path('/tmp/atlas-env-benchmark-sequential')) == digest_tree(Path('/tmp/atlas-env-benchmark-parallel'))
+          speedup = sequential['elapsedSeconds'] / parallel['elapsedSeconds']
+          evidence = {
+              'schemaVersion': 1,
+              'runner': {'cpu': 4, 'label': 'ubuntu-latest'},
+              'chunks': ['z7/249_242', 'z7/254_242', 'z7/257_242', 'z7/263_242'],
+              'sequentialSeconds': sequential['elapsedSeconds'],
+              'parallelSeconds': parallel['elapsedSeconds'],
+              'speedup': speedup,
+              'statistics': parallel['stats'],
+              'byteEquivalence': 'PASS',
+          }
+          Path('/tmp/environment-parallel-benchmark.json').write_text(json.dumps(evidence, indent=2, sort_keys=True) + '\n')
+          print(json.dumps(evidence, sort_keys=True))
+          PY
+
+      - name: Upload compact benchmark evidence only
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: environment-parallel-benchmark
+          path: /tmp/environment-parallel-benchmark.json
+          if-no-files-found: error
+          retention-days: 1

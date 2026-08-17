@@ -121,6 +121,22 @@ class EnvironmentAnimationResumeTests(unittest.TestCase):
         self.assertIn("/underlays/", record["underlay"])
         self.assertTrue((output / record["underlay"]).is_file())
 
+    def test_monolithic_source_sha_change_does_not_reset_unchanged_checkpoint(self) -> None:
+        output, assets = self.make_fixture()
+        checkpoint = output / "data/environment-animations/checkpoints/z7/1_1.json"
+        with patch("tools.otbm_atlas.environment_animation_resume.AssetRenderer", _FakeRenderer):
+            enrich_environment_animations_resumable(assets, output)
+            before = checkpoint.read_bytes()
+            manifest_path = output / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["sources"]["mapSha256"] = "different-map-global-sha"
+            manifest["sources"]["assetsSha256"] = "different-assets-global-sha"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            report = enrich_environment_animations_resumable(assets, output)
+            after = checkpoint.read_bytes()
+        self.assertEqual(report["reusedChunks"], 1)
+        self.assertEqual(before, after)
+
     def test_interrupted_finalization_reuses_completed_chunk(self) -> None:
         output, assets = self.make_fixture()
         with patch("tools.otbm_atlas.environment_animation_resume.AssetRenderer", _FakeRenderer):
@@ -189,6 +205,25 @@ class EnvironmentAnimationResumeTests(unittest.TestCase):
             report = enrich_environment_animations_resumable(assets, output)
         self.assertEqual(report["instances"], 0)
         self.assertEqual(report["chunks"], 0)
+        self.assertFalse(shard.exists())
+        self.assertFalse(any(path.exists() for path in old_payloads))
+
+    def test_deleted_manifest_chunk_removes_checkpoint_shard_and_payloads(self) -> None:
+        output, assets = self.make_fixture()
+        with patch("tools.otbm_atlas.environment_animation_resume.AssetRenderer", _FakeRenderer):
+            enrich_environment_animations_resumable(assets, output)
+            environment = output / "data/environment-animations"
+            checkpoint = environment / "checkpoints/z7/1_1.json"
+            shard = environment / "chunks/z7/1_1.json"
+            old_payloads = {path for path in environment.rglob("*.png")}
+            manifest_path = output / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["chunks"] = []
+            manifest["sources"]["mapSha256"] = "map-after-delete"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            report = enrich_environment_animations_resumable(assets, output)
+        self.assertEqual(report["completedChunks"], 0)
+        self.assertFalse(checkpoint.exists())
         self.assertFalse(shard.exists())
         self.assertFalse(any(path.exists() for path in old_payloads))
 

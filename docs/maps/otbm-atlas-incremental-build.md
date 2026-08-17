@@ -1,6 +1,6 @@
 # OTBM Atlas incremental build and publication contract
 
-Status: implementation contract for `OTH-20260816-atlas-incremental-build-ci`.
+Status: production integration under final exact-head validation for `OTH-20260816-atlas-incremental-build-ci`.
 
 ## Objective
 
@@ -10,7 +10,7 @@ An ordinary Atlas change must never imply a canonical full-world rebuild merely 
 immutable source snapshot
         |
         v
-spatial spool / local hashes
+persistent spatial spool / local hashes
         |
         v
 chunk dependency + reverse-dependency index
@@ -20,6 +20,7 @@ change-impact plan
         |
         +--> changed detail chunks only
         +--> changed overview chunks only
+        +--> changed environment-animation chunks only
         +--> changed data domain only
         +--> frontend only when appropriate
         |
@@ -36,9 +37,9 @@ A full build is a deliberate recovery/semantic-transition operation, not a defau
 
 The current v3 Atlas uses 128x128 map-tile chunks and the certified canonical world contains 3,494 detail chunks across Z0..Z15. The current canonical detail PNG corpus alone is measured at 10,995,096,999 bytes before overviews, environment animation, creature sprites, JSON data and other publication files.
 
-The legacy `tools/otbm_atlas/atlas.py` cache fingerprint includes the SHA-256 of the complete `world.otbm`, the SHA-256 of the complete appearance-asset tree and the local spool SHA. Consequently a change anywhere in the monolithic map or asset tree can invalidate every detail chunk even when almost all local pixels are unchanged. Its global source-state transition also recreates the complete spool.
+The former `tools/otbm_atlas/atlas.py` cache fingerprint included the SHA-256 of the complete `world.otbm`, the SHA-256 of the complete appearance-asset tree and the local spool SHA. Consequently a change anywhere in the monolithic map or asset tree could invalidate every detail chunk even when almost all local pixels were unchanged. Its global source-state transition also recreated the complete spool.
 
-The new incremental path deliberately does not put those global source hashes into a detail fingerprint.
+The production-integrated incremental path deliberately does not put those global source hashes into a detail or environment-animation chunk fingerprint.
 
 ## Source snapshot versus build delta
 
@@ -56,17 +57,37 @@ only changed derived outputs
 
 A future Game -> Atlas delta protocol remains a separate evidence-triggered decision. Complete snapshots remain the recovery truth.
 
-## Spatial spool
+## Production spatial state
 
-`tools/otbm_atlas/incremental_core.py` parses the source map and assigns every tile to a stable `(z, chunkX, chunkY)` spool. The current default remains 128. Parsing a monolithic OTBM may still require one sequential pass, but the resulting unchanged spool bytes are not rewritten and, more importantly, they do not trigger rendering.
+`tools/otbm_atlas/production_incremental.py` is the local production authority used by `tools/otbm_atlas/atlas.py`. The PR planner remains a base-vs-head GitHub CI tool; the production builder instead compares the current canonical snapshot with the last successfully committed local state under:
 
-`reconcile_spool()` compares candidate and stable per-chunk SHA-256 values and performs only three actions:
+```text
+<atlas-output>/.incremental-state/production-render-state.json
+```
 
-- replace changed/new chunk bytes atomically;
-- retain byte-identical chunks;
-- remove chunks that disappeared from the target snapshot.
+The production state records per-chunk render fingerprints and per-chunk spool SHA-256 values. The spool itself remains under `<atlas-output>/.spool`.
 
-Changing the chunk size itself is not treated as an ordinary incremental transition. It requires a clean spatial spool transition.
+When the canonical map SHA is unchanged, production validates the persisted spool bytes against the state before reusing them. A corrupted shard is not trusted from metadata: the canonical OTBM is reparsed and the stable spool is reconciled. If canonical bytes are unchanged, repairing the spool does not itself dirty the detail image.
+
+When the monolithic OTBM changes, one sequential parse may still be required because OTBM is the source container. Candidate bytes are then reconciled per spatial shard:
+
+- changed/new chunk bytes replace only their matching stable shard;
+- byte-identical shards remain untouched;
+- removed chunks are deleted explicitly;
+- factual `tile-facts/*.jsonl` shards are reconciled independently;
+- `facts.json` is replaced only when its bytes changed.
+
+A monolithic source read is therefore distinct from a full-world render. Ordinary source edits may require reading the source once but render only locally dirty chunks.
+
+## Legacy publication adoption
+
+The first production-integrated run can adopt the existing certified Atlas image corpus without rerendering it when:
+
+- no production incremental state exists yet;
+- existing manifest source identity exactly matches the canonical map/assets/chunk contract;
+- expected detail PNG/report files exist.
+
+That migration run binds the existing spool to per-chunk SHA-256 state. Later runs require byte-verified state and no longer rely on unbound legacy reuse.
 
 ## Render dependency index
 
@@ -83,23 +104,21 @@ appearance ID -> chunks
 sprite ID     -> chunks
 ```
 
-The sprite selection calculation mirrors the renderer's position patterns, stack count, hangable hook direction, fluid subtype and declared default animation phase. It does not need to decode every sprite sheet merely to determine dependency identity.
-
-Container descendants remain part of the spool because they contribute to canonical report statistics, but they are not promoted to visible render dependencies when the renderer itself does not draw them.
+The sprite selection calculation mirrors the renderer's position patterns, stack count, hangable hook direction, fluid subtype and declared default animation phase. Container descendants remain part of canonical spool/report data but are not promoted to visible render dependencies when the renderer itself does not draw them.
 
 ## Asset invalidation
 
 Asset state is decomposed into:
 
 - semantic digest per object appearance;
-- SHA-256 and sprite-ID range per sprite sheet;
+- SHA-256 and sprite-ID range per sprite sheet for detail-render dependency impact;
 - one global gutter profile containing maximum sprite dimensions and global shift extrema.
 
 An appearance change invalidates only chunks in that appearance's reverse index. A sprite-sheet byte change invalidates only chunks whose selected sprite IDs fall in that sheet's old or new ID range.
 
-The gutter profile is intentionally global today because the certified renderer computes conservative chunk crop bounds from global sprite dimensions and appearance shift extrema. If that profile changes, the current rendering contract truthfully requires all detail chunks to be considered dirty. This is a machine-readable `GLOBAL_GUTTER_PROFILE_CHANGED` full-build reason rather than a hidden cache miss.
+The gutter profile is intentionally global today because the certified renderer computes conservative chunk crop bounds from global sprite dimensions and appearance shift extrema. If that profile changes, the rendering contract truthfully requires all detail chunks to be considered dirty. This is a machine-readable `GLOBAL_GUTTER_PROFILE_CHANGED` full-build reason rather than a hidden cache miss.
 
-Current chunk rendering draws only tiles sourced by that chunk into its own conservative gutter. It does not draw neighboring source chunks into the image, so a local tile edit does not require speculative neighbor invalidation. If a future renderer introduces cross-chunk source composition, the render-core version and invalidation contract must be changed together.
+Current chunk rendering draws only tiles sourced by that chunk into its own conservative gutter. It does not draw neighboring source chunks into the image, so a local tile edit does not require speculative neighbor invalidation. If a future renderer introduces cross-chunk source composition, the render-core version and invalidation contract must change together.
 
 ## Local detail fingerprint
 
@@ -116,17 +135,54 @@ render-contract digest
 
 It does not contain the SHA-256 of the complete map or complete asset tree.
 
-Planner/publication refactors do not change the render-contract digest. Pixel-semantics changes in the incremental core require an explicit `RENDER_CORE_VERSION` bump; changes in `render.py`, `assets.py` or `semantic.py` are detected directly.
+Planner/publication refactors do not change the render-contract digest. Pixel-semantics changes in the incremental core require an explicit `RENDER_CORE_VERSION` bump; changes in renderer semantics are detected by the render-contract guard.
+
+## Production detail execution
+
+`tools/otbm_atlas/atlas.py` now asks the production planner for exact `dirtyDetailChunks`, `reusedDetailChunks` and `deletedDetailChunks`.
+
+Only dirty detail chunks become renderer jobs. Removed chunks delete only their detail/overview outputs. Stable detail chunks are reused directly; ordinary builds do not re-hash the complete ~11 GB detail corpus merely to prove a cache hit.
+
+Parallel dirty rendering preserves the existing bounded worker behavior. The production renderer uses the same guarded incremental-core spool decoder and crop-bounds semantics as the change-impact path.
+
+The resulting `data/statistics.json` includes `incrementalBuild` evidence with dirty/reused/deleted counts, full-build reasons and spool reconciliation/integrity state.
 
 ## Independent overview invalidation
 
-4x and 8x overview images remain deterministic derivatives of the detail PNG. A changed detail chunk invalidates its own overview derivatives. A change confined to `overview.py` may invalidate all overview chunks without forcing any detail PNG to be rendered again.
+4x and 8x overview images remain deterministic derivatives of the detail PNG. A changed detail chunk invalidates its own overview derivatives. Existing overview fingerprinting means an unchanged detail checksum reuses the overview. A global overview semantic change remains a separate invalidation domain and must not imply a detail rerender.
 
-This is a separate invalidation domain by design.
+## Environment-animation local invalidation
+
+The resumable environment exporter is also local. `tools/otbm_atlas/environment_incremental.py` separates the genuinely global environment contract from chunk dependencies.
+
+The global contract contains only:
+
+- environment export contract version;
+- Atlas manifest schema/chunk size;
+- animation zoom;
+- global overlap-safety radius.
+
+It explicitly excludes complete-map SHA, complete-asset SHA and the full manifest chunk inventory.
+
+Each environment-animation checkpoint fingerprint contains:
+
+```text
+global environment contract
+local spool SHA-256
+logical chunk bounds
+appearance semantics actually used by that chunk
+SHA-256 of exact decoded sprite pixels referenced by those appearances
+```
+
+A sprite sheet is only a storage container here: changing an unrelated sprite in the same sheet does not invalidate a chunk that never references that sprite. Tests prove that changing a sprite used only by chunk B leaves chunk A's checkpoint fingerprint unchanged.
+
+Checkpoint reuse also verifies referenced output bytes. A deleted Atlas chunk removes its stale environment checkpoint/shard, and unreferenced environment payload files are garbage-collected only after surviving checkpoint references are known.
+
+`EXPORT_VERSION=3` is the one-time contract transition from the earlier global-manifest fingerprint to this local dependency model.
 
 ## Data-domain classification
 
-The impact plan classifies changed paths independently from map rendering. Current machine-readable domains include:
+The PR impact plan classifies changed paths independently from map rendering. Current machine-readable domains include:
 
 - `mapGeometry`;
 - `renderAssets`;
@@ -139,11 +195,11 @@ The impact plan classifies changed paths independently from map rendering. Curre
 - `ci`;
 - `documentation`.
 
-A spawn XML or viewer-only change therefore does not become a reason to render all map images. Existing specialized generators remain responsible for their own domain outputs until they are migrated behind equivalent local fingerprints.
+A spawn XML or viewer-only change therefore does not become a reason to render all map images. Existing specialized generators remain responsible for their own data outputs unless and until they are migrated behind equivalent local fingerprints.
 
 ## Full-build guard
 
-Every plan declares:
+Every PR impact plan declares:
 
 ```json
 {
@@ -152,11 +208,17 @@ Every plan declares:
 }
 ```
 
-When a global render semantic really changes, the planner sets `fullBuildRequired: true` and records exact reasons. `python -m tools.otbm_atlas.incremental guard <plan>` fails closed in normal CI. The only override is explicit `--allow-full-build`.
+When a global render semantic really changes, the planner sets `fullBuildRequired: true` and records exact reasons. Normal CI fails closed rather than silently falling back to the complete world.
 
-The incremental workflow never silently responds by building the entire canonical world.
+The production `atlas.py` path follows the same policy. A detail-wide semantic transition raises an error with the exact reason. The only production override is explicit:
 
-The repository already has a separately gated full-world Atlas workflow path triggered deliberately by its final-gate/manual mechanism. It is not the ordinary PR path. Full clean execution remains the recovery/equivalence authority when such evidence is genuinely required.
+```bash
+python3 -m tools.otbm_atlas.atlas ... --allow-full-build
+```
+
+This flag is for a consciously authorized recovery/semantic transition, never an automatic response to a changed source SHA.
+
+The repository retains separately gated full-world validation/recovery paths. Clean execution remains the equivalence authority when it is genuinely required.
 
 ## Content-addressed publication
 
@@ -179,16 +241,9 @@ A failed partial build therefore cannot make a half-populated candidate the sele
 
 ## Chunk-size decision: 32 vs 64 vs 128
 
-The default is **not** changed from 128 by assumption. `tools/otbm_atlas/chunk_benchmark.py` measures the same bounded canonical region at 32, 64 and 128 and reports:
+The default remains **128**. `tools/otbm_atlas/chunk_benchmark.py` measures the same bounded canonical region at 32, 64 and 128 and reports chunk cardinality, populated tiles, nominal invalidation area, encoded bytes, render operations and render time.
 
-- number of produced chunks;
-- populated tiles;
-- nominal invalidation area in map tiles;
-- encoded detail bytes;
-- render operations;
-- measured render seconds.
-
-Smaller chunks improve invalidation locality but increase file/request/manifest cardinality. A future default must be chosen from measured build and browser evidence, not from chunk area alone.
+Smaller chunks improve invalidation locality but increase file/request/manifest cardinality. The GitHub benchmark is implemented and verified; this task does not change the production chunk contract without browser/deployment evidence demonstrating that the tradeoff is superior.
 
 Representative command:
 
@@ -201,42 +256,42 @@ python3 -m tools.otbm_atlas.chunk_benchmark \
 
 ## GitHub-hosted execution
 
-`.github/workflows/otbm-atlas-incremental.yml` uses only GitHub-hosted `ubuntu-latest` runners and does not use Synology runners. It performs:
+`.github/workflows/otbm-atlas-incremental.yml` uses only GitHub-hosted `ubuntu-latest` runners and does not use Synology runners. It provides:
 
 1. focused syntax/unit validation;
-2. an exact base-vs-head canonical impact plan;
-3. the fail-closed full-build guard;
-4. real canonical one-chunk incremental rendering and byte-for-byte comparison with the established renderer path;
-5. the bounded 32/64/128 Thais benchmark.
+2. exact base-vs-head canonical impact planning;
+3. fail-closed full-build guard;
+4. proportional non-render validation;
+5. exact dirty-detail execution in bounded process shards;
+6. representative byte/pixel equivalence when render-sensitive paths change;
+7. bounded 32/64/128 benchmark when its relevant contract changes.
 
 Generated Tibia/CipSoft-derived render images are temporary validation data and are deleted before job completion. The workflow does not upload the generated map corpus as a public artifact.
 
-Documentation/task-only changes do not trigger this workflow. `pull_request:labeled` is also not an incremental-workflow trigger.
+Documentation/task-only changes do not trigger the incremental workflow. Superseded runs are cancelled so obsolete PR generations do not consume runner time unnecessarily.
 
 ## GitHub Pages / hosting decision
 
-GitHub Pages is **not enabled for the current full Atlas**. The measured current detail corpus alone is about 11 GB, before the rest of the product, and the current public repository task does not authorize public redistribution of generated third-party-derived render assets.
+GitHub Pages is **not enabled for the current full Atlas**. The measured current detail corpus alone is about 11 GB, before the rest of the product, and this task does not authorize public redistribution of generated third-party-derived render assets.
 
-This does not block moving build/test CPU to GitHub-hosted Actions. Hosting/storage is intentionally separated from CI. A future hosting decision must use measured final corpus size, traffic, cache/object-store economics and explicit asset-redistribution authority.
-
-## Migration boundary with active Atlas work
-
-At the time this incremental path was introduced, active PRs independently owned the legacy `atlas.py`, product viewer files and existing specialized Atlas workflows. To prevent concurrent-writer conflicts, the incremental engine, tests, benchmark and new workflow were introduced as non-overlapping files first.
-
-The final migration step after those owners become terminal is to route the ordinary canonical Atlas build entry point through this impact plan/local fingerprint state and to remove any remaining unconditional global invalidation from the legacy entry path. That integration must preserve the environment-animation resumability and tile-inspector/product changes merged in the meantime rather than overwriting them.
+This does not block moving build/test CPU to GitHub-hosted Actions. Hosting/storage is intentionally separated from CI. Synology may remain a private runtime/storage destination; ordinary Atlas build/test CPU is no longer required to run there.
 
 ## Required equivalence discipline
 
-Incremental correctness is not inferred from cache hits. Validation must prove:
+Incremental correctness is not inferred from cache hits. Validation covers:
 
-- identical input -> zero dirty detail chunks;
-- one changed spatial chunk -> only that detail chunk plus its derivatives are dirty;
+- identical committed production state -> zero dirty detail chunks;
+- exact legacy certified publication -> adoption without detail rerender plus binding of spool hashes;
+- one changed spatial fingerprint -> only that detail chunk is dirty;
+- canonical-map candidate reconciliation -> unchanged spatial shards remain byte-identical;
+- corrupted persisted spool -> rebuild/reconcile from canonical OTBM rather than trusting corrupt cache;
 - changed used appearance/sprite -> only reverse-dependent chunks are dirty;
-- unrelated asset -> no unrelated chunk rebuild;
-- overview-code-only change -> overview invalidation without detail invalidation;
+- unrelated sprite -> unrelated environment checkpoint remains reusable;
+- monolithic map/assets SHA change alone -> unchanged environment checkpoint remains reusable;
+- deleted environment chunk -> stale checkpoint/shard/payload cleanup;
 - global gutter/render-contract change -> explicit full-build requirement;
-- one real canonical incremental chunk -> byte-identical detail PNG to the established renderer path;
+- real bounded canonical incremental rendering -> established renderer/equivalence gates;
 - content-addressed publication preserves unchanged object identities;
-- periodic/explicit clean-build evidence remains available to detect a missing dependency edge.
+- explicit clean-build evidence remains available to detect a missing dependency edge.
 
 A future change to an input dependency that is not represented in this contract is a correctness defect, not permission to add a global map hash back into every local fingerprint.

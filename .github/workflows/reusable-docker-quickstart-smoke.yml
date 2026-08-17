@@ -3,6 +3,12 @@ name: Reusable Docker Quickstart Smoke
 
 on:
   workflow_call:
+    inputs:
+      checkout_ref:
+        description: Optional ref or SHA to check out.
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -14,7 +20,15 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
+        if: inputs.checkout_ref == ''
         uses: actions/checkout@v6
+
+      - name: Checkout requested ref
+        if: inputs.checkout_ref != ''
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.checkout_ref }}
+          persist-credentials: false
 
       - name: Show Docker versions
         run: |
