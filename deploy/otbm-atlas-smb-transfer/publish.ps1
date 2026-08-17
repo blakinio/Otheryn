@@ -12,6 +12,9 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+$contractModule = Join-Path $PSScriptRoot "transfer_contract.psm1"
+Import-Module -Name $contractModule -Force -ErrorAction Stop
+
 function Invoke-PublicationGate {
     param(
         [Parameter(Mandatory = $true)]
@@ -24,16 +27,6 @@ function Invoke-PublicationGate {
     if ($LASTEXITCODE -ne 0) {
         throw "Atlas publication gate failed for '$AtlasPath'. Evidence: $OutputPath"
     }
-}
-
-function Get-ManifestSha256 {
-    param([Parameter(Mandatory = $true)][string]$AtlasPath)
-
-    $manifest = Join-Path $AtlasPath "manifest.json"
-    if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) {
-        throw "Missing Atlas manifest: $manifest"
-    }
-    return (Get-FileHash -LiteralPath $manifest -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..")).Path
@@ -94,7 +87,7 @@ if ($currentExistedInitially) {
     if (-not $AllowReplaceCurrent) {
         throw "'$currentPath' already exists. Refusing to replace a live/current Atlas without -AllowReplaceCurrent. Stop the preview first and rerun explicitly if replacement is intended."
     }
-    $currentManifestInitially = Get-ManifestSha256 -AtlasPath $currentPath
+    $currentManifestInitially = Get-AtlasManifestSha256 -AtlasPath $currentPath
 }
 
 if (Test-Path -LiteralPath $incomingPath) {
@@ -126,16 +119,10 @@ Write-Host "[3/5] Re-verifying the copied corpus over SMB..."
 Invoke-PublicationGate -AtlasPath $incomingPath -OutputPath $remoteGateReport
 
 Write-Host "[4/5] Checking current-state drift and promoting verified staging..."
-$currentExistsAtPromotion = Test-Path -LiteralPath $currentPath -PathType Container
-if ($currentExistsAtPromotion -ne $currentExistedInitially) {
-    throw "Atlas current state changed during transfer. Refusing promotion; verified staging remains at '$incomingPath'."
-}
-if ($currentExistsAtPromotion) {
-    $currentManifestAtPromotion = Get-ManifestSha256 -AtlasPath $currentPath
-    if ($currentManifestAtPromotion -ne $currentManifestInitially) {
-        throw "Atlas current manifest changed during transfer. Refusing promotion; verified staging remains at '$incomingPath'."
-    }
-}
+$currentExistsAtPromotion = Assert-AtlasCurrentStateStable `
+    -CurrentPath $currentPath `
+    -ExistedInitially $currentExistedInitially `
+    -ManifestInitially $currentManifestInitially
 
 $previousCreated = $false
 if ($currentExistsAtPromotion) {
@@ -159,7 +146,7 @@ catch {
     throw
 }
 
-$manifestSha256 = Get-ManifestSha256 -AtlasPath $currentPath
+$manifestSha256 = Get-AtlasManifestSha256 -AtlasPath $currentPath
 $receipt = [ordered]@{
     schemaVersion = 1
     promotedAt = (Get-Date).ToString("o")
