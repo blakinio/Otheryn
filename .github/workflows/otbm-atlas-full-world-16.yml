@@ -10,6 +10,11 @@ on:
         required: true
         type: boolean
         default: false
+      expected_producer_sha:
+        description: "Exact main SHA authorized for Synology deployment; required when deploy_to_synology=true"
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -29,12 +34,15 @@ jobs:
         id: mode
         env:
           DEPLOY_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_to_synology == true }}
+          EXPECTED_PRODUCER_SHA: ${{ inputs.expected_producer_sha }}
         run: |
           set -Eeuo pipefail
           deploy=false
           if [[ "$DEPLOY_REQUESTED" == true ]]; then
             [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]
             [[ "$GITHUB_REF" == refs/heads/main ]]
+            [[ "$EXPECTED_PRODUCER_SHA" =~ ^[0-9a-f]{40}$ ]]
+            [[ "$GITHUB_SHA" == "$EXPECTED_PRODUCER_SHA" ]]
             deploy=true
           fi
           echo "deploy=$deploy" >> "$GITHUB_OUTPUT"
@@ -72,6 +80,24 @@ jobs:
           tunnel="atlas-ci-tunnel-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           network="atlas-ci-net-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           host_root="/volume1/docker/otheryn/atlas/ci-ingest/${generation}"
+          prepared=false
+          cleanup_prepare() {
+            if [[ "$prepared" != true ]]; then
+              docker rm -f "$receiver" "$tunnel" >/dev/null 2>&1 || true
+              docker network rm "$network" >/dev/null 2>&1 || true
+              docker run --rm -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 sh -lc \
+                "rm -rf '/atlas/ci-ingest/${generation}'" >/dev/null 2>&1 || true
+            fi
+          }
+          trap cleanup_prepare EXIT
+
+          available_kb="$(df -Pk /volume1/docker/otheryn/atlas | awk 'NR==2 {print $4}')"
+          minimum_kb=$((20 * 1024 * 1024))
+          [[ "$available_kb" =~ ^[0-9]+$ ]]
+          (( available_kb >= minimum_kb )) || {
+            echo "Need at least 20 GiB free for verified incoming Atlas generation; available_kb=$available_kb" >&2
+            exit 1
+          }
 
           docker rm -f "$receiver" "$tunnel" >/dev/null 2>&1 || true
           docker network rm "$network" >/dev/null 2>&1 || true
@@ -85,7 +111,6 @@ jobs:
               "tar -xf - -C '/atlas/ci-ingest/${generation}/control/repo'"
 
           token="$(openssl rand -hex 32)"
-          echo "::add-mask::$token"
           printf '%s\n' "$token" | \
             docker run --rm -i -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 sh -lc \
               "umask 077; cat > '/atlas/ci-ingest/${generation}/control/token'"
@@ -98,11 +123,11 @@ jobs:
               --output "/atlas/ci-ingest/${generation}/control/current-state.json"
 
           docker network create "$network" >/dev/null
-          docker run -d --name "$receiver" --network "$network" --restart on-failure:5 \
+          docker run -d --name "$receiver" --network "$network" \
             -v "${host_root}:/data" python:3.12-slim \
             python /data/control/repo/deploy/otbm-atlas-ci-ingest/receiver.py \
               --root /data --token-file /data/control/token --port 8080 >/dev/null
-          docker run -d --name "$tunnel" --network "$network" --restart on-failure:5 \
+          docker run -d --name "$tunnel" --network "$network" \
             cloudflare/cloudflared:2026.7.3 \
             tunnel --no-autoupdate --url "http://${receiver}:8080" >/dev/null
 
@@ -128,6 +153,7 @@ jobs:
             echo "tunnel=$tunnel"
             echo "network=$network"
           } >> "$GITHUB_OUTPUT"
+          prepared=true
 
   plan:
     name: Plan canonical world into 32 weighted chunk shards
@@ -531,14 +557,28 @@ jobs:
           runtime_ok=false
           if docker compose -f /volume1/docker/otheryn/atlas/project/docker-compose.yml -p otheryn-atlas-preview \
               up -d --pull always --force-recreate atlas; then
-            for _ in $(seq 1 40); do
-              if docker run --rm --network host alpine:3.22 sh -lc \
-                  'test "$(wget -q -O - http://127.0.0.1:8095/healthz)" = ok && wget -q -O /tmp/manifest http://127.0.0.1:8095/manifest.json && grep -q '"'"'"schemaVersion"'"'"': 3' /tmp/manifest'; then
-                runtime_ok=true
-                break
+            cid="$(docker compose -f /volume1/docker/otheryn/atlas/project/docker-compose.yml -p otheryn-atlas-preview ps -q atlas)"
+            if [[ -n "$cid" ]]; then
+              for _ in $(seq 1 40); do
+                health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$cid" 2>/dev/null || true)"
+                [[ "$health" == healthy ]] && break
+                [[ "$health" == unhealthy ]] && break
+                sleep 3
+              done
+              if [[ "$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$cid" 2>/dev/null || true)" == healthy ]]; then
+                if docker run --rm -i --network host python:3.12-slim python - <<'PY'
+          import json
+          from urllib.request import urlopen
+          assert urlopen('http://127.0.0.1:8095/healthz', timeout=10).read() == b'ok\n'
+          manifest = json.load(urlopen('http://127.0.0.1:8095/manifest.json', timeout=20))
+          assert manifest['schemaVersion'] == 3
+          assert len(manifest['chunks']) == 3494
+          PY
+                then
+                  runtime_ok=true
+                fi
               fi
-              sleep 3
-            done
+            fi
           fi
 
           if [[ "$runtime_ok" != true ]]; then
@@ -549,8 +589,20 @@ jobs:
             exit 1
           fi
           "${py[@]}" activate /atlas --receipt "$receipt"
-          docker run --rm -v /volume1/docker/otheryn/atlas:/atlas:ro python:3.12-slim python -c \
-            "import json; print(json.dumps(json.load(open('/atlas/deployments/${GENERATION}.json')), sort_keys=True))"
+          docker run --rm -i -v /volume1/docker/otheryn/atlas:/atlas python:3.12-slim python - "$GENERATION" <<'PY'
+          import json
+          from pathlib import Path
+          import shutil
+          import sys
+          generation = sys.argv[1]
+          atlas = Path('/atlas')
+          receipt = json.loads((atlas / 'deployments' / f'{generation}.json').read_text())
+          keep = receipt.get('previous')
+          for path in sorted(atlas.glob('previous-*')):
+              if path.name != keep and path.is_dir():
+                  shutil.rmtree(path)
+          print(json.dumps(receipt, sort_keys=True))
+          PY
 
   cleanup:
     name: Tear down temporary ingest and reclaim successful staging
