@@ -145,7 +145,7 @@ jobs:
             --bundle-id fixture \
             --producer-sha "$GITHUB_SHA" \
             --kind fixture \
-            --part-bytes 7
+            --part-bytes 4096
 
   verify:
     name: Verify received bytes and cleanup temporary ingest
