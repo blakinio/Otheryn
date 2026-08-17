@@ -56,7 +56,6 @@ jobs:
     timeout-minutes: 15
     outputs:
       url: ${{ steps.prepare.outputs.url }}
-      token: ${{ steps.prepare.outputs.token }}
       generation: ${{ steps.prepare.outputs.generation }}
       receiver: ${{ steps.prepare.outputs.receiver }}
       tunnel: ${{ steps.prepare.outputs.tunnel }}
@@ -67,7 +66,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - name: Prepare isolated generation, receiver and outbound tunnel
+      - name: Prepare resumable producer-fenced generation, OIDC receiver and outbound tunnel
         id: prepare
         shell: bash
         run: |
@@ -75,19 +74,15 @@ jobs:
           [[ "${RUNNER_NAME:-}" == "synology-ots-01" ]]
           [[ "$GITHUB_REF" == refs/heads/main ]]
           docker version >/dev/null
-          generation="gha-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_SHA:0:12}"
+          generation="producer-${GITHUB_SHA}"
           receiver="atlas-ci-receiver-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           tunnel="atlas-ci-tunnel-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           network="atlas-ci-net-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           host_root="/volume1/docker/otheryn/atlas/ci-ingest/${generation}"
-          prepared=false
+          audience="ots-atlas-ci-ingest:${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}"
           cleanup_prepare() {
-            if [[ "$prepared" != true ]]; then
-              docker rm -f "$receiver" "$tunnel" >/dev/null 2>&1 || true
-              docker network rm "$network" >/dev/null 2>&1 || true
-              docker run --rm -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 sh -lc \
-                "rm -rf '/atlas/ci-ingest/${generation}'" >/dev/null 2>&1 || true
-            fi
+            docker rm -f "$receiver" "$tunnel" >/dev/null 2>&1 || true
+            docker network rm "$network" >/dev/null 2>&1 || true
           }
           trap cleanup_prepare EXIT
 
@@ -101,8 +96,21 @@ jobs:
 
           docker rm -f "$receiver" "$tunnel" >/dev/null 2>&1 || true
           docker network rm "$network" >/dev/null 2>&1 || true
-          docker run --rm -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 sh -lc \
-            "test ! -e '/atlas/ci-ingest/${generation}'; mkdir -p '/atlas/ci-ingest/${generation}/control/repo'"
+          docker run --rm \
+            -e GENERATION="$generation" -e PRODUCER_SHA="$GITHUB_SHA" \
+            -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 sh -lc '
+              set -eu
+              root="/atlas/ci-ingest/${GENERATION}"
+              if [ -e "$root" ]; then
+                test -f "$root/control/producer-sha"
+                test "$(cat "$root/control/producer-sha")" = "$PRODUCER_SHA"
+              else
+                mkdir -p "$root/control"
+                printf "%s\n" "$PRODUCER_SHA" > "$root/control/producer-sha"
+              fi
+              rm -rf "$root/control/repo"
+              mkdir -p "$root/control/repo"
+            '
 
           tar -cf - \
             tools/otbm_atlas tools/otbm_atlas_facts \
@@ -110,23 +118,28 @@ jobs:
             docker run --rm -i -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 sh -lc \
               "tar -xf - -C '/atlas/ci-ingest/${generation}/control/repo'"
 
-          token="$(openssl rand -hex 32)"
-          printf '%s\n' "$token" | \
-            docker run --rm -i -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 sh -lc \
-              "umask 077; cat > '/atlas/ci-ingest/${generation}/control/token'"
-
-          docker run --rm \
-            -v /volume1/docker/otheryn/atlas:/atlas \
-            -v "${host_root}/control/repo:/repo:ro" \
-            -w /repo python:3.12-slim \
-            python -m tools.otbm_atlas.world_publish capture-current /atlas \
-              --output "/atlas/ci-ingest/${generation}/control/current-state.json"
+          if ! docker run --rm -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 \
+              test -f "/atlas/ci-ingest/${generation}/control/current-state.json"; then
+            docker run --rm \
+              -v /volume1/docker/otheryn/atlas:/atlas \
+              -v "${host_root}/control/repo:/repo:ro" \
+              -w /repo python:3.12-slim \
+              python -m tools.otbm_atlas.world_publish capture-current /atlas \
+                --output "/atlas/ci-ingest/${generation}/control/current-state.json"
+          fi
 
           docker network create "$network" >/dev/null
           docker run -d --name "$receiver" --network "$network" \
             -v "${host_root}:/data" python:3.12-slim \
             python /data/control/repo/deploy/otbm-atlas-ci-ingest/receiver.py \
-              --root /data --token-file /data/control/token --port 8080 >/dev/null
+              --root /data \
+              --github-oidc-repository "$GITHUB_REPOSITORY" \
+              --github-oidc-run-id "$GITHUB_RUN_ID" \
+              --github-oidc-run-attempt "$GITHUB_RUN_ATTEMPT" \
+              --github-oidc-audience "$audience" \
+              --github-oidc-event-name "$GITHUB_EVENT_NAME" \
+              --github-oidc-runner-environment github-hosted \
+              --port 8080 >/dev/null
           docker run -d --name "$tunnel" --network "$network" \
             cloudflare/cloudflared:2026.7.3 \
             tunnel --no-autoupdate --url "http://${receiver}:8080" >/dev/null
@@ -139,21 +152,84 @@ jobs:
           done
           [[ -n "$url" ]] || { docker logs "$tunnel"; exit 1; }
           for _ in $(seq 1 30); do
-            if docker exec -e ATLAS_INGEST_TOKEN="$token" "$receiver" python -c 'import json, os; from urllib.request import Request, urlopen; request=Request("http://127.0.0.1:8080/health", headers={"Authorization": "Bearer " + os.environ["ATLAS_INGEST_TOKEN"]}); assert json.load(urlopen(request, timeout=5))["status"] == "READY"'; then
+            if docker exec "$receiver" python -c 'import json; from urllib.request import urlopen; assert json.load(urlopen("http://127.0.0.1:8080/health", timeout=5))["status"] == "READY"'; then
               break
             fi
             sleep 2
           done
-          docker exec -e ATLAS_INGEST_TOKEN="$token" "$receiver" python -c 'import json, os; from urllib.request import Request, urlopen; request=Request("http://127.0.0.1:8080/health", headers={"Authorization": "Bearer " + os.environ["ATLAS_INGEST_TOKEN"]}); assert json.load(urlopen(request, timeout=5))["status"] == "READY"'
+          docker exec "$receiver" python -c 'import json; from urllib.request import urlopen; assert json.load(urlopen("http://127.0.0.1:8080/health", timeout=5))["status"] == "READY"'
           {
             echo "url=$url"
-            echo "token=$token"
             echo "generation=$generation"
             echo "receiver=$receiver"
             echo "tunnel=$tunnel"
             echo "network=$network"
           } >> "$GITHUB_OUTPUT"
-          prepared=true
+          trap - EXIT
+
+  resume:
+    name: Resolve durable TRANSFERRED_VERIFIED shard state
+    needs: [admission, receiver]
+    if: needs.admission.outputs.deploy == 'true' && needs.receiver.result == 'success'
+    runs-on: [ots, synology]
+    timeout-minutes: 30
+    outputs:
+      transferred_csv: ${{ steps.state.outputs.transferred_csv }}
+    steps:
+      - name: Physically reverify any COMPLETE shards from earlier attempts
+        env:
+          GENERATION: ${{ needs.receiver.outputs.generation }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "${RUNNER_NAME:-}" == "synology-ots-01" ]]
+          host_root="/volume1/docker/otheryn/atlas/ci-ingest/${GENERATION}"
+          docker run --rm \
+            -v /volume1/docker/otheryn/atlas:/atlas \
+            -v "${host_root}/control/repo:/repo:ro" \
+            -w /repo python:3.12-slim \
+            python deploy/otbm-atlas-ci-ingest/transfer_state.py verify-existing \
+              "/atlas/ci-ingest/${GENERATION}" \
+              --producer-sha "$GITHUB_SHA" \
+              --uploader /repo/deploy/otbm-atlas-ci-ingest/upload_bundle.py
+      - name: Export reusable shard evidence from producer-fenced generation
+        id: state
+        env:
+          GENERATION: ${{ needs.receiver.outputs.generation }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "${RUNNER_NAME:-}" == "synology-ots-01" ]]
+          host_root="/volume1/docker/otheryn/atlas/ci-ingest/${GENERATION}"
+          docker run --rm -e GENERATION \
+            -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 sh -lc \
+            'rm -rf "/atlas/ci-ingest/${GENERATION}/control/resume-export"'
+          docker run --rm \
+            -v /volume1/docker/otheryn/atlas:/atlas \
+            -v "${host_root}/control/repo:/repo:ro" \
+            -w /repo python:3.12-slim \
+            python deploy/otbm-atlas-ci-ingest/transfer_state.py export-resume \
+              "/atlas/ci-ingest/${GENERATION}" \
+              --producer-sha "$GITHUB_SHA" \
+              --output "/atlas/ci-ingest/${GENERATION}/control/resume-export"
+          transferred_csv="$(docker run --rm -e GENERATION \
+            -v /volume1/docker/otheryn/atlas:/atlas:ro python:3.12-slim \
+            python -c 'import json,os; p="/atlas/ci-ingest/"+os.environ["GENERATION"]+"/control/resume-export/resume-summary.json"; print(json.load(open(p))["transferredCsv"])')"
+          echo "transferred_csv=$transferred_csv" >> "$GITHUB_OUTPUT"
+          echo "reusable_transferred_verified=$transferred_csv"
+          out="$RUNNER_TEMP/atlas-resume-evidence"
+          rm -rf "$out"
+          mkdir -p "$out"
+          docker run --rm -e GENERATION \
+            -v /volume1/docker/otheryn/atlas:/atlas:ro alpine:3.22 sh -lc \
+            'cd "/atlas/ci-ingest/${GENERATION}/control/resume-export" && tar -cf - .' | tar -xf - -C "$out"
+      - name: Upload reusable compact shard evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: full-world-shard-resume
+          path: ${{ runner.temp }}/atlas-resume-evidence
+          if-no-files-found: error
+          retention-days: 1
 
   plan:
     name: Plan canonical world into 32 weighted chunk shards
@@ -228,10 +304,13 @@ jobs:
 
   shard:
     name: Canonical Atlas chunk shard ${{ matrix.shard }}/31
-    needs: [admission, receiver, plan]
-    if: always() && needs.admission.result == 'success' && needs.plan.result == 'success' && (needs.receiver.result == 'success' || needs.receiver.result == 'skipped') && (github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && (github.event.label.name == 'ci:full-world-16' || github.event.label.name == 'ci:full-world-32')))
+    needs: [admission, receiver, resume, plan]
+    if: always() && needs.admission.result == 'success' && needs.plan.result == 'success' && (needs.receiver.result == 'success' || needs.receiver.result == 'skipped') && (needs.resume.result == 'success' || needs.resume.result == 'skipped') && (github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && (github.event.label.name == 'ci:full-world-16' || github.event.label.name == 'ci:full-world-32')))
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    permissions:
+      contents: read
+      id-token: write
     strategy:
       fail-fast: false
       max-parallel: 32
@@ -254,16 +333,34 @@ jobs:
           echo "memory_bytes=$(awk '/MemTotal/{print $2*1024}' /proc/meminfo)"
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
           test "$(nproc)" -eq 4
+      - name: Resolve durable transfer reuse for this shard
+        id: transfer_state
+        env:
+          ATLAS_SHARD: ${{ matrix.shard }}
+          DEPLOY: ${{ needs.admission.outputs.deploy }}
+          TRANSFERRED_CSV: ${{ needs.resume.outputs.transferred_csv }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          reused=false
+          if [[ "$DEPLOY" == true && ",${TRANSFERRED_CSV}," == *",${ATLAS_SHARD},"* ]]; then
+            reused=true
+          fi
+          echo "reused=$reused" >> "$GITHUB_OUTPUT"
+          echo "shard=$ATLAS_SHARD transferred_verified_reuse=$reused"
       - name: Free disk for runner-local generated corpus
+        if: steps.transfer_state.outputs.reused != 'true'
         run: |
           sudo rm -rf /usr/local/lib/android /opt/ghc /usr/share/dotnet || true
           df -h /
       - name: Download compact deterministic world plan
+        if: steps.transfer_state.outputs.reused != 'true'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
           name: full-world-chunk-plan
           path: build
       - name: Build one weighted chunk assignment with four bounded workers
+        if: steps.transfer_state.outputs.reused != 'true'
         env:
           ATLAS_SHARD: ${{ matrix.shard }}
         run: |
@@ -277,6 +374,7 @@ jobs:
             --shard "$ATLAS_SHARD" \
             --workers 4
       - name: Independently verify static and environment shard corpus
+        if: steps.transfer_state.outputs.reused != 'true'
         env:
           ATLAS_SHARD: ${{ matrix.shard }}
         run: |
@@ -284,6 +382,7 @@ jobs:
           root="build/full-map-atlas-v3-shard-${ATLAS_SHARD}"
           python3 -m tools.otbm_atlas.verify_world_shard "$root" --output "$root/verification.json"
       - name: Emit compact shard evidence and manifest
+        if: steps.transfer_state.outputs.reused != 'true'
         env:
           ATLAS_SHARD: ${{ matrix.shard }}
           PRODUCER_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -333,15 +432,21 @@ jobs:
           print(json.dumps({"shardIndex": shard, "chunks": evidence["chunks"], "floors": evidence["floorCounts"], "worldPlanDigest": evidence["worldPlanDigest"], "verification": evidence["verification"]}, sort_keys=True))
           PY
       - name: Stream verified shard directly to private Synology ingest
-        if: needs.admission.outputs.deploy == 'true'
+        if: needs.admission.outputs.deploy == 'true' && steps.transfer_state.outputs.reused != 'true'
         env:
           ATLAS_INGEST_URL: ${{ needs.receiver.outputs.url }}
-          ATLAS_INGEST_TOKEN: ${{ needs.receiver.outputs.token }}
+          OIDC_AUDIENCE: ots-atlas-ci-ingest:${{ github.run_id }}:${{ github.run_attempt }}
           ATLAS_SHARD: ${{ matrix.shard }}
           PRODUCER_SHA: ${{ github.sha }}
         run: |
           set -Eeuo pipefail
+          oidc_response="$(curl --fail --silent --show-error \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${OIDC_AUDIENCE}")"
+          ATLAS_INGEST_TOKEN="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$oidc_response")"
+          test -n "$ATLAS_INGEST_TOKEN"
           echo "::add-mask::$ATLAS_INGEST_TOKEN"
+          unset oidc_response
           printf -v shard_id '%02d' "$ATLAS_SHARD"
           python3 deploy/otbm-atlas-ci-ingest/upload_bundle.py \
             "build/full-map-atlas-v3-shard-${ATLAS_SHARD}" \
@@ -351,7 +456,9 @@ jobs:
             --producer-sha "$PRODUCER_SHA" \
             --kind shard \
             --shard-index "$ATLAS_SHARD"
+          unset ATLAS_INGEST_TOKEN
       - name: Upload compact evidence and manifest only
+        if: steps.transfer_state.outputs.reused != 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: full-world-shard-${{ matrix.shard }}
@@ -360,11 +467,61 @@ jobs:
             build/shard-manifest-*.json
           if-no-files-found: error
           retention-days: 1
+      - name: Confirm renderer bypass for durable shard
+        if: steps.transfer_state.outputs.reused == 'true'
+        env:
+          ATLAS_SHARD: ${{ matrix.shard }}
+        run: echo "shard=$ATLAS_SHARD reused=TRANSFERRED_VERIFIED render_skipped=true"
+
+  transfer_verify:
+    name: Reverify physical transferred shards on Synology
+    needs: [admission, receiver, resume, shard]
+    if: always() && needs.admission.outputs.deploy == 'true' && needs.receiver.result == 'success'
+    runs-on: [ots, synology]
+    timeout-minutes: 90
+    steps:
+      - name: Independently rebuild archive identity and persist TRANSFERRED_VERIFIED markers
+        env:
+          GENERATION: ${{ needs.receiver.outputs.generation }}
+          SHARD_RESULT: ${{ needs.shard.result }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "${RUNNER_NAME:-}" == "synology-ots-01" ]]
+          host_root="/volume1/docker/otheryn/atlas/ci-ingest/${GENERATION}"
+          docker run --rm \
+            -v /volume1/docker/otheryn/atlas:/atlas \
+            -v "${host_root}/control/repo:/repo:ro" \
+            -w /repo python:3.12-slim \
+            python deploy/otbm-atlas-ci-ingest/transfer_state.py verify-existing \
+              "/atlas/ci-ingest/${GENERATION}" \
+              --producer-sha "$GITHUB_SHA" \
+              --uploader /repo/deploy/otbm-atlas-ci-ingest/upload_bundle.py \
+              --output "/atlas/ci-ingest/${GENERATION}/control/transfer-summary.json"
+          if [[ "$SHARD_RESULT" == success ]]; then
+            docker run --rm -e GENERATION \
+              -v /volume1/docker/otheryn/atlas:/atlas:ro python:3.12-slim \
+              python -c 'import json,os; p="/atlas/ci-ingest/"+os.environ["GENERATION"]+"/control/transfer-summary.json"; v=json.load(open(p)); assert v["status"]=="TRANSFERRED_VERIFIED" and len(v["verifiedShards"])==32, v'
+          fi
+          out="$RUNNER_TEMP/atlas-transfer-verification"
+          rm -rf "$out"
+          mkdir -p "$out"
+          docker run --rm -e GENERATION \
+            -v /volume1/docker/otheryn/atlas:/atlas:ro alpine:3.22 sh -lc \
+            'cat "/atlas/ci-ingest/${GENERATION}/control/transfer-summary.json"' > "$out/transfer-summary.json"
+      - name: Upload compact transfer verification summary
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: full-world-transfer-verification
+          path: ${{ runner.temp }}/atlas-transfer-verification
+          if-no-files-found: ignore
+          retention-days: 1
 
   world:
     name: Certify exact 3494-chunk full world
-    needs: shard
-    if: always() && needs.shard.result == 'success' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && (github.event.label.name == 'ci:full-world-16' || github.event.label.name == 'ci:full-world-32')))
+    needs: [admission, shard, transfer_verify]
+    if: always() && needs.shard.result == 'success' && (needs.admission.outputs.deploy != 'true' || needs.transfer_verify.result == 'success') && (github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && (github.event.label.name == 'ci:full-world-16' || github.event.label.name == 'ci:full-world-32')))
     runs-on: ubuntu-latest
     steps:
       - name: Download all compact shard evidence
@@ -442,17 +599,20 @@ jobs:
               "verification": "PASS",
               "generatedCorpusPublication": "DIRECT_PRIVATE_SYNOLOGY_INGEST" if deployment else "NONE",
               "globalProductDataBoundary": "source-driven global product data is generated once on a hosted runner for deployment; render shards never build it",
-              "deploymentPreflightBoundary": "assembled full Z0..Z15 corpus only",
+              "deploymentPreflightBoundary": "TRANSFERRED_VERIFIED 32-shard corpus before assembled full Z0..Z15 publication",
           }
           print(json.dumps(evidence, sort_keys=True))
           PY
 
   global:
     name: Build and stream global Atlas product data
-    needs: [admission, receiver, shard]
-    if: needs.admission.outputs.deploy == 'true' && needs.receiver.result == 'success' && needs.shard.result == 'success'
+    needs: [admission, receiver, resume, shard, transfer_verify]
+    if: needs.admission.outputs.deploy == 'true' && needs.receiver.result == 'success' && needs.shard.result == 'success' && needs.transfer_verify.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout exact main producer
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
@@ -486,16 +646,23 @@ jobs:
       - name: Stream verified global bundle directly to private Synology ingest
         env:
           ATLAS_INGEST_URL: ${{ needs.receiver.outputs.url }}
-          ATLAS_INGEST_TOKEN: ${{ needs.receiver.outputs.token }}
+          OIDC_AUDIENCE: ots-atlas-ci-ingest:${{ github.run_id }}:${{ github.run_attempt }}
         run: |
           set -Eeuo pipefail
+          oidc_response="$(curl --fail --silent --show-error \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${OIDC_AUDIENCE}")"
+          ATLAS_INGEST_TOKEN="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$oidc_response")"
+          test -n "$ATLAS_INGEST_TOKEN"
           echo "::add-mask::$ATLAS_INGEST_TOKEN"
+          unset oidc_response
           python3 deploy/otbm-atlas-ci-ingest/upload_bundle.py build/full-world-global \
             --url "$ATLAS_INGEST_URL" \
             --token "$ATLAS_INGEST_TOKEN" \
             --bundle-id global \
             --producer-sha "$GITHUB_SHA" \
             --kind global
+          unset ATLAS_INGEST_TOKEN
       - name: Upload compact global publication evidence only
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
@@ -506,8 +673,8 @@ jobs:
 
   finalize:
     name: Assemble, preflight and atomically promote on Synology
-    needs: [admission, receiver, shard, world, global]
-    if: needs.admission.outputs.deploy == 'true' && needs.receiver.result == 'success' && needs.shard.result == 'success' && needs.world.result == 'success' && needs.global.result == 'success'
+    needs: [admission, receiver, resume, shard, transfer_verify, world, global]
+    if: needs.admission.outputs.deploy == 'true' && needs.receiver.result == 'success' && needs.shard.result == 'success' && needs.transfer_verify.result == 'success' && needs.world.result == 'success' && needs.global.result == 'success'
     runs-on: [ots, synology]
     timeout-minutes: 45
     steps:
@@ -606,7 +773,7 @@ jobs:
 
   cleanup:
     name: Tear down temporary ingest and reclaim successful staging
-    needs: [admission, receiver, shard, world, global, finalize]
+    needs: [admission, receiver, resume, shard, transfer_verify, world, global, finalize]
     if: always() && needs.admission.outputs.deploy == 'true' && needs.receiver.result == 'success'
     runs-on: [ots, synology]
     timeout-minutes: 15
@@ -621,13 +788,13 @@ jobs:
           [[ "${RUNNER_NAME:-}" == "synology-ots-01" ]]
           docker rm -f "$RECEIVER" "$TUNNEL" >/dev/null 2>&1 || true
           docker network rm "$NETWORK" >/dev/null 2>&1 || true
-      - name: Remove bearer token and successful duplicate staging only
+      - name: Remove successful duplicate staging only
         env:
           GENERATION: ${{ needs.receiver.outputs.generation }}
           FINALIZE_RESULT: ${{ needs.finalize.result }}
         run: |
           set -Eeuo pipefail
           docker run --rm -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 sh -lc \
-            "rm -f '/atlas/ci-ingest/${GENERATION}/control/token'; if [ '$FINALIZE_RESULT' = success ]; then rm -rf '/atlas/ci-ingest/${GENERATION}'; fi"
+            "if [ '$FINALIZE_RESULT' = success ]; then rm -rf '/atlas/ci-ingest/${GENERATION}'; fi"
           echo "finalize_result=$FINALIZE_RESULT"
-          [[ "$FINALIZE_RESULT" == success ]] || echo "Failed/incomplete generation preserved without token for operator inspection."
+          [[ "$FINALIZE_RESULT" == success ]] || echo "Failed/incomplete producer-fenced generation preserved with TRANSFERRED_VERIFIED markers/quarantine for safe retry and inspection."
