@@ -4,22 +4,47 @@ from __future__ import annotations
 import argparse
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import hashlib
+from io import BytesIO
 import json
 from pathlib import Path
 
 from . import atlas as core
+from .assets import encode_png
 from .overview import LOW_OVERVIEW_FACTOR, OVERVIEW_FACTOR, OVERVIEW_VERSION, make_overview
 from .production_incremental import overview_output_reusable
+
+
+def _make_overviews(payload: bytes, factors: tuple[int, ...]) -> dict[int, bytes]:
+    """Produce multiple canonical overview factors with at most one PNG decode."""
+    unique_factors = tuple(dict.fromkeys(factors))
+    try:
+        from PIL import Image
+
+        with Image.open(BytesIO(payload)) as image:
+            rgba_image = image.convert("RGBA")
+            results: dict[int, bytes] = {}
+            for factor in unique_factors:
+                if factor <= 0 or rgba_image.width % factor or rgba_image.height % factor:
+                    raise ValueError("PNG dimensions must be divisible by overview factor")
+                resized = rgba_image.resize(
+                    (rgba_image.width // factor, rgba_image.height // factor),
+                    Image.Resampling.NEAREST,
+                )
+                results[factor] = encode_png(resized.width, resized.height, resized.tobytes())
+            return results
+    except ImportError:
+        return {factor: make_overview(payload, factor) for factor in unique_factors}
 
 
 def _overview_worker(job: tuple[str, tuple[tuple[str, str, str, int, str, int, int], ...]]) -> list[tuple[str, str, dict[str, object]]]:
     detailed_path_text, derivatives = job
     source_payload = Path(detailed_path_text).read_bytes()
+    payloads = _make_overviews(source_payload, tuple(derivative[3] for derivative in derivatives))
     results: list[tuple[str, str, dict[str, object]]] = []
     for prefix, overview_path_text, report_path_text, factor, fingerprint, image_width, image_height in derivatives:
         overview_path = Path(overview_path_text)
         report_path = Path(report_path_text)
-        payload = make_overview(source_payload, factor)
+        payload = payloads[factor]
         overview_path.parent.mkdir(parents=True, exist_ok=True)
         temporary = overview_path.with_suffix(".png.tmp")
         temporary.write_bytes(payload)
