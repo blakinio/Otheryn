@@ -42,6 +42,7 @@ build/full-map-atlas
         v
 verified staging
         |
+        | current-state drift guard
         | same-share directory rename
         v
 \\Synology\docker\otheryn\atlas\current
@@ -65,10 +66,13 @@ For a later deliberate update:
 
 1. stop the private Atlas preview using the normal DSM Container Manager lifecycle;
 2. run the script with `-AllowReplaceCurrent`;
-3. the existing `current` is renamed to `previous-<timestamp>-<id>`;
-4. only fully verified staging is renamed to `current`;
-5. if the staging rename fails, the script attempts to restore the previous directory back to `current`;
-6. keep the previous directory until the new deployment passes browser validation.
+3. the script records that `current` exists and fingerprints its `manifest.json` before the long copy;
+4. immediately before promotion it requires both the presence state and manifest fingerprint to be unchanged;
+5. if another operator/deployment creates, removes or changes `current` while the transfer is running, promotion is refused and the verified `incoming-*` directory is left untouched for inspection;
+6. only a stable existing `current` is renamed to `previous-<timestamp>-<id>`;
+7. only fully verified staging is renamed to `current`;
+8. if the staging rename fails, the script attempts to restore the previous directory back to `current`;
+9. keep the previous directory until the new deployment passes browser validation.
 
 Example:
 
