@@ -149,13 +149,19 @@ class WorldPublishTests(unittest.TestCase):
             assignments[index % world_publish.EXPECTED_SHARDS].append(chunk)
         for shard, values in enumerate(assignments):
             manifest = {
-                "schemaVersion": 3,
-                "chunkSize": 128,
+                "schemaVersion": world_publish.EXPECTED_ATLAS_VERSION,
+                "chunkSize": world_publish.EXPECTED_CHUNK_SIZE,
                 "tilePixels": 32,
                 "overviewFactor": 4,
                 "lowOverviewFactor": 8,
                 "overviewVersion": 1,
-                "sources": {"mapSha256": "m", "assetsSha256": "a", "chunkSize": 128, "atlasVersion": 3, "tileFactsVersion": 1},
+                "sources": {
+                    "mapSha256": world_publish.EXPECTED_MAP_SHA256,
+                    "assetsSha256": "a",
+                    "chunkSize": world_publish.EXPECTED_CHUNK_SIZE,
+                    "atlasVersion": world_publish.EXPECTED_ATLAS_VERSION,
+                    "tileFactsVersion": 1,
+                },
                 "provenance": {"map": "world.otbm", "appearanceAssetRoot": "assets"},
                 "chunks": values,
                 "certification": {
