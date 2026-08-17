@@ -12,6 +12,7 @@
 #include "account/account.hpp"
 #include "config/configmanager.hpp"
 #include "database/database.hpp"
+#include "database/player_writer_fenced_save_transaction.hpp"
 #include "security/login_session_manager.hpp"
 #include "io/functions/iologindata_load_player.hpp"
 #include "io/functions/iologindata_save_player.hpp"
@@ -245,19 +246,33 @@ void IOLoginData::loadOnlyDataForOnlinePlayer(const std::shared_ptr<Player> &pla
 }
 
 bool IOLoginData::savePlayer(const std::shared_ptr<Player> &player) {
+	g_logger().error("[{}] Refusing contextless protected player save.", __FUNCTION__);
+	(void)player;
+	return false;
+}
+
+bool IOLoginData::savePlayer(
+	const std::shared_ptr<Player> &player,
+	PlayerWriterFenceContext &writerFenceContext
+) {
+	if (!player || writerFenceContext.playerId != player->getGUID()) {
+		g_logger().error("[{}] Refusing protected player save with missing or cross-subject writer fence.", __FUNCTION__);
+		return false;
+	}
+
 	try {
-		const bool success = DBTransaction::executeWithinTransaction([player]() {
+		const auto fenceResult = PlayerWriterFencedSaveTransaction::execute(writerFenceContext, [player]() {
 			return savePlayerGuard(player);
 		});
-
-		if (!success) {
-			g_logger().error("[{}] Error occurred saving player", __FUNCTION__);
+		if (fenceResult != PlayerWriterFenceResult::Applied) {
+			g_logger().error(
+				"[{}] Protected player save rejected by durable writer fence with result {}.",
+				__FUNCTION__,
+				static_cast<uint32_t>(fenceResult)
+			);
 			return false;
 		}
 
-		// Wheel KV uses a separate persistence domain from the player SQL transaction.
-		// Stage it only after the player transaction commits so a later SQL rollback
-		// cannot leave KV changes queued for independent persistence.
 		stageOnlinePlayerWheelKV(player);
 		return true;
 	} catch (const DatabaseException &e) {

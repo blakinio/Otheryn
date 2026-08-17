@@ -6,6 +6,7 @@ target_sources(
             player_checkpoint_kv_post_commit_failure_it.cpp
             player_checkpoint_sql_failure_it.cpp
             player_writer_fence_repository_it.cpp
+            player_writer_fenced_save_it.cpp
             sanctions_it.cpp
             world_persistence_it.cpp
 )
