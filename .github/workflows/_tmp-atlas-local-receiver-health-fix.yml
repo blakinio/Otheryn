@@ -27,24 +27,26 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          old = '''          for _ in $(seq 1 30); do
-            if curl --fail --silent --show-error -H "Authorization: Bearer $token" "$url/health" | grep -q 'READY'; then
-              break
-            fi
-            sleep 2
-          done
-          curl --fail --silent --show-error -H "Authorization: Bearer $token" "$url/health" | grep -q 'READY'
-'''
-          new = '''          for _ in $(seq 1 30); do
-            if docker exec -e ATLAS_INGEST_TOKEN="$token" "$receiver" python -c \\
-              'import json, os; from urllib.request import Request, urlopen; request=Request("http://127.0.0.1:8080/health", headers={"Authorization": "Bearer " + os.environ["ATLAS_INGEST_TOKEN"]}); assert json.load(urlopen(request, timeout=5))["status"] == "READY"'; then
-              break
-            fi
-            sleep 2
-          done
-          docker exec -e ATLAS_INGEST_TOKEN="$token" "$receiver" python -c \\
-            'import json, os; from urllib.request import Request, urlopen; request=Request("http://127.0.0.1:8080/health", headers={"Authorization": "Bearer " + os.environ["ATLAS_INGEST_TOKEN"]}); assert json.load(urlopen(request, timeout=5))["status"] == "READY"'
-'''
+          old = (
+              "          for _ in $(seq 1 30); do\n"
+              "            if curl --fail --silent --show-error -H \"Authorization: Bearer $token\" \"$url/health\" | grep -q 'READY'; then\n"
+              "              break\n"
+              "            fi\n"
+              "            sleep 2\n"
+              "          done\n"
+              "          curl --fail --silent --show-error -H \"Authorization: Bearer $token\" \"$url/health\" | grep -q 'READY'\n"
+          )
+          new = (
+              "          for _ in $(seq 1 30); do\n"
+              "            if docker exec -e ATLAS_INGEST_TOKEN=\"$token\" \"$receiver\" python -c \\\\\n"
+              "              'import json, os; from urllib.request import Request, urlopen; request=Request(\"http://127.0.0.1:8080/health\", headers={\"Authorization\": \"Bearer \" + os.environ[\"ATLAS_INGEST_TOKEN\"]}); assert json.load(urlopen(request, timeout=5))[\"status\"] == \"READY\"'; then\n"
+              "              break\n"
+              "            fi\n"
+              "            sleep 2\n"
+              "          done\n"
+              "          docker exec -e ATLAS_INGEST_TOKEN=\"$token\" \"$receiver\" python -c \\\\\n"
+              "            'import json, os; from urllib.request import Request, urlopen; request=Request(\"http://127.0.0.1:8080/health\", headers={\"Authorization\": \"Bearer \" + os.environ[\"ATLAS_INGEST_TOKEN\"]}); assert json.load(urlopen(request, timeout=5))[\"status\"] == \"READY\"'\n"
+          )
 
           paths = [
               Path('.github/workflows/otbm-atlas-ci-ingest-tests.yml'),
