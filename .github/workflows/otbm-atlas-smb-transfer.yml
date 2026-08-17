@@ -30,15 +30,21 @@ jobs:
       - name: Parse PowerShell helper
         shell: pwsh
         run: |
-          $errors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile(
-            (Resolve-Path 'deploy/otbm-atlas-smb-transfer/publish.ps1'),
-            [ref]$null,
-            [ref]$errors
-          ) | Out-Null
-          if ($errors.Count -ne 0) {
-            $errors | Format-List | Out-String | Write-Error
-            exit 1
+          foreach ($file in @(
+            'deploy/otbm-atlas-smb-transfer/publish.ps1',
+            'deploy/otbm-atlas-smb-transfer/transfer_contract.psm1'
+          )) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $file),
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -ne 0) {
+              $errors | Format-List | Out-String | Write-Error
+              exit 1
+            }
           }
 
       - name: Prove plan-only mode has no side effects
@@ -56,6 +62,42 @@ jobs:
           if ($plan.mode -ne 'private-local') { throw 'unexpected publication mode' }
           if ($plan.replaceCurrentAllowed) { throw 'replacement must be fail-closed by default' }
 
+      - name: Prove current-state drift blocks promotion
+        shell: pwsh
+        run: |
+          Import-Module ./deploy/otbm-atlas-smb-transfer/transfer_contract.psm1 -Force
+          $root = Join-Path $env:RUNNER_TEMP 'drift-contract'
+          $current = Join-Path $root 'current'
+          New-Item -ItemType Directory -Path $root -Force | Out-Null
+
+          $stableAbsent = Assert-AtlasCurrentStateStable -CurrentPath $current -ExistedInitially $false -ManifestInitially $null
+          if ($stableAbsent) { throw 'absent current unexpectedly reported as present' }
+
+          New-Item -ItemType Directory -Path $current -Force | Out-Null
+          Set-Content -LiteralPath (Join-Path $current 'manifest.json') -Value '{"generation":1}' -Encoding UTF8
+          $blockedAppearance = $false
+          try {
+            Assert-AtlasCurrentStateStable -CurrentPath $current -ExistedInitially $false -ManifestInitially $null | Out-Null
+          }
+          catch {
+            $blockedAppearance = $true
+          }
+          if (-not $blockedAppearance) { throw 'new current appearing during transfer was not blocked' }
+
+          $initialManifest = Get-AtlasManifestSha256 -AtlasPath $current
+          $stablePresent = Assert-AtlasCurrentStateStable -CurrentPath $current -ExistedInitially $true -ManifestInitially $initialManifest
+          if (-not $stablePresent) { throw 'stable current unexpectedly reported as absent' }
+
+          Set-Content -LiteralPath (Join-Path $current 'manifest.json') -Value '{"generation":2}' -Encoding UTF8
+          $blockedMutation = $false
+          try {
+            Assert-AtlasCurrentStateStable -CurrentPath $current -ExistedInitially $true -ManifestInitially $initialManifest | Out-Null
+          }
+          catch {
+            $blockedMutation = $true
+          }
+          if (-not $blockedMutation) { throw 'current manifest drift was not blocked' }
+
       - name: Assert transfer safety boundaries
         run: |
           python3 - <<'PY'
@@ -66,6 +108,7 @@ jobs:
           assert 'incoming-' in text
           assert 'allowreplacecurrent' in text
           assert '--mode private-local' in text
+          assert 'assert-atlascurrentstatestable' in text
           for forbidden in ('ssh ', 'scp ', 'docker exec', 'cloudflared', 'rclone '):
               assert forbidden not in text, forbidden
           PY
