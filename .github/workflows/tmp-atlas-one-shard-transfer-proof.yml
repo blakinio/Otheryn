@@ -9,7 +9,7 @@ permissions:
 
 concurrency:
   group: atlas-one-shard-proof-${{ github.event.pull_request.number }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   admission:
@@ -39,7 +39,6 @@ jobs:
     timeout-minutes: 15
     outputs:
       url: ${{ steps.prepare.outputs.url }}
-      token: ${{ steps.prepare.outputs.token }}
       generation: ${{ steps.prepare.outputs.generation }}
       receiver: ${{ steps.prepare.outputs.receiver }}
       tunnel: ${{ steps.prepare.outputs.tunnel }}
@@ -50,7 +49,7 @@ jobs:
         with:
           ref: ${{ needs.admission.outputs.head_sha }}
           persist-credentials: false
-      - name: Start isolated receiver and tunnel
+      - name: Start isolated OIDC receiver and tunnel
         id: prepare
         shell: bash
         run: |
@@ -62,6 +61,7 @@ jobs:
           tunnel="atlas-one-shard-proof-tunnel-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           network="atlas-one-shard-proof-net-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           host_root="/volume1/docker/otheryn/atlas/ci-ingest-tests/${generation}"
+          audience="ots-atlas-ci-ingest:${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}"
 
           available_kb="$(docker run --rm -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 df -Pk /atlas | awk 'NR==2 {print $4}')"
           minimum_kb=$((2 * 1024 * 1024))
@@ -70,19 +70,23 @@ jobs:
           docker rm -f "$receiver" "$tunnel" >/dev/null 2>&1 || true
           docker network rm "$network" >/dev/null 2>&1 || true
           docker run --rm -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 \
-            sh -lc "test ! -e '/atlas/ci-ingest-tests/${generation}'; mkdir -p '/atlas/ci-ingest-tests/${generation}/control'"
-          tar -C deploy/otbm-atlas-ci-ingest -cf - receiver.py | \
+            sh -lc "test ! -e '/atlas/ci-ingest-tests/${generation}'; mkdir -p '/atlas/ci-ingest-tests/${generation}/control/repo'"
+          tar -cf - tools/otbm_atlas deploy/otbm-atlas-ci-ingest | \
             docker run --rm -i -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 \
-              sh -lc "tar -xf - -C '/atlas/ci-ingest-tests/${generation}/control'"
-
-          token="$(openssl rand -hex 32)"
-          printf '%s\n' "$token" | docker run --rm -i -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 \
-            sh -lc "umask 077; cat > '/atlas/ci-ingest-tests/${generation}/control/token'"
+              sh -lc "tar -xf - -C '/atlas/ci-ingest-tests/${generation}/control/repo'"
 
           docker network create "$network" >/dev/null
           docker run -d --name "$receiver" --network "$network" \
             -v "${host_root}:/data" python:3.12-slim \
-            python /data/control/receiver.py --root /data --token-file /data/control/token --port 8080 >/dev/null
+            python /data/control/repo/deploy/otbm-atlas-ci-ingest/receiver.py \
+              --root /data \
+              --github-oidc-repository "$GITHUB_REPOSITORY" \
+              --github-oidc-run-id "$GITHUB_RUN_ID" \
+              --github-oidc-run-attempt "$GITHUB_RUN_ATTEMPT" \
+              --github-oidc-audience "$audience" \
+              --github-oidc-event-name "$GITHUB_EVENT_NAME" \
+              --github-oidc-runner-environment github-hosted \
+              --port 8080 >/dev/null
           docker run -d --name "$tunnel" --network "$network" \
             cloudflare/cloudflared:2026.7.3 tunnel --no-autoupdate --url "http://${receiver}:8080" >/dev/null
 
@@ -93,11 +97,16 @@ jobs:
             sleep 2
           done
           test -n "$url"
-          docker exec -e ATLAS_INGEST_TOKEN="$token" "$receiver" python -c 'import json, os; from urllib.request import Request, urlopen; r=Request("http://127.0.0.1:8080/health", headers={"Authorization":"Bearer "+os.environ["ATLAS_INGEST_TOKEN"]}); assert json.load(urlopen(r, timeout=5))["status"]=="READY"'
+          for _ in $(seq 1 30); do
+            if docker exec "$receiver" python -c 'import json; from urllib.request import urlopen; assert json.load(urlopen("http://127.0.0.1:8080/health", timeout=5))["status"]=="READY"'; then
+              break
+            fi
+            sleep 2
+          done
+          docker exec "$receiver" python -c 'import json; from urllib.request import urlopen; assert json.load(urlopen("http://127.0.0.1:8080/health", timeout=5))["status"]=="READY"'
 
           {
             echo "url=$url"
-            echo "token=$token"
             echo "generation=$generation"
             echo "receiver=$receiver"
             echo "tunnel=$tunnel"
@@ -110,6 +119,9 @@ jobs:
     needs: [admission, receiver]
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout exact proof head
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
@@ -160,20 +172,27 @@ jobs:
           assert value['missingSprites']=={}
           print({'sourceVerification':'PASS','chunks':value['chunks']})
           PY
-      - name: Transfer and wait for Synology COMPLETE receipt
+      - name: Transfer with job-scoped GitHub OIDC and wait for COMPLETE receipt
         env:
           ATLAS_INGEST_URL: ${{ needs.receiver.outputs.url }}
-          ATLAS_INGEST_TOKEN: ${{ needs.receiver.outputs.token }}
+          OIDC_AUDIENCE: ots-atlas-ci-ingest:${{ github.run_id }}:${{ github.run_attempt }}
           PRODUCER_SHA: ${{ needs.admission.outputs.head_sha }}
         run: |
           set -Eeuo pipefail
+          oidc_response="$(curl --fail --silent --show-error \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${OIDC_AUDIENCE}")"
+          ATLAS_INGEST_TOKEN="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$oidc_response")"
+          test -n "$ATLAS_INGEST_TOKEN"
           echo "::add-mask::$ATLAS_INGEST_TOKEN"
+          unset oidc_response
           python3 deploy/otbm-atlas-ci-ingest/upload_bundle.py build/one-shard-proof-0 \
             --url "$ATLAS_INGEST_URL" \
             --token "$ATLAS_INGEST_TOKEN" \
             --bundle-id shard-00-proof \
             --producer-sha "$PRODUCER_SHA" \
             --kind shard --shard-index 0 | tee "$RUNNER_TEMP/shard-upload-result.json"
+          unset ATLAS_INGEST_TOKEN
           python3 - "$RUNNER_TEMP/shard-upload-result.json" <<'PY'
           import json,sys
           value=json.load(open(sys.argv[1]))
@@ -196,49 +215,70 @@ jobs:
         with:
           ref: ${{ needs.admission.outputs.head_sha }}
           persist-credentials: false
-      - name: Independently reverify received corpus and deterministic archive identity
+      - name: Independently reverify host-mounted shard and deterministic archive identity
+        id: reverify
         if: needs.shard.result == 'success'
         env:
           GENERATION: ${{ needs.receiver.outputs.generation }}
           PRODUCER_SHA: ${{ needs.admission.outputs.head_sha }}
         run: |
           set -Eeuo pipefail
-          root="/volume1/docker/otheryn/atlas/ci-ingest-tests/${GENERATION}"
-          bundle="${root}/bundles/shard-00-proof"
-          receipt="${root}/receipts/shard-00-proof.json"
-          test -d "$bundle"
-          test -f "$receipt"
-          python3 -m tools.otbm_atlas.verify_world_shard "$bundle" --output "$RUNNER_TEMP/reverify.json"
-          python3 - "$bundle" "$receipt" "$RUNNER_TEMP/rebuilt.tar" "$PRODUCER_SHA" <<'PY'
-          import hashlib,importlib.util,json,sys
+          test "${RUNNER_NAME:-}" = "synology-ots-01"
+          host_root="/volume1/docker/otheryn/atlas/ci-ingest-tests/${GENERATION}"
+          docker run --rm -i \
+            -e GENERATION -e PRODUCER_SHA \
+            -v /volume1/docker/otheryn/atlas:/atlas:ro \
+            -v "${host_root}/control/repo:/repo:ro" \
+            -w /repo python:3.12-slim python - <<'PY'
+          import importlib.util
+          import json
+          import os
           from pathlib import Path
-          bundle,receipt_path,archive_path,producer_sha=map(Path,sys.argv[1:4])+[sys.argv[4]] if False else (Path(sys.argv[1]),Path(sys.argv[2]),Path(sys.argv[3]),sys.argv[4])
-          spec=importlib.util.spec_from_file_location('atlas_uploader','deploy/otbm-atlas-ci-ingest/upload_bundle.py')
-          module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
-          receipt=json.loads(receipt_path.read_text())
-          info=module.build_archive(bundle,archive_path)
-          assert receipt['status']=='COMPLETE'
-          assert receipt['producerSha']==producer_sha
-          assert receipt['shardIndex']==0
-          assert receipt['archiveBytes']==info['bytes']
-          assert receipt['archiveSha256']==info['sha256']
-          verify=json.loads(Path(sys.argv[3]).with_name('reverify.json').read_text())
-          assert verify['ok'] is True and verify['missingSprites']=={}
+          from tools.otbm_atlas.verify_world_shard import verify_world_shard
+
+          generation = os.environ['GENERATION']
+          producer_sha = os.environ['PRODUCER_SHA']
+          root = Path('/atlas/ci-ingest-tests') / generation
+          bundle = root / 'bundles/shard-00-proof'
+          receipt_path = root / 'receipts/shard-00-proof.json'
+          assert bundle.is_dir(), bundle
+          assert receipt_path.is_file(), receipt_path
+          verify = verify_world_shard(bundle)
+          assert verify['ok'] is True, verify['errors']
+          assert verify['missingSprites'] == {}
+          spec = importlib.util.spec_from_file_location('atlas_uploader', '/repo/deploy/otbm-atlas-ci-ingest/upload_bundle.py')
+          assert spec is not None and spec.loader is not None
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          archive_path = Path('/tmp/rebuilt.tar')
+          info = module.build_archive(bundle, archive_path)
+          receipt = json.loads(receipt_path.read_text())
+          assert receipt['status'] == 'COMPLETE'
+          assert receipt['producerSha'] == producer_sha
+          assert receipt['shardIndex'] == 0
+          assert receipt['archiveBytes'] == info['bytes']
+          assert receipt['archiveSha256'] == info['sha256']
           print(json.dumps({'postSourcePhysicalVerification':'PASS','status':receipt['status'],'archiveBytes':info['bytes'],'archiveSha256':info['sha256'],'parts':len(receipt['parts']),'producerSha':receipt['producerSha'],'chunks':verify['chunks']},sort_keys=True))
           PY
-      - name: Cleanup exact disposable proof generation
+      - name: Stop transport and clean only a successfully reverified generation
         if: always()
         env:
           GENERATION: ${{ needs.receiver.outputs.generation }}
           RECEIVER: ${{ needs.receiver.outputs.receiver }}
           TUNNEL: ${{ needs.receiver.outputs.tunnel }}
           NETWORK: ${{ needs.receiver.outputs.network }}
+          REVERIFY_OUTCOME: ${{ steps.reverify.outcome }}
         run: |
           set -Eeuo pipefail
           docker rm -f "$RECEIVER" "$TUNNEL" >/dev/null 2>&1 || true
           docker network rm "$NETWORK" >/dev/null 2>&1 || true
-          docker run --rm -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 \
-            sh -lc "rm -rf '/atlas/ci-ingest-tests/${GENERATION}'"
+          if [[ "$REVERIFY_OUTCOME" == success ]]; then
+            docker run --rm -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 \
+              sh -lc "rm -rf '/atlas/ci-ingest-tests/${GENERATION}'"
+            echo "reverified_generation_cleanup=complete"
+          else
+            echo "reverify_outcome=$REVERIFY_OUTCOME; generation preserved for operator inspection"
+          fi
       - name: Require source shard success
         if: always()
         env:
