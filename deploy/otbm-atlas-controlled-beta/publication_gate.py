@@ -3,8 +3,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from tools.otbm_atlas.deploy_preflight import deployment_preflight
 
 EXPECTED_ATLAS_VERSION = 3
 EXPECTED_CHUNK_SIZE = 128
@@ -95,22 +102,37 @@ def evaluate_publication(
             "chunks": identity.get("chunks"),
             "mapSha256": identity.get("mapSha256"),
         },
+        "preflightStatus": preflight.get("status"),
         "reasons": reasons,
     }
 
 
+def evaluate_atlas(
+    atlas_root: Path,
+    *,
+    mode: str,
+    approval: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Run a fresh full deployment preflight against the real corpus, then gate publication."""
+    preflight = deployment_preflight(
+        atlas_root,
+        verify_chunks=True,
+        require_environment_animations=True,
+    )
+    return evaluate_publication(preflight, mode=mode, approval=approval)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("preflight", type=Path, help="JSON report emitted by tools.otbm_atlas.deploy_preflight")
+    parser.add_argument("atlas", type=Path, help="generated Atlas directory; the gate always performs a fresh full deployment preflight")
     parser.add_argument("--mode", choices=sorted(MODES), required=True)
     parser.add_argument("--approval", type=Path, help="ATLAS-PR-009 approval JSON; mandatory for Internet-facing modes")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
 
     try:
-        preflight = _read_json(args.preflight)
         approval = _read_json(args.approval) if args.approval else None
-        report = evaluate_publication(preflight, mode=args.mode, approval=approval)
+        report = evaluate_atlas(args.atlas, mode=args.mode, approval=approval)
     except (OSError, ValueError, TypeError, json.JSONDecodeError) as error:
         report = {
             "status": "BLOCKED",
@@ -119,6 +141,7 @@ def main() -> int:
             "publicationReady": False,
             "approval": {"required": args.mode in INTERNET_MODES, "present": bool(args.approval), "valid": False, "scope": None},
             "identity": {},
+            "preflightStatus": "ERROR",
             "reasons": [str(error)],
         }
 
