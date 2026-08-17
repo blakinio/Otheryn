@@ -214,7 +214,7 @@ jobs:
               --output "/atlas/ci-ingest/${GENERATION}/control/resume-export"
           transferred_csv="$(docker run --rm -e GENERATION \
             -v /volume1/docker/otheryn/atlas:/atlas:ro python:3.12-slim \
-            python -c 'import json,os; p=f"/atlas/ci-ingest/{os.environ[\"GENERATION\"]}/control/resume-export/resume-summary.json"; print(json.load(open(p))["transferredCsv"])')"
+            python -c 'import json,os; p="/atlas/ci-ingest/"+os.environ["GENERATION"]+"/control/resume-export/resume-summary.json"; print(json.load(open(p))["transferredCsv"])')"
           echo "transferred_csv=$transferred_csv" >> "$GITHUB_OUTPUT"
           echo "reusable_transferred_verified=$transferred_csv"
           out="$RUNNER_TEMP/atlas-resume-evidence"
@@ -501,7 +501,7 @@ jobs:
           if [[ "$SHARD_RESULT" == success ]]; then
             docker run --rm -e GENERATION \
               -v /volume1/docker/otheryn/atlas:/atlas:ro python:3.12-slim \
-              python -c 'import json,os; p=f"/atlas/ci-ingest/{os.environ[\"GENERATION\"]}/control/transfer-summary.json"; v=json.load(open(p)); assert v["status"]=="TRANSFERRED_VERIFIED" and len(v["verifiedShards"])==32, v'
+              python -c 'import json,os; p="/atlas/ci-ingest/"+os.environ["GENERATION"]+"/control/transfer-summary.json"; v=json.load(open(p)); assert v["status"]=="TRANSFERRED_VERIFIED" and len(v["verifiedShards"])==32, v'
           fi
           out="$RUNNER_TEMP/atlas-transfer-verification"
           rm -rf "$out"
