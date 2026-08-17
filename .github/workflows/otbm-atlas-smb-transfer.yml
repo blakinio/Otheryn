@@ -1,0 +1,71 @@
+---
+name: OTBM Atlas SMB Transfer
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "deploy/otbm-atlas-smb-transfer/**"
+      - ".github/workflows/otbm-atlas-smb-transfer.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: SMB publication helper contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          persist-credentials: false
+
+      - name: Parse PowerShell helper
+        shell: pwsh
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'deploy/otbm-atlas-smb-transfer/publish.ps1'),
+            [ref]$null,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -ne 0) {
+            $errors | Format-List | Out-String | Write-Error
+            exit 1
+          }
+
+      - name: Prove plan-only mode has no side effects
+        shell: pwsh
+        run: |
+          $source = Join-Path $env:RUNNER_TEMP 'atlas-source'
+          $root = Join-Path $env:RUNNER_TEMP 'atlas-root'
+          New-Item -ItemType Directory -Path $source -Force | Out-Null
+          $json = & ./deploy/otbm-atlas-smb-transfer/publish.ps1 -Source $source -AtlasRoot $root -PlanOnly
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $plan = $json | ConvertFrom-Json
+          if ($plan.source -ne (Resolve-Path $source).Path) { throw 'plan source mismatch' }
+          if ($plan.atlasRoot -ne $root) { throw 'plan Atlas root mismatch' }
+          if (Test-Path -LiteralPath $root) { throw 'PlanOnly created the destination root' }
+          if ($plan.mode -ne 'private-local') { throw 'unexpected publication mode' }
+          if ($plan.replaceCurrentAllowed) { throw 'replacement must be fail-closed by default' }
+
+      - name: Assert transfer safety boundaries
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('deploy/otbm-atlas-smb-transfer/publish.ps1').read_text(encoding='utf-8').lower()
+          assert 'robocopy.exe' in text
+          assert '/mir' in text
+          assert 'incoming-' in text
+          assert 'allowreplacecurrent' in text
+          assert '--mode private-local' in text
+          for forbidden in ('ssh ', 'scp ', 'docker exec', 'cloudflared', 'rclone '):
+              assert forbidden not in text, forbidden
+          PY
