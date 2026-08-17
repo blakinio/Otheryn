@@ -18,7 +18,11 @@ class ProductRebaseContractTests(unittest.TestCase):
             production_source,
         )
         self.assertIn(
-            "environment_statistics = enrich_environment_animations_resumable(asset_dir, output)",
+            "environment_statistics_override: Mapping[str, object] | None = None",
+            production_source,
+        )
+        self.assertIn(
+            "else enrich_environment_animations_resumable(asset_dir, output)",
             production_source,
         )
         self.assertNotIn(

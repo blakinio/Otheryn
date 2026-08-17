@@ -1,0 +1,204 @@
+---
+name: OTBM Atlas CI Ingest Tests
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "deploy/otbm-atlas-ci-ingest/**"
+      - "tools/otbm_atlas/world_publish.py"
+      - "tools/otbm_atlas/production_data.py"
+      - "tools/otbm_atlas/tests/test_world_publish.py"
+      - ".github/workflows/otbm-atlas-ci-ingest-tests.yml"
+      - ".github/workflows/otbm-atlas-full-world-16.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  unit:
+    name: Publication unit contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact head
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          persist-credentials: false
+      - name: Compile publication tooling
+        run: |
+          python3 -m py_compile \
+            deploy/otbm-atlas-ci-ingest/receiver.py \
+            deploy/otbm-atlas-ci-ingest/upload_bundle.py \
+            tools/otbm_atlas/world_publish.py \
+            tools/otbm_atlas/production_data.py \
+            tools/otbm_atlas/tests/test_world_publish.py
+      - name: Run focused publication tests
+        run: python3 -m unittest tools.otbm_atlas.tests.test_world_publish -v
+
+  receiver:
+    name: Prepare temporary Synology ingest
+    needs: unit
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [ots, synology]
+    timeout-minutes: 10
+    outputs:
+      url: ${{ steps.prepare.outputs.url }}
+      token: ${{ steps.prepare.outputs.token }}
+      generation: ${{ steps.prepare.outputs.generation }}
+      receiver: ${{ steps.prepare.outputs.receiver }}
+      tunnel: ${{ steps.prepare.outputs.tunnel }}
+      network: ${{ steps.prepare.outputs.network }}
+    steps:
+      - name: Checkout exact head
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          persist-credentials: false
+      - name: Start authenticated write-only receiver and temporary tunnel
+        id: prepare
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "${RUNNER_NAME:-}" == "synology-ots-01" ]]
+          docker version >/dev/null
+          generation="ci-test-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          receiver="atlas-ci-test-receiver-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          tunnel="atlas-ci-test-tunnel-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          network="atlas-ci-test-net-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          host_root="/volume1/docker/otheryn/atlas/ci-ingest-tests/${generation}"
+
+          mapfile -t stale_containers < <(docker ps -a --format '{{.Names}}' | grep -E '^atlas-ci-test-(receiver|tunnel)-[0-9]+-[0-9]+$' || true)
+          if ((${#stale_containers[@]})); then docker rm -f "${stale_containers[@]}" >/dev/null 2>&1 || true; fi
+          mapfile -t stale_networks < <(docker network ls --format '{{.Name}}' | grep -E '^atlas-ci-test-net-[0-9]+-[0-9]+$' || true)
+          if ((${#stale_networks[@]})); then docker network rm "${stale_networks[@]}" >/dev/null 2>&1 || true; fi
+          docker run --rm -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 sh -lc \
+            "find /atlas/ci-ingest-tests -path '*/control/token' -type f -delete 2>/dev/null || true"
+
+          docker rm -f "$receiver" "$tunnel" >/dev/null 2>&1 || true
+          docker network rm "$network" >/dev/null 2>&1 || true
+          docker run --rm -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 \
+            sh -lc "rm -rf '/atlas/ci-ingest-tests/${generation}' && mkdir -p '/atlas/ci-ingest-tests/${generation}/control'"
+          tar -C deploy/otbm-atlas-ci-ingest -cf - receiver.py | \
+            docker run --rm -i -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 \
+              sh -lc "tar -xf - -C '/atlas/ci-ingest-tests/${generation}/control'"
+
+          token="$(openssl rand -hex 32)"
+          printf '%s\n' "$token" | \
+            docker run --rm -i -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 \
+              sh -lc "umask 077; cat > '/atlas/ci-ingest-tests/${generation}/control/token'"
+
+          docker network create "$network" >/dev/null
+          docker run -d --name "$receiver" --network "$network" \
+            -v "${host_root}:/data" \
+            python:3.12-slim \
+            python /data/control/receiver.py --root /data --token-file /data/control/token --port 8080 >/dev/null
+          docker run -d --name "$tunnel" --network "$network" \
+            cloudflare/cloudflared:2026.7.3 \
+            tunnel --no-autoupdate --url "http://${receiver}:8080" >/dev/null
+
+          url=""
+          for _ in $(seq 1 60); do
+            url="$(docker logs "$tunnel" 2>&1 | grep -Eo 'https://[-a-z0-9]+\.trycloudflare\.com' | tail -n1 || true)"
+            [[ -n "$url" ]] && break
+            sleep 2
+          done
+          [[ -n "$url" ]] || { docker logs "$tunnel"; exit 1; }
+          for _ in $(seq 1 30); do
+            if curl --fail --silent --show-error -H "Authorization: Bearer $token" "$url/health" | grep -q 'READY'; then
+              break
+            fi
+            sleep 2
+          done
+          curl --fail --silent --show-error -H "Authorization: Bearer $token" "$url/health" | grep -q 'READY'
+
+          {
+            echo "url=$url"
+            echo "token=$token"
+            echo "generation=$generation"
+            echo "receiver=$receiver"
+            echo "tunnel=$tunnel"
+            echo "network=$network"
+          } >> "$GITHUB_OUTPUT"
+
+  upload:
+    name: Upload tiny hosted fixture through real transport
+    needs: receiver
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact head
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          persist-credentials: false
+      - name: Upload fixture
+        env:
+          ATLAS_INGEST_URL: ${{ needs.receiver.outputs.url }}
+          ATLAS_INGEST_TOKEN: ${{ needs.receiver.outputs.token }}
+        run: |
+          set -Eeuo pipefail
+          echo "::add-mask::$ATLAS_INGEST_TOKEN"
+          fixture="$RUNNER_TEMP/atlas-ingest-fixture"
+          mkdir -p "$fixture/nested"
+          printf 'hosted-to-synology\n' > "$fixture/hello.txt"
+          printf '{"nested":true}\n' > "$fixture/nested/data.json"
+          python3 deploy/otbm-atlas-ci-ingest/upload_bundle.py "$fixture" \
+            --url "$ATLAS_INGEST_URL" \
+            --token "$ATLAS_INGEST_TOKEN" \
+            --bundle-id fixture \
+            --producer-sha "$GITHUB_SHA" \
+            --kind fixture \
+            --part-bytes 4096
+
+  verify:
+    name: Verify received bytes and cleanup temporary ingest
+    if: always() && needs.receiver.result == 'success'
+    needs: [receiver, upload]
+    runs-on: [ots, synology]
+    timeout-minutes: 10
+    steps:
+      - name: Verify exact received fixture
+        if: needs.upload.result == 'success'
+        shell: bash
+        env:
+          GENERATION: ${{ needs.receiver.outputs.generation }}
+        run: |
+          set -Eeuo pipefail
+          docker run --rm -i \
+            -e GENERATION -e GITHUB_SHA \
+            -v /volume1/docker/otheryn/atlas:/atlas:ro \
+            python:3.12-slim python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          root = Path('/atlas/ci-ingest-tests') / os.environ['GENERATION']
+          assert (root / 'bundles/fixture/hello.txt').read_text() == 'hosted-to-synology\n'
+          assert json.loads((root / 'bundles/fixture/nested/data.json').read_text()) == {'nested': True}
+          receipt = json.loads((root / 'receipts/fixture.json').read_text())
+          assert receipt['status'] == 'COMPLETE'
+          assert receipt['producerSha'] == os.environ['GITHUB_SHA']
+          print(json.dumps({'transport': 'PASS', 'archiveBytes': receipt['archiveBytes'], 'parts': len(receipt['parts'])}, sort_keys=True))
+          PY
+      - name: Remove exact temporary receiver/tunnel generation
+        if: always()
+        shell: bash
+        env:
+          GENERATION: ${{ needs.receiver.outputs.generation }}
+          RECEIVER: ${{ needs.receiver.outputs.receiver }}
+          TUNNEL: ${{ needs.receiver.outputs.tunnel }}
+          NETWORK: ${{ needs.receiver.outputs.network }}
+        run: |
+          set -Eeuo pipefail
+          docker rm -f "$RECEIVER" "$TUNNEL" >/dev/null 2>&1 || true
+          docker network rm "$NETWORK" >/dev/null 2>&1 || true
+          docker run --rm -v /volume1/docker/otheryn/atlas:/atlas alpine:3.22 \
+            sh -lc "rm -rf '/atlas/ci-ingest-tests/${GENERATION}'"
+      - name: Require hosted upload success
+        if: always()
+        env:
+          UPLOAD_RESULT: ${{ needs.upload.result }}
+        run: test "$UPLOAD_RESULT" = success
