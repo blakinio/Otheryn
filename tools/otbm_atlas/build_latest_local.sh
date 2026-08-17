@@ -114,7 +114,7 @@ def main() -> int:
 if __name__ == "__main__":
     raise SystemExit(main())
 PY
-python3 "$RUNNER" "$MAP" "$ASSETS" "$OUTPUT" "$WORKERS"
+PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" python3 "$RUNNER" "$MAP" "$ASSETS" "$OUTPUT" "$WORKERS"
 rm -f "$RUNNER"
 
 echo "Verifying Atlas..."
