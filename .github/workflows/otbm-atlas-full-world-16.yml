@@ -364,7 +364,7 @@ jobs:
   world:
     name: Certify exact 3494-chunk full world
     needs: shard
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && (github.event.label.name == 'ci:full-world-16' || github.event.label.name == 'ci:full-world-32'))
+    if: always() && needs.shard.result == 'success' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && (github.event.label.name == 'ci:full-world-16' || github.event.label.name == 'ci:full-world-32')))
     runs-on: ubuntu-latest
     steps:
       - name: Download all compact shard evidence
