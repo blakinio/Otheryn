@@ -1,14 +1,14 @@
 ---
 task_id: OTH-20260817-atlas-github-synology-deployment
-status: implementing
+status: validating
 owner: chat-github-atlas-deployment
 branch: fix/OTH-20260817-atlas-durable-shard-transfer
 base_branch: main
 created: "2026-08-17T11:02:00+02:00"
-updated: "2026-08-17T17:14:00+02:00"
+updated: "2026-08-17T21:17:00+02:00"
 project_lane: otheryn-content
 execution_mode: chat-github
-related_pr: "pending"
+related_pr: "#442"
 ownership_released: false
 owned_paths:
   - .github/workflows/otbm-atlas-full-world-16.yml
@@ -29,7 +29,7 @@ owned_paths:
 
 Finish the private Synology Atlas deployment without repeating expensive render work blindly. GitHub-hosted Linux remains the render compute; Synology remains receiver/verification/assembly/deployment only.
 
-The current continuation is deliberately bounded: record the recovery decision, prove exactly one fresh real shard end-to-end, and do not authorize a new 32-shard production render until that proof is understood.
+The bounded one-real-shard proof is now complete. The current continuation hardens the production 32-shard path with durable `TRANSFERRED_VERIFIED` state and safe same-producer retry. A new 32-shard production render remains blocked until this exact-head hardening passes focused validation and is reviewed/merged under normal governance.
 
 ## Canonical production identity
 
@@ -71,14 +71,12 @@ Rules:
 1. Do not recover, reuse, or mix old run `32032770809` staging into the next production corpus.
 2. Do not delete old staging merely to make the next run work; it may remain quarantined/non-canonical evidence until deliberate cleanup.
 3. The next production generation must be fresh and fenced to one exact producer SHA.
-4. Do not start another full 32-shard production render yet.
-5. First run exactly one real shard in a fresh test generation.
-6. Keep approximately 48 MiB transfer parts; smaller parts are not the primary fix.
-7. A source GitHub-hosted runner must not be considered safely releasable until Synology has independently confirmed the complete shard is durably present and content-equivalent.
+4. Do not start another full 32-shard production render until the hardened production transfer contract is validated on the exact PR head and merged.
+5. Keep approximately 48 MiB transfer parts; smaller parts are not the primary fix.
+6. A source GitHub-hosted runner may finish after the receiver returns exact durable `COMPLETE` identity; independent Synology re-verification then promotes that persisted shard to durable `TRANSFERRED_VERIFIED` state before world assembly.
+7. A retry after `TRANSFERRED_VERIFIED` must not rerender that shard unless later physical verification invalidates and removes the marker.
 
 ## Target per-shard contract
-
-The production contract to prove before a clean 32-shard rebuild is:
 
 ```text
 BUILD
@@ -88,9 +86,10 @@ BUILD
 -> upload + per-part SHA ACK
 -> durable Synology persistence
 -> reconstruct complete archive
--> independent full archive SHA-256 match
+-> receiver COMPLETE with exact source archive bytes/SHA-256
+-> independent Synology physical corpus verification
+-> independent deterministic full archive bytes/SHA-256 match
 -> TRANSFERRED_VERIFIED
--> source runner may finish
 -> later extraction/assembly
 -> ASSEMBLED
 ```
@@ -103,52 +102,72 @@ State meanings:
 
 A retry after `TRANSFERRED_VERIFIED` must never imply rerender. Extraction/assembly failure must not destroy the persisted rendered result.
 
-## Bounded one-shard proof
+## Successful bounded one-shard proof — run 32054847514
 
-The first proof uses exactly one real shard and a fresh generation under `/volume1/docker/otheryn/atlas/ci-ingest-tests/`.
+The bounded proof executed on exact producer/PR head `f88d0e2d7d4860e1f0f2ea2b2a456de81ceb736e` and completed `SUCCESS`.
 
-Proof requirements:
+Verified evidence:
 
-- no old failed-run staging is read or reused;
-- plan the canonical 32-way assignment, but build only shard `0`;
-- run `verify_world_shard` before transfer;
-- use the existing 48 MiB uploader parts;
-- source hosted job must wait for a positive Synology completion receipt;
-- after the hosted source job has ended, a separate `synology-ots-01` job independently verifies the received physical corpus and receipt;
-- record exact producer SHA, bytes, part count and SHA evidence in workflow logs;
-- clean only the exact disposable test generation after post-source verification;
-- this proof does not publish, promote `current`, restart Atlas, or run a full-world build.
+- canonical 32-way plan: `3494` chunks, shard `0` assignment `109` chunks;
+- `worldPlanDigest`: `8d1d2975292b1e67410239cdee330e5a7728a4a4085f537bf611266855f59265`;
+- shard `0` build: PASS, four hosted workers;
+- source `verify_world_shard`: PASS, `missingSprites={}`;
+- transfer auth: job-scoped GitHub OIDC, no cross-job bearer;
+- Synology receiver receipt: `COMPLETE`;
+- archive bytes: `514170880`;
+- archive SHA-256: `7edfda86139460bc17b1b07037f2b404cc8ec5212c2999dcd39ff5ee60d650c1`;
+- transfer parts: `11` at the existing ~48 MiB part contract;
+- separate post-source job ran on `synology-ots-01` after the hosted source job exited;
+- physical shard verification: PASS, `109` chunks;
+- deterministic archive rebuild matched the same `514170880` bytes and SHA-256 exactly;
+- disposable proof generation cleanup ran only after successful physical re-verification;
+- workflow `Temporary Atlas One-Shard Transfer Proof` run `32054847514`: `completed/success`.
 
-The first proof may use the currently available authenticated Quick Tunnel only as a bounded transport baseline. A pass validates one-shard transfer/reverification behavior; it does **not** approve Quick Tunnel as the final 16-19 GiB production bulk transport. The production transport decision remains gated on this evidence and must remain resumable/idempotent/SHA-verified.
+This validates the bounded transport/reverification mechanism. It does **not** by itself authorize Quick Tunnel as the final high-volume production transport or authorize a 32/32 production render before the production contract below is validated and merged.
+
+## Production TRANSFERRED_VERIFIED hardening derived from the proof
+
+PR `#442` now stages the following production design for exact-head validation:
+
+1. Production ingest generation identity is producer-fenced (`producer-<40-hex SHA>`) rather than run-attempt-fenced, so a failed same-producer generation can be resumed without mixing producers.
+2. Existing producer generation control state is preserved; control repo is refreshed from the exact producer while the original captured `current-state.json` remains the promotion fence.
+3. `transfer_state.py` independently rebuilds the deterministic TAR from each physical Synology shard, compares full archive bytes/SHA-256 with the receiver receipt, runs physical `verify_world_shard`, and only then writes `TRANSFERRED_VERIFIED` marker/evidence.
+4. Resume state exports only producer-matching markers with an existing physical bundle, receipt and compact evidence.
+5. Matrix shard jobs with durable `TRANSFERRED_VERIFIED` state skip expensive free-disk/build/verify/upload/evidence generation and use preserved Synology evidence instead.
+6. Newly transferred and reused shards are physically re-verified on `synology-ots-01` before full-world certification/global bundle/final assembly can proceed.
+7. If a physical verification fails, its marker/evidence is removed fail-closed; a later retry is then allowed to rerender only that invalidated shard.
+8. Failed/incomplete producer generation is preserved for retry/inspection; successful final deployment cleanup may remove duplicate ingest staging.
+9. The workflow still requires explicit `workflow_dispatch`, `deploy_to_synology=true`, exact `main`, and exact `expected_producer_sha` before production deployment admission.
+
+Hard boundaries remain unchanged during PR validation: do not run full 32-shard production render, do not promote `current`, do not restart Atlas, and do not open a public route.
 
 ## Prior implementation history
 
 PR `#435` (`feat(atlas): deploy certified world to Synology`) merged the original receiver/uploader/full-world deployment architecture. PR `#441` (`fix(atlas): stage receiver repo without namespace initializer`) fixed the concrete receiver staging failure and produced the failed transport-heavy production run above.
 
-The previous task checkpoint predates those post-merge production attempts and is superseded by this continuation checkpoint.
-
 ## Acceptance for this continuation phase
 
 - [x] failed-run cause boundary rechecked against run `32032770809` and current receiver/uploader code;
 - [x] owner decision recorded: old failed-run NAS staging is non-canonical and will not be reused;
-- [x] clean rebuild is blocked behind a one-real-shard proof;
-- [ ] dedicated branch + draft PR exists for the proof;
-- [ ] exactly one real shard builds and passes source-side independent verification;
-- [ ] hosted runner receives positive Synology completion evidence before it exits;
-- [ ] separate post-source Synology job independently verifies the physical shard corpus/receipt;
-- [ ] exact one-shard proof evidence is recorded here;
-- [ ] production `TRANSFERRED_VERIFIED` implementation/transport design is updated from proof evidence;
-- [ ] only after that, decide whether a clean 32/32 production render may start.
+- [x] clean rebuild was blocked behind a one-real-shard proof;
+- [x] dedicated branch + draft PR `#442` exists for the proof/hardening;
+- [x] exactly one real shard builds and passes source-side independent verification;
+- [x] hosted runner receives positive Synology completion evidence before it exits;
+- [x] separate post-source Synology job independently verifies the physical shard corpus/receipt;
+- [x] exact one-shard proof evidence is recorded here;
+- [x] production `TRANSFERRED_VERIFIED` implementation/transport design is updated from proof evidence;
+- [ ] focused unit/syntax/exact-head CI passes for the hardened production workflow;
+- [ ] only after green exact-head validation and normal merge governance, decide whether a clean 32/32 production render may start.
 
 ## Context checkpoint
 
 ```yaml
 checkpoint_version: 2
 policy_version: 2
-updated_at: 2026-08-17T17:14:00+02:00
-head: pending
+updated_at: 2026-08-17T21:17:00+02:00
+head: pending-production-hardening-commit
 base: ef9bb701904720004fef745462da14eeac0c4896
-status: implementing
+status: validating
 phase: validate
 task_kind: e2e
 execution_mode: chat-github
@@ -157,17 +176,17 @@ session_role: implementer-validator
 context_pressure: medium
 context_growth: stable
 context_score: 8
-estimate_confidence: medium
+estimate_confidence: high
 decomposition_decision: phased
-decomposition_reason: one cohesive deployment task; gather one-shard physical evidence before changing the production transport contract
+decomposition_reason: one-shard proof is complete; validate resumable producer-fenced TRANSFERRED_VERIFIED production contract before any expensive 32/32 production execution
 validation_level: focused
-heavy_validation_runs: 0
+heavy_validation_runs: 1
 proven:
-  - run 32032770809 used exact producer 0be8c1d88767d58dc08676525c8dbfd77b016d99
-  - hosted shard build and independent verification succeeded before representative HTTP 524 transport failures
-  - hosted runner to synology-ots-01 reachability is physically proven by successful shards
-  - current receiver stores 48 MiB parts durably and serializes reconstruction plus extraction under a global completion lock
-  - owner explicitly rejects old failed-run staging as an input to the next production generation
+  - one-shard proof run 32054847514 completed success on exact head f88d0e2d7d4860e1f0f2ea2b2a456de81ceb736e
+  - shard 0 source verify passed for 109 chunks with no missing sprites
+  - receiver COMPLETE matched 514170880 bytes and 7edfda86139460bc17b1b07037f2b404cc8ec5212c2999dcd39ff5ee60d650c1
+  - post-source synology-ots-01 physical verification and deterministic archive identity passed
+  - job-scoped GitHub OIDC removes the prior cross-job bearer secret path
 blockers: []
-next_action: open a draft PR and run exactly one fresh real shard through the bounded hosted-to-Synology transfer proof
+next_action: commit production TRANSFERRED_VERIFIED hardening, run focused exact-head CI, and keep 32/32 production execution blocked until those checks and normal merge governance pass
 ```

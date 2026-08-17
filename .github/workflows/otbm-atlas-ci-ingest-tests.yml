@@ -35,7 +35,9 @@ jobs:
           python3 -m py_compile \
             deploy/otbm-atlas-ci-ingest/receiver.py \
             deploy/otbm-atlas-ci-ingest/upload_bundle.py \
+            deploy/otbm-atlas-ci-ingest/transfer_state.py \
             deploy/otbm-atlas-ci-ingest/test_receiver_oidc.py \
+            deploy/otbm-atlas-ci-ingest/test_transfer_state.py \
             tools/otbm_atlas/world_publish.py \
             tools/otbm_atlas/production_data.py \
             tools/otbm_atlas/tests/test_world_publish.py
@@ -44,6 +46,7 @@ jobs:
           set -Eeuo pipefail
           python3 -m unittest tools.otbm_atlas.tests.test_world_publish -v
           python3 deploy/otbm-atlas-ci-ingest/test_receiver_oidc.py -v
+          python3 deploy/otbm-atlas-ci-ingest/test_transfer_state.py -v
 
   receiver:
     name: Prepare temporary Synology ingest
