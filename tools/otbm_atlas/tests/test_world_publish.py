@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from io import BytesIO
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
 import tarfile
 import tempfile
 import unittest
+from unittest import mock
 
 from tools.otbm_atlas import world_publish
 
@@ -25,6 +27,25 @@ uploader = _load_deploy_module("atlas_ci_uploader", "upload_bundle.py")
 
 
 class CIIngestTests(unittest.TestCase):
+    def test_receiver_requires_exact_bearer_capability(self):
+        with tempfile.TemporaryDirectory() as text:
+            token = "a" * 64
+            target = receiver.Receiver(Path(text), token)
+            self.assertFalse(target.authorized(None))
+            self.assertFalse(target.authorized("Bearer " + "b" * 64))
+            self.assertFalse(target.authorized(token))
+            self.assertTrue(target.authorized("Bearer " + token))
+
+    def test_oversized_part_is_rejected_before_body_read(self):
+        class ShouldNotRead:
+            def read(self, _size):
+                raise AssertionError("oversized part must fail before reading request body")
+
+        with tempfile.TemporaryDirectory() as text:
+            target = receiver.Receiver(Path(text), "x" * 64, max_part_bytes=8)
+            with self.assertRaisesRegex(ValueError, "part size"):
+                target.store_part("fixture", "part-0000", ShouldNotRead(), 9, "0" * 64)
+
     def test_safe_extract_rejects_parent_traversal(self):
         with tempfile.TemporaryDirectory() as text:
             root = Path(text)
@@ -58,8 +79,8 @@ class CIIngestTests(unittest.TestCase):
             (source / "hello.txt").write_text("hello atlas\n", encoding="utf-8")
             archive = root / "bundle.tar"
             info = uploader.build_archive(source, archive)
-            parts = uploader.split_archive(archive, root / "split", 7)
-            target = receiver.Receiver(root / "receiver", "x" * 64, max_part_bytes=64)
+            parts = uploader.split_archive(archive, root / "split", 4096)
+            target = receiver.Receiver(root / "receiver", "x" * 64, max_part_bytes=4096)
             manifest_parts = []
             for part in parts:
                 payload = Path(part["path"]).read_bytes()
@@ -82,12 +103,30 @@ class CIIngestTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as text:
             target = receiver.Receiver(Path(text), "x" * 64, max_part_bytes=64)
             payload = b"first"
-            sha = __import__("hashlib").sha256(payload).hexdigest()
+            sha = hashlib.sha256(payload).hexdigest()
             target.store_part("fixture", "part-0000", BytesIO(payload), len(payload), sha)
             other = b"other"
-            other_sha = __import__("hashlib").sha256(other).hexdigest()
+            other_sha = hashlib.sha256(other).hexdigest()
             with self.assertRaises(FileExistsError):
                 target.store_part("fixture", "part-0000", BytesIO(other), len(other), other_sha)
+
+    def test_completion_rejects_total_bundle_size_bound(self):
+        with tempfile.TemporaryDirectory() as text:
+            root = Path(text)
+            target = receiver.Receiver(root, "x" * 64, max_part_bytes=64)
+            payload = b"0123456789"
+            sha = hashlib.sha256(payload).hexdigest()
+            target.store_part("fixture", "part-0000", BytesIO(payload), len(payload), sha)
+            with mock.patch.object(receiver, "MAX_BUNDLE_BYTES", 9):
+                with self.assertRaisesRegex(ValueError, "bundle archive exceeds"):
+                    target.complete("fixture", {
+                        "schemaVersion": 1,
+                        "bundleId": "fixture",
+                        "kind": "fixture",
+                        "producerSha": "a" * 40,
+                        "archiveSha256": sha,
+                        "parts": [{"name": "part-0000", "bytes": len(payload), "sha256": sha}],
+                    })
 
 
 class WorldPublishTests(unittest.TestCase):
