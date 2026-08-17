@@ -119,8 +119,11 @@ class Receiver:
         self.parts = self.root / "parts"
         self.bundles = self.root / "bundles"
         self.receipts = self.root / "receipts"
-        self._locks_guard = threading.Lock()
-        self._completion_locks: dict[str, threading.Lock] = {}
+        # Parts may arrive from all hosted shard jobs concurrently, but bundle
+        # reconstruction/extraction is intentionally serialized. This bounds the
+        # temporary archive/extraction disk peak on Synology while preserving
+        # parallel network ingest.
+        self._completion_lock = threading.Lock()
         for path in (self.parts, self.bundles, self.receipts):
             path.mkdir(parents=True, exist_ok=True)
 
@@ -129,10 +132,6 @@ class Receiver:
         if not header or not header.startswith(prefix):
             return False
         return hmac.compare_digest(header[len(prefix):], self.token)
-
-    def _completion_lock(self, bundle: str) -> threading.Lock:
-        with self._locks_guard:
-            return self._completion_locks.setdefault(bundle, threading.Lock())
 
     def part_path(self, bundle: str, part: str) -> Path:
         bundle = _safe_name(bundle, BUNDLE_RE, "bundle id")
@@ -179,7 +178,7 @@ class Receiver:
 
     def complete(self, bundle: str, manifest: dict[str, Any]) -> dict[str, Any]:
         bundle = _safe_name(bundle, BUNDLE_RE, "bundle id")
-        with self._completion_lock(bundle):
+        with self._completion_lock:
             return self._complete_locked(bundle, manifest)
 
     def _complete_locked(self, bundle: str, manifest: dict[str, Any]) -> dict[str, Any]:
