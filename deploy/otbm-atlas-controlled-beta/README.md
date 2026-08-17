@@ -23,30 +23,24 @@ Two independent boundaries remain before real users can receive Atlas access:
 
 Do not bridge either boundary by rebuilding the world on Synology or by uploading the generated corpus to GitHub/R2/Pages/CDN storage.
 
-## Gate the verified corpus
+## Gate the real verified corpus
 
-First generate the existing deployment preflight report against the real corpus:
+The publication gate accepts the **generated Atlas directory**, not a previously written preflight JSON report. On every invocation it directly runs `tools.otbm_atlas.deploy_preflight.deployment_preflight()` with full chunk verification and required environment animations, then evaluates the resulting in-memory report. This prevents a hand-written/stale JSON report from being used as publication evidence.
 
-```text
-python -m tools.otbm_atlas.deploy_preflight build/full-map-atlas \
-  --require-environment-animations \
-  --output build/full-map-atlas/deployment-preflight.json
-```
-
-The user-facing distribution gate requires the resulting report to prove:
+The fresh preflight must prove:
 
 - `FULL_RUNTIME_READY`;
 - canonical Atlas v3 / 128-tile / 3494-chunk identity;
-- canonical map SHA-256;
+- canonical map SHA-256 and accepted source provenance through the existing deployment preflight;
 - current viewer runtime;
 - READY spatial data, Tile Inspector, creatures and environment animations;
-- successful independent verification.
+- successful independent full chunk verification.
 
-Private/local readiness can then be checked with:
+Private/local readiness can be checked directly against the corpus with:
 
 ```text
 python deploy/otbm-atlas-controlled-beta/publication_gate.py \
-  build/full-map-atlas/deployment-preflight.json \
+  build/full-map-atlas \
   --mode private-local
 ```
 
@@ -54,7 +48,7 @@ Internet-facing modes deliberately fail without a separate approval JSON:
 
 ```text
 python deploy/otbm-atlas-controlled-beta/publication_gate.py \
-  build/full-map-atlas/deployment-preflight.json \
+  build/full-map-atlas \
   --mode internet-authenticated \
   --approval path/to/reviewed-atlas-pr-009.json
 ```
@@ -117,7 +111,7 @@ The first controlled beta must remain reversible without rebuilding the Atlas:
 2. leave the private Synology origin intact;
 3. if needed, stop the Atlas Container Manager project;
 4. restore/repoint the verified Synology data directory;
-5. rerun deployment preflight and browser probe before reactivation.
+5. rerun the publication gate and browser probe before reactivation.
 
 ## External reference points
 
