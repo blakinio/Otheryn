@@ -17,6 +17,7 @@ INPUT_ROOT="$INPUT_BASE/$LABEL"
 ASSETS="$INPUT_ROOT/assets"
 OUTPUT="$ROOT/build/full-map-atlas-$LABEL"
 LOG="$ROOT/build/logs/atlas-$LABEL.log"
+RUNNER="$ROOT/build/.atlas-local-runner-$LABEL.py"
 URL="https://drive.usercontent.google.com/download?id=${FILE_ID}&export=download&confirm=t"
 
 mkdir -p "$INPUT_BASE" "$ROOT/build/logs"
@@ -81,31 +82,40 @@ python3 -m tools.otbm_atlas.render \
   --report "$SMOKE/thais-render.json"
 
 echo "Starting full Atlas build..."
-python3 - "$MAP" "$ASSETS" "$OUTPUT" "$WORKERS" <<'PY'
+cat > "$RUNNER" <<'PY'
 from pathlib import Path
 import sys
 import tools.otbm_atlas.atlas as atlas
 
-repo = Path(".").resolve()
-map_path = Path(sys.argv[1]).resolve()
-assets = Path(sys.argv[2]).resolve()
-output = Path(sys.argv[3]).resolve()
-workers = int(sys.argv[4])
 
-atlas.CANONICAL_ASSET_ROOT = assets.relative_to(repo)
-manifest = atlas.build_atlas(
-    map_path,
-    assets,
-    output,
-    repository_root=repo,
-    workers=workers,
-    allow_full_build=True,
-)
-count = len(manifest.get("chunks", []))
-if count != 3494:
-    raise SystemExit(f"expected 3494 chunks, got {count}")
-print(f"Full Atlas build OK: {count} chunks")
+def main() -> int:
+    repo = Path(".").resolve()
+    map_path = Path(sys.argv[1]).resolve()
+    assets = Path(sys.argv[2]).resolve()
+    output = Path(sys.argv[3]).resolve()
+    workers = int(sys.argv[4])
+
+    atlas.CANONICAL_ASSET_ROOT = assets.relative_to(repo)
+    manifest = atlas.build_atlas(
+        map_path,
+        assets,
+        output,
+        repository_root=repo,
+        workers=workers,
+        allow_full_build=True,
+    )
+    count = len(manifest.get("chunks", []))
+    if count != 3494:
+        raise SystemExit(f"expected 3494 chunks, got {count}")
+    print(f"Full Atlas build OK: {count} chunks")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
 PY
+python3 "$RUNNER" "$MAP" "$ASSETS" "$OUTPUT" "$WORKERS"
+rm -f "$RUNNER"
 
 echo "Verifying Atlas..."
 python3 -m tools.otbm_atlas.verify "$OUTPUT" --output "$OUTPUT/verification.json"
