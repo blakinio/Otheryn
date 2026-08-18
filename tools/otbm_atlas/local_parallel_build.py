@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Mapping
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import hashlib
 from io import BytesIO
@@ -11,7 +12,10 @@ from pathlib import Path
 from . import atlas as core
 from .assets import encode_png
 from .overview import LOW_OVERVIEW_FACTOR, OVERVIEW_FACTOR, OVERVIEW_VERSION, make_overview
-from .production_incremental import overview_output_reusable
+
+
+OverviewDerivative = tuple[str, str, str, int, str, int, int]
+OverviewCandidate = tuple[str, str, str, str, str, int, str, int, int, dict[str, object] | None]
 
 
 def _make_overviews(payload: bytes, factors: tuple[int, ...]) -> dict[int, bytes]:
@@ -36,7 +40,7 @@ def _make_overviews(payload: bytes, factors: tuple[int, ...]) -> dict[int, bytes
         return {factor: make_overview(payload, factor) for factor in unique_factors}
 
 
-def _overview_worker(job: tuple[str, tuple[tuple[str, str, str, int, str, int, int], ...]]) -> list[tuple[str, str, dict[str, object]]]:
+def _overview_worker(job: tuple[str, tuple[OverviewDerivative, ...]]) -> list[tuple[str, str, dict[str, object]]]:
     detailed_path_text, derivatives = job
     source_payload = Path(detailed_path_text).read_bytes()
     payloads = _make_overviews(source_payload, tuple(derivative[3] for derivative in derivatives))
@@ -60,7 +64,55 @@ def _overview_worker(job: tuple[str, tuple[tuple[str, str, str, int, str, int, i
     return results
 
 
-def _apply_overview_result(chunk: dict[str, object], output: Path, prefix: str, overview_path_text: str, report: dict[str, object]) -> None:
+def _validate_overview_candidate(candidate: OverviewCandidate) -> tuple[str, str, dict[str, object] | None, bool]:
+    """Validate one reusable derivative from one report read and one PNG read."""
+    prefix, _directory, _chunk_text, overview_path_text, report_path_text, factor, fingerprint, image_width, image_height, previous_identity = candidate
+    overview_path = Path(overview_path_text)
+    report_path = Path(report_path_text)
+    if not overview_path.is_file() or not report_path.is_file():
+        return prefix, overview_path_text, None, False
+
+    try:
+        report_payload = report_path.read_bytes()
+        report_value = json.loads(report_payload.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
+        return prefix, overview_path_text, None, False
+    if not isinstance(report_value, dict):
+        return prefix, overview_path_text, None, False
+    report = {str(key): value for key, value in report_value.items()}
+    checksum = report.get("checksum")
+    if (
+        report.get("fingerprint") != fingerprint
+        or not isinstance(checksum, str)
+        or report.get("imageWidth") != image_width // factor
+        or report.get("imageHeight") != image_height // factor
+    ):
+        return prefix, overview_path_text, report, False
+
+    try:
+        image_payload = overview_path.read_bytes()
+    except OSError:
+        return prefix, overview_path_text, report, False
+    actual_checksum = hashlib.sha256(image_payload).hexdigest()
+    if actual_checksum != checksum:
+        return prefix, overview_path_text, report, False
+
+    if previous_identity is not None:
+        identity_checksum = previous_identity.get("checksum")
+        identity_report_checksum = previous_identity.get("reportSha256")
+        if identity_checksum != actual_checksum:
+            return prefix, overview_path_text, report, False
+        if identity_report_checksum != hashlib.sha256(report_payload).hexdigest():
+            return prefix, overview_path_text, report, False
+
+    return prefix, overview_path_text, report, True
+
+
+def _validate_overview_job(job: tuple[OverviewCandidate, ...]) -> list[tuple[str, str, dict[str, object] | None, bool]]:
+    return [_validate_overview_candidate(candidate) for candidate in job]
+
+
+def _apply_overview_result(chunk: dict[str, object], output: Path, prefix: str, overview_path_text: str, report: Mapping[str, object]) -> None:
     overview_path = Path(overview_path_text)
     chunk.update({
         f"{prefix}Path": overview_path.relative_to(output).as_posix(),
@@ -70,50 +122,115 @@ def _apply_overview_result(chunk: dict[str, object], output: Path, prefix: str, 
     })
 
 
+def _progress(completed: int, total: int, next_mark: int) -> int:
+    if completed == total or completed >= next_mark:
+        print(f"Overview validation: {completed}/{total}", flush=True)
+        while next_mark <= completed:
+            next_mark += 256
+    return next_mark
+
+
 def build_overviews(chunks: list[dict[str, object]], output: Path, previous_overviews: dict[str, object] | None, workers: int) -> None:
-    """Build missing 4x/8x derivatives in parallel without changing byte semantics."""
+    """Validate/reuse existing overviews and build only dirty derivatives in parallel."""
     if workers <= 0:
         raise ValueError("workers must be positive")
 
-    jobs: list[tuple[int, tuple[str, tuple[tuple[str, str, str, int, str, int, int], ...]]]] = []
+    validation_jobs: list[tuple[int, tuple[OverviewCandidate, ...]]] = []
+    generation_by_index: list[list[OverviewDerivative]] = [[] for _chunk in chunks]
     for index, chunk in enumerate(chunks):
-        detailed_path = output / str(chunk["path"])
         chunk_text = f"z{chunk['z']}/{chunk['chunkX']}_{chunk['chunkY']}"
-        derivatives: list[tuple[str, str, str, int, str, int, int]] = []
+        candidates: list[OverviewCandidate] = []
         for prefix, directory, factor in (("overview", "overview", OVERVIEW_FACTOR), ("lowOverview", "overview-low", LOW_OVERVIEW_FACTOR)):
             overview_path = output / directory / f"z{chunk['z']}" / f"{chunk['chunkX']}_{chunk['chunkY']}.png"
-            fingerprint = hashlib.sha256(f"{OVERVIEW_VERSION}:{factor}:{chunk['checksum']}".encode()).hexdigest()
             report_path = overview_path.with_suffix(".json")
-            report = core._read_report(report_path)
-            reusable = report is not None and overview_output_reusable(output, directory, chunk_text, fingerprint, previous_overviews)
-            if reusable:
-                _apply_overview_result(chunk, output, prefix, str(overview_path), report)
-                continue
-            derivatives.append((prefix, str(overview_path), str(report_path), factor, fingerprint, int(chunk["imageWidth"]), int(chunk["imageHeight"])))
-        if derivatives:
-            jobs.append((index, (str(detailed_path), tuple(derivatives))))
+            fingerprint = hashlib.sha256(f"{OVERVIEW_VERSION}:{factor}:{chunk['checksum']}".encode()).hexdigest()
+            identity: dict[str, object] | None = None
+            if previous_overviews is not None:
+                value = previous_overviews.get(f"{directory}/{chunk_text}")
+                identity = dict(value) if isinstance(value, Mapping) else {}
+            candidates.append((
+                prefix,
+                directory,
+                chunk_text,
+                str(overview_path),
+                str(report_path),
+                factor,
+                fingerprint,
+                int(chunk["imageWidth"]),
+                int(chunk["imageHeight"]),
+                identity,
+            ))
+        validation_jobs.append((index, tuple(candidates)))
 
+    candidate_count = sum(len(job) for _index, job in validation_jobs)
+    if candidate_count == 0:
+        return
+    worker_count = min(workers, len(validation_jobs))
+    print(f"Overview validation: {candidate_count} candidates | workers={worker_count}", flush=True)
+
+    validation_results: list[list[tuple[str, str, dict[str, object] | None, bool]] | None] = [None] * len(chunks)
+    completed = 0
+    next_mark = 256
+    if worker_count == 1:
+        for index, job in validation_jobs:
+            result = _validate_overview_job(job)
+            validation_results[index] = result
+            completed += len(result)
+            next_mark = _progress(completed, candidate_count, next_mark)
+    else:
+        with ProcessPoolExecutor(max_workers=worker_count) as executor:
+            future_to_index = {executor.submit(_validate_overview_job, job): index for index, job in validation_jobs}
+            for future in as_completed(future_to_index):
+                index = future_to_index[future]
+                result = future.result()
+                validation_results[index] = result
+                completed += len(result)
+                next_mark = _progress(completed, candidate_count, next_mark)
+
+    valid_count = 0
+    dirty_count = 0
+    for index, (_job_index, candidates) in enumerate(validation_jobs):
+        results = validation_results[index]
+        if results is None:
+            raise RuntimeError(f"overview validation produced no result for chunk index {index}")
+        for candidate, (prefix, overview_path_text, report, valid) in zip(candidates, results, strict=True):
+            _prefix, _directory, _chunk_text, _path, report_path_text, factor, fingerprint, image_width, image_height, _identity = candidate
+            if valid:
+                if report is None:
+                    raise RuntimeError("validated overview has no report")
+                _apply_overview_result(chunks[index], output, prefix, overview_path_text, report)
+                valid_count += 1
+            else:
+                generation_by_index[index].append((prefix, overview_path_text, report_path_text, factor, fingerprint, image_width, image_height))
+                dirty_count += 1
+    print(f"Overview reuse: {valid_count} valid, {dirty_count} dirty", flush=True)
+
+    jobs: list[tuple[int, tuple[str, tuple[OverviewDerivative, ...]]]] = []
+    for index, derivatives in enumerate(generation_by_index):
+        if derivatives:
+            detailed_path = output / str(chunks[index]["path"])
+            jobs.append((index, (str(detailed_path), tuple(derivatives))))
     if not jobs:
         return
 
-    worker_count = min(workers, len(jobs))
-    print(f"Overview derivatives: {len(jobs)} dirty chunks | workers={worker_count}", flush=True)
-    if worker_count == 1:
+    derivative_worker_count = min(workers, len(jobs))
+    print(f"Overview derivatives: {len(jobs)} dirty chunks | workers={derivative_worker_count}", flush=True)
+    if derivative_worker_count == 1:
         for index, job in jobs:
             for prefix, overview_path_text, report in _overview_worker(job):
                 _apply_overview_result(chunks[index], output, prefix, overview_path_text, report)
         return
 
-    completed = 0
-    with ProcessPoolExecutor(max_workers=worker_count) as executor:
+    completed_chunks = 0
+    with ProcessPoolExecutor(max_workers=derivative_worker_count) as executor:
         future_to_index = {executor.submit(_overview_worker, job): index for index, job in jobs}
         for future in as_completed(future_to_index):
             index = future_to_index[future]
             for prefix, overview_path_text, report in future.result():
                 _apply_overview_result(chunks[index], output, prefix, overview_path_text, report)
-            completed += 1
-            if completed == len(jobs) or completed % 64 == 0:
-                print(f"Overview derivatives: {completed}/{len(jobs)} chunks", flush=True)
+            completed_chunks += 1
+            if completed_chunks == len(jobs) or completed_chunks % 64 == 0:
+                print(f"Overview derivatives: {completed_chunks}/{len(jobs)} chunks", flush=True)
 
 
 def build_atlas(map_path: Path, asset_dir: Path, output: Path, chunk_size: int = 128, scripts_dir: Path | None = None, repository_root: Path = Path("."), workers: int = 1, allow_full_build: bool = False) -> dict[str, object]:
