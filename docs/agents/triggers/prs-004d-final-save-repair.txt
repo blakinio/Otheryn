@@ -1,0 +1,2 @@
+trigger: apply bounded PRS-004D final-save fence-release repair
+activation: pull-request-target-diagnostic-1
